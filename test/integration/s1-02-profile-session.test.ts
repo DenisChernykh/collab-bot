@@ -102,9 +102,9 @@ describe("S1-02 durable profile sessions", () => {
 			const executor = new DurableCommandExecutor(new DatabaseBoundaryTransactionRunner(boundary), new SqliteDurableCommandStore(boundary), { hash: hashCanonicalInput }, clock);
 			await expect(executor.execute({
 				context: { commandId: "telegram:update:901", telegramUpdateId: 901, actor: { kind: "telegram_user", telegramUserId: "901" }, occurredAt: new Date(1_700_000_000_000) },
-				input: { kind: "profile.apply", profile: { type: "blogger", displayName: "Alice", description: "A useful local profile.", topics: ["city"], platform: { platformType: "website", url: "https://example.com/alice" }, privateContact: "@alice" } },
+				input: { kind: "profile.apply", profile: { type: "blogger", displayName: "Alice", description: "A useful local profile.", topics: ["city"], platform: { platformType: "website", url: "https://example.com/alice" } } },
 				effect: async () => {
-					await profileService.create("901", { type: "blogger", displayName: "Alice", description: "A useful local profile.", topics: ["city"], platforms: [{ platformType: "website", url: "https://example.com/alice" }], privateContact: "@alice" });
+					await profileService.create("901", { type: "blogger", displayName: "Alice", description: "A useful local profile.", topics: ["city"], platforms: [{ platformType: "website", url: "https://example.com/alice" }] });
 					throw new Error("session cleanup failed");
 				},
 			})).rejects.toThrow("session cleanup failed");

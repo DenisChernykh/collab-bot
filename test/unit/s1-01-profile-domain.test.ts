@@ -11,33 +11,29 @@ const valid: ProfileInput = {
 	description: "Ищу партнёров для полезных городских проектов.",
 	topics: ["lifestyle"],
 	platforms: [{ platformType: "website", url: "https://example.com/alice" }],
-	privateContact: "@alice_contact",
 };
 
 describe("S1-01 profile domain validation", () => {
-	it("normalizes user-facing whitespace but preserves separate public platform and private contact", () => {
+	it("normalizes user-facing whitespace while keeping Telegram identity outside the profile", () => {
 		const result = validateProfileInput({
 			...valid,
 			displayName: "  Alice Creator  ",
 			description: "  Ищу партнёров для полезных городских проектов.  ",
-			privateContact: "  @alice_contact  ",
 		});
 
 		expect(result.displayName).toBe("Alice Creator");
 		expect(result.description).toContain("Ищу партнёров");
-		expect(result.privateContact).toBe("@alice_contact");
+		expect(result).not.toHaveProperty("privateContact");
 	});
 
 	it("rejects invalid profile bounds and duplicate topics", () => {
 		for (const input of [
 			{ ...valid, displayName: "A" },
 			{ ...valid, description: "коротко" },
-			{ ...valid, privateContact: "x" },
 			{ ...valid, topics: [] },
 			{ ...valid, topics: ["city", "city"] },
 			{ ...valid, topics: ["city", "food", "beauty", "travel"] },
 			{ ...valid, platforms: [] },
-			{ ...valid, privateContact: "\u0000secret" },
 		]) {
 			expect(() => validateProfileInput(input as ProfileInput)).toThrow();
 		}

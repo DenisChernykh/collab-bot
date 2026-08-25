@@ -1,7 +1,7 @@
 # Collaboration Bot — Technical Design
 
 - Статус: `Approved for solo-launch implementation`
-- Версия: `0.3`
+- Версия: `0.4`
 - Дата: `2026-08-25`
 - Product source of truth: `docs/PRD.md`
 
@@ -36,7 +36,7 @@
 - миграции, foreign keys и базовая проверка целостности;
 - повтор Telegram update/callback не дублирует бизнес-решение;
 - Telegram network call не выполняется внутри SQLite transaction;
-- закрытый контакт раскрывается только принятой паре;
+- после accepted только паре вычисляется Telegram direct action; до этого Telegram identity не раскрывается;
 - ошибки видны в безопасных JSON logs, а процесс можно вручную перезапустить;
 - перед изменением реальных данных допускается ручная копия SQLite-файла при остановленном процессе.
 
@@ -206,7 +206,7 @@ bootstrap/runtime
 
 | Модуль | Ответственность |
 |---|---|
-| `profiles` | Telegram identity, профиль, темы, площадки и видимость контакта |
+| `profiles` | профиль, темы и публичные площадки; pairwise Telegram identity action вычисляется отдельно из `telegram_users` |
 | `collaborations` | draft, публикация, версия условий, slots и lifecycle |
 | `applications` | отклик, решение, атомарное заполнение slots |
 | `moderation` | hide/restore, block/unblock и audit |
@@ -291,7 +291,7 @@ interface CommandContext {
 - `ListAdminIncidents`;
 - `CalculatePilotFunnel`.
 
-Query DTO не возвращает `private_contact`, кроме pairwise contact view после подтверждённого `accepted`. Этот view содержит сохранённый `private_contact` и вычисляемую `https://t.me/<username>` только при наличии username; он строится отдельно для каждого accepted application.
+Query DTO не возвращает Telegram identity до подтверждённого `accepted`. Pairwise contact view после accepted вычисляет action для второй стороны: `https://t.me/<current_username>` в приоритете, иначе inline `tg://user?id=<telegram_user_id>`. Если identity недоступна, adapter может предложить одноразовый «Попросить контакт» handshake; бот не становится relay и не хранит историю переписки.
 
 ### 5.4. Domain value types
 
@@ -362,7 +362,7 @@ PRAGMA busy_timeout = 5000;
 - Startup применяет pending migrations до polling.
 - Update-flow отдельно выполняет `pnpm db:migrate` и останавливается при ошибке.
 - Каждая migration проверяется на fresh database и upgrade fixture предыдущей версии.
-- Destructive migration требует отдельного backup/restore rehearsal.
+- Destructive migration требует отдельного backup/restore rehearsal; явно авторизованное privacy-positive удаление чувствительного contact-поля является исключением: удалённые значения не копируются в legacy/backup table, а upgrade rehearsal доказывает сохранение всех остальных authoritative rows.
 
 ## 8. Data model
 
@@ -389,7 +389,6 @@ Block является identity policy. Внутренняя причина хр
 | `display_name TEXT` | 2–100 |
 | `description TEXT NOT NULL` | 10–500 |
 | `city_code TEXT` | CHECK = `ekaterinburg` |
-| `private_contact TEXT` | 3–200 |
 | `status TEXT` | `active` или `archived` |
 | `created_at / updated_at INTEGER` | UTC ms |
 
@@ -403,7 +402,7 @@ WHERE status = 'active';
 
 Для будущих нескольких active profiles индекс снимается отдельной migration одновременно с появлением profile switcher.
 
-Все поля active profile редактируемы. Изменение profile type или других полей не отменяет существующие collaborations/applications и не запускает их ретроактивную validation: eligibility фиксируется в момент `SubmitApplication`. Все последующие public projections используют текущий profile; отдельный accepted pairwise query тоже возвращает текущий `private_contact`, но только участникам конкретной принятой пары.
+Все поля active profile редактируемы. Изменение profile type или других полей не отменяет существующие collaborations/applications и не запускает их ретроактивную validation: eligibility фиксируется в момент `SubmitApplication`. Все последующие public projections используют текущий profile; accepted pairwise query вычисляет Telegram action из актуального `telegram_users` snapshot.
 
 ### 8.3. `profile_platforms`
 
@@ -1055,10 +1054,11 @@ Business entities, operator audit и product events автоматически �
 
 ### 15.3. User data
 
-- Private contact хранится plaintext в локальной SQLite MVP; защита — права каталога/файла 0700/0600, отсутствие логирования и ограниченный OS account.
-- Contact выбирается отдельным query только после accepted authorization.
-- Backup наследует тот же уровень чувствительности и permissions.
-- Logs/events не содержат raw profile description, offer, expectation, application message или contact.
+- Profile не собирает и не хранит phone/email/alternate contact. Telegram identity живёт в `telegram_users` и используется для direct action только после accepted authorization.
+- Приоритет action: текущий `username` → `https://t.me/<username>`; fallback — `tg://user?id=<telegram_user_id>` с явным сообщением о приватности и возможной недоступности.
+- Если direct identity недоступна, S3 может сделать одноразовый `Попросить контакт` handshake; request не создаёт relay, chat history или moderation.
+- Phone `request_contact` не вызывается автоматически; alternate contacts стороны обменивают самостоятельно в Telegram.
+- Logs/events не содержат raw profile description, offer, expectation, application message, phone, email или identity action payload.
 
 Шифрование field-level отложено: на одном Mac ключ рядом с приложением не даёт достаточного выигрыша относительно сложности. При переносе на shared host решение пересматривается.
 
@@ -1340,7 +1340,7 @@ Later runtime checks:
 
 ### 20.5. End-to-end fake journey
 
-Обязательный first-launch journey: `profile → publish → browse/deep link → apply → accept/reject → pairwise contact → own lists → admin hide → restart`. Completion, block/unblock и analytics не входят в этот gate.
+Обязательный first-launch journey: `profile → publish → browse/deep link → apply → accept/reject → Telegram contact action → own lists → admin hide → restart`. Completion, block/unblock и analytics не входят в этот gate.
 
 Расширенный Later journey (не является first-launch gate):
 
@@ -1357,7 +1357,7 @@ Journey:
 2. publication creates one channel post;
 3. both candidates enter by feed/deep link and apply;
 4. author accepts both; last slot closes recruitment;
-5. contacts reveal pairwise;
+5. accepted pair получает вычисляемое Telegram contact action;
 6. post changes to matched;
 7. author completes; pair reports are recorded;
 8. admin hides another card and blocks its author;
@@ -1396,7 +1396,7 @@ S3 checkpoint выполняет steps 1–6 и restart-проверку: это
 | PRD | Use case / owner | Data and invariant | Telegram entrypoint | Failure policy | Tests | Slice |
 |---|---|---|---|---|---|---|
 | FR-P01 | Create/UpdateProfile | `profiles`; partial UNIQUE active/user | `Мой профиль`, deferred create | duplicate/race returns current profile | unit, SQLite, adapter, E2E | S1 |
-| FR-P02 | profile visibility query | `profile_platforms`; private contact separate | profile card, accepted result | redact by default; unauthorized is neutral | unit, SQLite, E2E | S1 |
+| FR-P02 | profile visibility query | `profile_platforms`; Telegram identity remains in `telegram_users` | profile card, accepted result | redact identity by default; unauthorized is neutral | unit, SQLite, E2E | S1 |
 | FR-P03 | channel selection adapter | platform chat ID/URL; request ID bound to session | profile wizard `request_chat` | inaccessible/missing username uses manual URL | adapter, real smoke | S1 |
 | FR-C01 | draft commands | nullable `collaborations`, topics, session; cancel cascade | `/new`, Back, `/cancel`, resume | invalid input preserves step; restart resumes | SQLite, adapter, restart | S2 |
 | FR-C02 | Publish/ReconcilePublication | publication/attempt/outbox ledger; known message before public | preview Publish, admin incident | known fail safe retry; ambiguous requires reconciliation | SQLite, adapter, runtime, smoke | S2 |
@@ -1406,7 +1406,7 @@ S3 checkpoint выполняет steps 1–6 и restart-проверку: это
 | FR-S02 | public-token query | UNIQUE opaque token, no mutation authority | `/start c_<token>` | unknown/hidden gives neutral unavailable | adapter, E2E, smoke | S2/S3 |
 | FR-A01 | Submit/WithdrawApplication | UNIQUE card/profile; receipt; terms version | apply/withdraw callbacks | duplicate replay; closed/deadline rejected | unit, SQLite, E2E | S3 |
 | FR-A02 | DecideApplication | serialized transaction, application status, slots | actor/version-bound decision callback | race returns current; blocked applicant closes | concurrency integration, E2E | S3 |
-| FR-A03 | pairwise contact query | accepted authorization over private contact | decision result, `Мои...` | DM fail does not revoke decision/contact view | unit, SQLite, E2E | S3 |
+| FR-A03 | pairwise Telegram action query | accepted authorization over current `telegram_users` identity | decision result, `Мои...` | missing identity offers one-shot request; no relay | unit, SQLite, E2E | S3 |
 | FR-O01 | Complete/ReportCompletion | UNIQUE report/application/reporter | completion callbacks/reminder | negative/mismatch saved, no confirmed event | unit, SQLite, E2E | S4 |
 | FR-V01 | publication projection runner | message ID, attempts, projection revision/hash | automatic post and admin reconcile | send ambiguity no retry; edit/delete bounded | adapter, runtime, smoke | S2–S4 |
 | FR-M01 | Hide/Restore | hidden overlay, operator audit, delete/restore attempt | `/admin` hide/restore | delete ambiguity stays hidden; restore waits success | SQLite, E2E, smoke | S4 |
@@ -1475,7 +1475,7 @@ Exit: fresh DB bootstrap, lint/test/build, duplicate command test и aggregate g
 
 - `/start` и главное меню;
 - telegram-user snapshot;
-- один profile, public platform и private contact;
+- один profile и public platform; Telegram identity отдельно в `telegram_users`;
 - create/edit/view wizard;
 - минимальный grammY long-polling entrypoint, config/migration wiring, `getMe` identity check и basic signal shutdown;
 - restart и duplicate-update tests на fake Telegram adapter;
@@ -1483,7 +1483,7 @@ Exit: fresh DB bootstrap, lint/test/build, duplicate command test и aggregate g
 
 Не добавлять generic form/runtime framework, showcase capability, heartbeat/status storage, Unix socket, cleanup scheduler, LaunchAgent или backup automation.
 
-Exit: `LAC-01`, профиль виден пользователю, private contact не попадает в публичную projection, compiled bot можно вручную запустить и сразу потрогать в Telegram после отдельной авторизации.
+Exit: `LAC-01`, профиль виден пользователю, wizard не собирает alternate contact, compiled bot можно вручную запустить и сразу потрогать в Telegram после отдельной авторизации.
 
 ### S2. Card and publication vertical
 
@@ -1582,7 +1582,7 @@ Redis, BullMQ и отдельный worker добавляются только �
 First-launch checklist:
 
 - [ ] Пройден `LAC-10` на fake Telegram.
-- [ ] Private contact доступен только принятой паре.
+- [ ] Telegram direct action вычисляется только для принятой пары; до accepted identity не раскрывается.
 - [ ] Duplicate update/callback не дублирует business state или delivery intent.
 - [ ] Bot API не вызывается внутри SQLite transaction.
 - [ ] Token, contact, raw input и opaque public/callback tokens отсутствуют в logs/fixtures/Git.
@@ -1602,9 +1602,9 @@ First-launch checklist:
 - [ ] Slots не могут переполниться при concurrency/replay.
 - [ ] Каждое изменение slots/status имеет новую projection revision.
 - [ ] Block/accept race следует serialization-winner policy: block-first закрывает без контакта, accept-first сохраняет `accepted` и возникшее право пары на контакт.
-- [ ] Contact недоступен до accepted pair.
+- [ ] Username/user-ID action недоступен до accepted pair.
 - [ ] Showcase degradation не повреждает authoritative DB state.
-- [ ] Block/hide не пытаются отозвать уже раскрытый контакт.
+- [ ] Block/hide не пытаются отозвать уже выданный Telegram action.
 - [ ] Logs/events не содержат raw content, contacts или tokens.
 - [ ] Production token защищён expected username preflight.
 - [ ] LaunchAgent paths не пересекаются с Giveaway Bot.

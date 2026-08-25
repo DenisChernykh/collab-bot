@@ -90,7 +90,7 @@ function isJsonObject(value: string): boolean {
 function isProfileSessionState(value: unknown): value is ProfileSessionState {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
 	const candidate = value as Record<string, unknown>;
-	const steps = new Set(["type", "display_name", "topics", "description", "platform", "platform_url", "audience", "private_contact", "review"]);
+	const steps = new Set(["type", "display_name", "topics", "description", "platform", "platform_url", "audience", "review"]);
 	return candidate.version === 1 && typeof candidate.generation === "string" && /^[a-f0-9]{16}$/.test(candidate.generation) && typeof candidate.step === "string" && steps.has(candidate.step) &&
 		typeof candidate.draft === "object" && candidate.draft !== null && !Array.isArray(candidate.draft) &&
 		(candidate.requestId === undefined || (Number.isSafeInteger(candidate.requestId) && (candidate.requestId as number) >= -2147483648 && (candidate.requestId as number) <= 2147483647));

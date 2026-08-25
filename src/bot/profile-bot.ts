@@ -355,18 +355,10 @@ async function advanceText(ctx: Context, options: ProfileBotOptions, userId: str
 				return;
 			}
 			const withAudience = value === "-" ? platform : { ...platform, audienceSize: Number(value) };
-			const saved = await saveState(options, userId, { ...state, step: "private_contact", draft: { ...state.draft, platform: withAudience } });
-			await ctx.reply("Укажите контакт для связи (3–200 символов). Другие пользователи увидят его только после того, как вы примете их отклик.", { reply_markup: cancelKeyboard(saved) });
-			return;
-		}
-		case "private_contact":
-			if (value.length < 3 || value.length > 200 || value.includes("\u0000")) {
-				await ctx.reply("Контакт должен быть длиной от 3 до 200 символов.");
-				return;
-			}
-			await saveState(options, userId, { ...state, step: "review", draft: { ...state.draft, privateContact: value } });
+			await saveState(options, userId, { ...state, step: "review", draft: { ...state.draft, platform: withAudience } });
 			await renderReview(ctx, options, userId);
 			return;
+		}
 		case "review":
 			await ctx.reply("Проверьте данные и сохраните профиль либо отмените заполнение.", { reply_markup: reviewKeyboard(session) });
 			return;
@@ -449,7 +441,7 @@ async function showProfile(ctx: Context, options: ProfileBotOptions, userId: str
 	}
 	const topics = profile.topics.map(topicLabel).join(", ");
 	const platform = profile.platforms[0];
-	await ctx.reply(`Ваш профиль\n\nНазвание: ${profile.displayName}\nКто вы: ${profileTypeLabel(profile.type)}\nТемы: ${topics}\nПлощадка: ${platform?.url ?? "не указана"}\nКонтакт для связи: ${profile.privateContact}`, { reply_markup: new InlineKeyboard().text("✏️ Изменить профиль", "profile:edit").row().text("← В главное меню", "menu:home") });
+	await ctx.reply(`Ваш профиль\n\nНазвание: ${profile.displayName}\nКто вы: ${profileTypeLabel(profile.type)}\nТемы: ${topics}\nПлощадка: ${platform?.url ?? "не указана"}`, { reply_markup: new InlineKeyboard().text("✏️ Изменить профиль", "profile:edit").row().text("← В главное меню", "menu:home") });
 }
 
 async function startOrResume(ctx: Context, options: ProfileBotOptions, userId: string, edit: boolean): Promise<void> {
@@ -467,7 +459,6 @@ async function startOrResume(ctx: Context, options: ProfileBotOptions, userId: s
 		description: profile.description,
 		topics: profile.topics,
 		...(firstPlatform === undefined ? {} : { platform: firstPlatform }),
-		privateContact: profile.privateContact,
 	};
 	const saved = await saveState(options, userId, { version: PROFILE_SESSION_VERSION, generation: createSessionGeneration(), step: "type", draft });
 	await ctx.reply(edit ? "Начнём обновление профиля. Выберите, кто вы:" : "Давайте создадим профиль. Выберите, кто вы:", { reply_markup: typeKeyboard(saved) });
@@ -496,7 +487,6 @@ async function renderMenu(ctx: Context, options: ProfileBotOptions, userId: stri
 		case "platform": await ctx.reply(PROFILE_LINK_PROMPT, { reply_markup: platformKeyboard(session) }); return;
 		case "platform_url": await ctx.reply("Укажите другую публичную ссылку https://...", { reply_markup: cancelKeyboard(session) }); return;
 		case "audience": await ctx.reply("Укажите размер аудитории числом или отправьте `-`.", { reply_markup: cancelKeyboard(session) }); return;
-		case "private_contact": await ctx.reply("Укажите контакт для связи (3–200 символов). Другие пользователи увидят его только после принятого отклика.", { reply_markup: cancelKeyboard(session) }); return;
 		case "review": await renderReview(ctx, options, userId); return;
 	}
 }
@@ -505,7 +495,7 @@ async function renderReview(ctx: Context, options: ProfileBotOptions, userId: st
 	const session = await activeSession(options, userId);
 	if (session === undefined) return;
 	const draft = session.state.draft;
-	await ctx.reply(`Проверьте профиль\n\nНазвание: ${draft.displayName ?? "—"}\nКто вы: ${draft.type === undefined ? "—" : profileTypeLabel(draft.type)}\nОписание: ${draft.description ?? "—"}\nТемы: ${draft.topics?.map(topicLabel).join(", ") ?? "—"}\nПлощадка: ${draft.platform?.url ?? "—"}\nКонтакт для связи: ${draft.privateContact ?? "—"}`, { reply_markup: reviewKeyboard(session) });
+	await ctx.reply(`Проверьте профиль\n\nНазвание: ${draft.displayName ?? "—"}\nКто вы: ${draft.type === undefined ? "—" : profileTypeLabel(draft.type)}\nОписание: ${draft.description ?? "—"}\nТемы: ${draft.topics?.map(topicLabel).join(", ") ?? "—"}\nПлощадка: ${draft.platform?.url ?? "—"}`, { reply_markup: reviewKeyboard(session) });
 }
 
 async function ensureActor(ctx: Context, options: ProfileBotOptions): Promise<boolean> {
@@ -544,8 +534,8 @@ async function saveState(options: ProfileBotOptions, userId: string, state: Prof
 }
 
 function toProfileInput(draft: ProfileDraft): ProfileInput | undefined {
-	if (draft.type === undefined || draft.displayName === undefined || draft.description === undefined || draft.topics === undefined || draft.platform === undefined || draft.privateContact === undefined) return undefined;
-	return { type: draft.type, displayName: draft.displayName, description: draft.description, topics: draft.topics, platforms: [draft.platform], privateContact: draft.privateContact };
+	if (draft.type === undefined || draft.displayName === undefined || draft.description === undefined || draft.topics === undefined || draft.platform === undefined) return undefined;
+	return { type: draft.type, displayName: draft.displayName, description: draft.description, topics: draft.topics, platforms: [draft.platform] };
 }
 
 function parseTopics(value: string): Topic[] | undefined {

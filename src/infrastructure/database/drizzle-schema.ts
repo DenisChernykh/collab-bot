@@ -52,7 +52,6 @@ export const profiles = sqliteTable(
 		displayName: text("display_name").notNull(),
 		description: text("description").notNull(),
 		cityCode: text("city_code").notNull(),
-		privateContact: text("private_contact").notNull(),
 		status: text("status", { enum: ["active", "archived"] as const }).notNull(),
 		createdAt: integer("created_at").notNull(),
 		updatedAt: integer("updated_at").notNull(),
@@ -65,7 +64,6 @@ export const profiles = sqliteTable(
 		check("profiles_city_code", sql`${table.cityCode} = 'ekaterinburg'`),
 		check("profiles_display_name_nonempty", sql`length(${table.displayName}) > 0`),
 		check("profiles_description_nonempty", sql`length(${table.description}) > 0`),
-		check("profiles_private_contact_nonempty", sql`length(${table.privateContact}) > 0`),
 		check("profiles_timestamp_coherence", sql`${table.updatedAt} >= ${table.createdAt}`),
 	],
 );

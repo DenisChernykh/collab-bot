@@ -1,7 +1,7 @@
 # Collaboration Bot — solo-launch implementation plan
 
 - Статус документа: `Approved execution registry`
-- Версия: `0.4`
+- Версия: `0.5`
 - Дата: `2026-08-25`
 - Цель: как можно быстрее получить работающий Telegram-цикл для ручного распространения
 - Ограничение: один stage за пользовательскую авторизацию, один локальный commit на unit, без push/PR/deploy
@@ -24,7 +24,7 @@
 - Target unit: не более 12 изменённых source/test files и не более примерно 90 минут реализации. Если граница явно превышается, unit останавливается и делится до продолжения.
 - Используются уже реализованные SQLite, command receipt и delivery-ledger primitives. Они не усиливаются ради гипотетических scale/operations cases.
 - S1–S4 добавляют только текущий пользовательский flow и минимальную runtime composition; heartbeat/status storage, cleanup scheduler, Unix socket, backup/LaunchAgent и прочая deferred platform infrastructure не создаются без отдельной авторизации.
-- Один независимый review выполняется на финальном candidate каждого stage. Reviewer ищет только launch blockers: утечку credential/private contact, повреждение authoritative data, повторный business effect/опасную повторную Telegram mutation, поломку core journey или невозможность запустить stage.
+- Один независимый review выполняется на финальном candidate каждого stage. Reviewer ищет только launch blockers: утечку credential/неавторизованное Telegram identity disclosure, повреждение authoritative data, повторный business effect/опасную повторную Telegram mutation, поломку core journey или невозможность запустить stage.
 - Style, дополнительные абстракции, гипотетический scale, Later capabilities и редкие operational hardening cases не блокируют stage. Подтверждённый blocker получает одну consolidated fix wave и focused recheck; многоциклового deep review нет.
 - Evidence различает local tests, fake Telegram и real Telegram. Local/fake PASS не заявляет реальный запуск.
 - Каждый stage `S1`–`S3` заканчивается ранним hands-on checkpoint: код сначала проходит fake gates, затем после отдельной авторизации запускается тот же flow в real Telegram. Отсутствие credentials не расширяет implementation scope и не разрешает откладывать runtime composition до финала.
@@ -38,7 +38,7 @@
 | S0 — Compact foundation | `completed` | 7 | Проверенный foundation без operational platform |
 | S1 — Profile vertical | `in_progress` | 2 | Реальный бот открывается, пользователь создаёт и видит профиль |
 | S2 — Card publication vertical | `pending` | 2 | Автор создаёт и публикует карточку в real showcase |
-| S3 — Marketplace vertical | `pending` | 2 | Два пользователя проходят отклик, решение и обмен контактами |
+| S3 — Marketplace vertical | `pending` | 2 | Два пользователя проходят отклик, решение и получают Telegram action |
 | S4 — Shareable launch | `pending` | 1 | Admin hide, полный real journey и готовая к распространению ссылка |
 
 ```text
@@ -193,6 +193,19 @@ P0-01 → P0-02
 - **Verification/evidence:** focused unit/SQLite/fake E2E, fresh and upgrade migrations, `pnpm db:verify`, `pnpm check`, `git diff --check`, changed-file and secret scans. Real Bot API count comparison, access/no-access behavior and exact bot identity are a separately authorized real-Telegram checkpoint; no credentials/network are part of the local card.
 - **Stop conditions:** source/timestamp cannot be added without destructive migration; the API requires a policy beyond best-effort manual fallback; implementation needs periodic refresh, another platform integration, OAuth/scraping, real credentials/network for local acceptance, or a new product field/policy.
 
+### C-01 — Telegram-first contact correction (post-S1, pre-S3)
+
+- **Status:** `completed`
+- **Objective:** Убрать обязательный private/alternate contact из profile wizard и storage; после будущего S3 acceptance оставить прямой Telegram action как единственный канонический контактный путь.
+- **Dependencies:** Existing `S1-02` profile wizard and `telegram_users` current identity snapshot. This is a bounded correction, not a third S1 unit and not a new stage dependency.
+- **Scope:** PRD/TD/plan contract update; S1 domain/input/repository/Drizzle mapping; `audience → review` wizard transition; session step/draft validation; migration `0005_s1-03-telegram-first-contact.sql` dropping `profiles.private_contact` and existing values without legacy/backup copy while preserving profile/platform/topic/session rows; fresh/upgrade/fake regression tests.
+- **S3 contract only:** After an accepted pair, S3 will render «Написать в Telegram», preferring `https://t.me/<current_username>` and falling back to inline `tg://user?id=<telegram_user_id>` with explicit privacy/failure behavior. If identity is unavailable, S3 may add a one-shot «Попросить контакт» handshake. No in-bot relay, history, moderation, automatic phone request or pre-match disclosure is implemented here.
+- **Invariants:** New/current profile flow never asks for or writes phone/email/alternate contact; public profile remains separate from `telegram_users`; migration preserves all non-contact authoritative data; S3 remains pending and no S3 buttons are implemented in this correction.
+- **Tests first:** domain validation without contact; fresh schema without `private_contact`; v4→v5 upgrade with one existing profile plus platform/topic data and an unfinished session; close/reopen profile read; fake `/start → create → native/manual platform → audience → review → apply → view/edit`; no contact prompt/assertion.
+- **Verification:** focused profile/migration/fake E2E, `pnpm db:verify`, `pnpm check`, `git diff --check`, exact changed-file and secret scans. No live DB migration, live bot process, credentials, real Telegram network or S3 contact action was used.
+- **Evidence:** Commit SHA `SELF`; historical S1-01/S1-02 evidence above remains historical evidence for the pre-correction contract and is not silently rewritten. This card records the explicit post-S1 product/schema correction.
+- **Stop conditions:** Migration cannot prove non-contact data preservation; any implementation needs legacy contact storage/sentinel, pre-match identity disclosure, in-bot relay/history/moderation, automatic phone collection, or S3 decision logic.
+
 ### S3 — Marketplace vertical
 
 #### S3-01 — Feed, deep link and application
@@ -210,20 +223,20 @@ P0-01 → P0-02
 - **Evidence:** Fill exact evidence and `Commit SHA: SELF`.
 - **Stop conditions:** Requires analytics, recommendation policy or real Telegram before the stage-final authorized checkpoint.
 
-#### S3-02 — Decisions, capacity, contacts and own applications
+#### S3-02 — Decisions, capacity, Telegram contact action and own applications
 
 - **Status:** `pending`
-- **Objective:** Let the author accept/reject, close recruitment and expose pairwise contact; show authoritative application statuses.
+- **Objective:** Let the author accept/reject, close recruitment and expose a pairwise Telegram contact action; show authoritative application statuses.
 - **Requirements:** `LFR-06`–`LFR-08`, `LFR-11`; `LAC-04`–`LAC-06`, `LAC-08`–`LAC-09`.
 - **Dependencies:** `S3-01`.
-- **Scope:** Decision transaction, slot guard, manual close, pairwise contact query, own-application list and intents.
+- **Scope:** Decision transaction, slot guard, manual close, accepted-pair Telegram action (username link, user-ID fallback or one-shot request), own-application list and intents.
 - **Do not touch:** completion, reminders, automatic deadline, block/unblock or block/accept policy.
-- **Invariants:** Capacity never exceeds slots; contact only for accepted pair; DM failure never rolls back decision; replay returns current result.
-- **Tests first:** accept/reject, last slot, manual close, contact visibility matrix, failed DM, restart/replay.
+- **Invariants:** Capacity never exceeds slots; Telegram action only for accepted pair; no pre-match identity disclosure or in-bot relay; DM failure never rolls back decision; replay returns current result.
+- **Tests first:** accept/reject, last slot, manual close, Telegram action visibility/fallback matrix, failed DM, restart/replay.
 - **Verification:** focused unit/SQLite/fake tests, core fake journey, `pnpm check`, one stage-final critical review; after separate Telegram authorization, manual two-account checkpoint `browse → apply → accept/reject → contact → own lists`.
 - **Exit criteria:** `LAC-04`–`LAC-06` pass and the same flow is wired into the runnable bot. With separately authorized accounts, the author can touch the core product immediately after S3; one commit `S3-02: decide applications and reveal pair contacts`.
 - **Evidence:** Fill exact evidence and `Commit SHA: SELF`.
-- **Stop conditions:** Contact privacy cannot be proven or scope requires Later lifecycle.
+- **Stop conditions:** Telegram action privacy/fallback cannot be proven, implementation needs automatic phone collection/in-bot relay, or scope requires Later lifecycle.
 
 ### S4 — Shareable launch
 

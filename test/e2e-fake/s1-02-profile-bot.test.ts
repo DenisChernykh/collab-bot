@@ -106,13 +106,12 @@ describe("S1-02 fake Telegram profile journey", () => {
 			});
 			await restartedBot.handleUpdate({ update_id: 15, message: privateMessage(15, "https://t.me/alice_channel") });
 			await restartedBot.handleUpdate({ update_id: 16, message: privateMessage(16, "-") });
-			await restartedBot.handleUpdate({ update_id: 17, message: privateMessage(17, "@alice_contact") });
 			const firstApplyCallback = callbackData(fake, "profile:apply");
-			await restartedBot.handleUpdate({ update_id: 18, callback_query: callback(18, firstApplyCallback) });
+			await restartedBot.handleUpdate({ update_id: 17, callback_query: callback(17, firstApplyCallback) });
 			clock.advanceBy(60_000);
-			await restartedBot.handleUpdate({ update_id: 18, callback_query: callback(18, firstApplyCallback) });
+			await restartedBot.handleUpdate({ update_id: 17, callback_query: callback(17, firstApplyCallback) });
 
-			expect(await profileServiceForAssertions.getOwn("100")).toMatchObject({ displayName: "Alice Creator", privateContact: "@alice_contact", platforms: [{ url: "https://t.me/alice_channel" }] });
+			expect(await profileServiceForAssertions.getOwn("100")).toMatchObject({ displayName: "Alice Creator", platforms: [{ url: "https://t.me/alice_channel" }] });
 			expect(await boundary.query<{ count: number }>("SELECT count(*) AS count FROM profiles WHERE status = 'active'")).toEqual([{ count: 1 }]);
 			expect(fake.calls.some((call) => call.method === "sendMessage" && String(call.payload.text).includes("Готово — профиль сохранён"))).toBe(true);
 
@@ -138,6 +137,7 @@ describe("S1-02 fake Telegram profile journey", () => {
 			expect(String(fake.lastMessage()?.text)).toContain("Кто вы: Блогер");
 			expect(String(fake.lastMessage()?.text)).toContain("Темы: Город, Еда и рестораны");
 			expect(String(fake.lastMessage()?.text)).toContain("https://t.me/alice_channel");
+			expect(String(fake.lastMessage()?.text)).not.toContain("Контакт для связи");
 			const mainMenuCallback = fake.lastMessage()?.reply_markup?.inline_keyboard?.flat().find((button) => (button as { callback_data?: string }).callback_data === "menu:home");
 			expect(mainMenuCallback).toBeDefined();
 			await restartedBot.handleUpdate({ update_id: 20, callback_query: callback(20, "menu:home") });
@@ -154,15 +154,14 @@ describe("S1-02 fake Telegram profile journey", () => {
 			await restartedBot.handleUpdate({ update_id: 28, callback_query: callback(28, callbackData(fake, "profile:platform:other")) });
 			await restartedBot.handleUpdate({ update_id: 29, message: privateMessage(29, "https://example.com/alice") });
 			await restartedBot.handleUpdate({ update_id: 30, message: privateMessage(30, "100") });
-			await restartedBot.handleUpdate({ update_id: 31, message: privateMessage(31, "@new_contact") });
 			const secondApplyCallback = callbackData(fake, "profile:apply");
 			failSessionDelete = true;
-			await expect(restartedBot.handleUpdate({ update_id: 32, callback_query: callback(32, secondApplyCallback) })).rejects.toThrow("session cleanup failed");
+			await expect(restartedBot.handleUpdate({ update_id: 31, callback_query: callback(31, secondApplyCallback) })).rejects.toThrow("session cleanup failed");
 			expect(await profileServiceForAssertions.getOwn("100")).toMatchObject({ displayName: "Alice Creator" });
 			expect(await new SqliteProfileSessionRepository(boundary).findActive("100", clock.now().getTime())).toMatchObject({ state: { step: "review" } });
 			failSessionDelete = false;
-			await restartedBot.handleUpdate({ update_id: 32, callback_query: callback(32, secondApplyCallback) });
-			expect(await profileServiceForAssertions.getOwn("100")).toMatchObject({ displayName: "Alice Studio", privateContact: "@new_contact", platforms: [{ url: "https://example.com/alice" }] });
+			await restartedBot.handleUpdate({ update_id: 31, callback_query: callback(31, secondApplyCallback) });
+			expect(await profileServiceForAssertions.getOwn("100")).toMatchObject({ displayName: "Alice Studio", platforms: [{ url: "https://example.com/alice" }] });
 			expect(await boundary.query<{ count: number }>("SELECT count(*) AS count FROM profiles WHERE status = 'active'")).toEqual([{ count: 1 }]);
 			const callsBeforeGroupUpdate = fake.calls.length;
 			await restartedBot.handleUpdate({ update_id: 33, message: { ...privateMessage(33, "/start"), chat: { id: -100, type: "group", title: "Group" } } });

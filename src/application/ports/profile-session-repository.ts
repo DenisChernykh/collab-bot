@@ -11,7 +11,6 @@ export type ProfileSessionStep =
 	| "platform"
 	| "platform_url"
 	| "audience"
-	| "private_contact"
 	| "review";
 
 export interface ProfileDraft {
@@ -20,7 +19,6 @@ export interface ProfileDraft {
 	readonly topics?: ProfileInput["topics"];
 	readonly description?: string;
 	readonly platform?: ProfileInput["platforms"][number];
-	readonly privateContact?: string;
 }
 
 export interface ProfileSessionState {

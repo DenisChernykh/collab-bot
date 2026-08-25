@@ -21,7 +21,6 @@ interface ProfileRow {
 	display_name?: unknown;
 	description?: unknown;
 	city_code?: unknown;
-	private_contact?: unknown;
 	status?: unknown;
 	created_at?: unknown;
 	updated_at?: unknown;
@@ -47,7 +46,7 @@ export class SqliteProfileRepository implements ProfileRepository {
 
 	async findActiveByTelegramUserId(telegramUserId: string): Promise<ProfileRecord | undefined> {
 		const rows = await this.boundary.query<ProfileRow>(
-			"SELECT id, telegram_user_id, type, display_name, description, city_code, private_contact, status, created_at, updated_at FROM profiles WHERE telegram_user_id = ? AND status = 'active'",
+			"SELECT id, telegram_user_id, type, display_name, description, city_code, status, created_at, updated_at FROM profiles WHERE telegram_user_id = ? AND status = 'active'",
 			[telegramUserId],
 		);
 		const row = rows[0];
@@ -56,7 +55,7 @@ export class SqliteProfileRepository implements ProfileRepository {
 
 	async findPublicById(profileId: string): Promise<PublicProfileRecord | undefined> {
 		const rows = await this.boundary.query<ProfileRow>(
-			"SELECT id, telegram_user_id, type, display_name, description, city_code, private_contact, status, created_at, updated_at FROM profiles WHERE id = ? AND status = 'active'",
+			"SELECT id, telegram_user_id, type, display_name, description, city_code, status, created_at, updated_at FROM profiles WHERE id = ? AND status = 'active'",
 			[profileId],
 		);
 		const row = rows[0];
@@ -68,8 +67,8 @@ export class SqliteProfileRepository implements ProfileRepository {
 	async create(telegramUserId: string, input: ProfileInput, now: number): Promise<ProfileRecord> {
 		const id = generateUuid();
 		await this.boundary.execute(
-			"INSERT INTO profiles (id, telegram_user_id, type, display_name, description, city_code, private_contact, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)",
-			[id, telegramUserId, input.type, input.displayName, input.description, "ekaterinburg", input.privateContact, now, now],
+			"INSERT INTO profiles (id, telegram_user_id, type, display_name, description, city_code, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?)",
+			[id, telegramUserId, input.type, input.displayName, input.description, "ekaterinburg", now, now],
 		);
 		await this.replaceChildren(id, input);
 		const created = await this.findActiveByTelegramUserId(telegramUserId);
@@ -81,8 +80,8 @@ export class SqliteProfileRepository implements ProfileRepository {
 		const existing = await this.findActiveByTelegramUserId(telegramUserId);
 		if (existing === undefined) throw new Error("active profile could not be reloaded");
 		await this.boundary.execute(
-			"UPDATE profiles SET type = ?, display_name = ?, description = ?, city_code = ?, private_contact = ?, updated_at = ? WHERE id = ? AND status = 'active'",
-			[input.type, input.displayName, input.description, "ekaterinburg", input.privateContact, now, existing.id],
+			"UPDATE profiles SET type = ?, display_name = ?, description = ?, city_code = ?, updated_at = ? WHERE id = ? AND status = 'active'",
+			[input.type, input.displayName, input.description, "ekaterinburg", now, existing.id],
 		);
 		await this.replaceChildren(existing.id, input);
 		const updated = await this.findActiveByTelegramUserId(telegramUserId);
@@ -133,7 +132,7 @@ function readBase(row: ProfileRow): ProfileRecord {
 		typeof row.id !== "string" || typeof row.telegram_user_id !== "string" ||
 		typeof row.type !== "string" || typeof row.display_name !== "string" ||
 		typeof row.description !== "string" || row.city_code !== "ekaterinburg" ||
-		typeof row.private_contact !== "string" || (row.status !== "active" && row.status !== "archived") ||
+		(row.status !== "active" && row.status !== "archived") ||
 		!Number.isSafeInteger(row.created_at) || !Number.isSafeInteger(row.updated_at)
 	) {
 		throw new Error("profile row is corrupt");
@@ -146,7 +145,6 @@ function readBase(row: ProfileRow): ProfileRecord {
 		displayName: row.display_name,
 		description: row.description,
 		cityCode: "ekaterinburg",
-		privateContact: row.private_contact,
 		status: row.status,
 		createdAt: row.created_at as number,
 		updatedAt: row.updated_at as number,
@@ -186,7 +184,6 @@ function mapPlatformRow(row: PlatformRow): ProfilePlatformRecord {
 function toPublicProfile(profile: ProfileRecord): PublicProfileRecord {
 	return {
 		id: profile.id,
-		telegramUserId: profile.telegramUserId,
 		type: profile.type,
 		displayName: profile.displayName,
 		description: profile.description,

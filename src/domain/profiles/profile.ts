@@ -25,7 +25,6 @@ export interface ProfileInput {
 	readonly description: string;
 	readonly topics: readonly Topic[];
 	readonly platforms: readonly ProfilePlatformInput[];
-	readonly privateContact: string;
 }
 
 export interface ProfilePlatformRecord extends ProfilePlatformInput {
@@ -39,7 +38,6 @@ export interface ProfileRecord {
 	readonly displayName: string;
 	readonly description: string;
 	readonly cityCode: typeof PROFILE_CITY;
-	readonly privateContact: string;
 	readonly status: "active" | "archived";
 	readonly createdAt: number;
 	readonly updatedAt: number;
@@ -47,13 +45,12 @@ export interface ProfileRecord {
 	readonly platforms: readonly ProfilePlatformRecord[];
 }
 
-export type PublicProfileRecord = Omit<ProfileRecord, "privateContact">;
+export type PublicProfileRecord = Omit<ProfileRecord, "telegramUserId">;
 
 export function validateProfileInput(input: ProfileInput): ProfileInput {
 	const type = parseProfileType(input.type);
 	const displayName = requiredText(input.displayName, 2, 100, "display name");
 	const description = requiredText(input.description, 10, 500, "description");
-	const privateContact = requiredText(input.privateContact, 3, 200, "private contact");
 	if (!Array.isArray(input.topics) || input.topics.length < 1 || input.topics.length > 3) {
 		throw new DomainValidationError("profile topics must contain between one and three values");
 	}
@@ -65,7 +62,7 @@ export function validateProfileInput(input: ProfileInput): ProfileInput {
 		throw new DomainValidationError("profile requires at least one public platform");
 	}
 	const platforms = input.platforms.map(validatePlatform);
-	return { type, displayName, description, topics, platforms, privateContact };
+	return { type, displayName, description, topics, platforms };
 }
 
 function validatePlatform(input: ProfilePlatformInput): ProfilePlatformInput {
