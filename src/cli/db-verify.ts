@@ -1,6 +1,7 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { DatabaseBoundary } from "../infrastructure/database/database-boundary.js";
 import { MigrationRunner, MigrationSource } from "../infrastructure/database/migrations.js";
@@ -10,19 +11,8 @@ async function main(): Promise<void> {
 		throw new Error("db:verify does not accept database or environment paths");
 	}
 	const directory = await mkdtemp(join(tmpdir(), "collaboration-db-verify-"));
-	const migrationsPath = join(directory, "migrations");
+	const migrationsPath = fileURLToPath(new URL("../../migrations/", import.meta.url));
 	const databasePath = join(directory, "verify.sqlite");
-	await mkdir(migrationsPath);
-	await writeFile(
-		join(migrationsPath, "0001_verify.sql"),
-		"CREATE TABLE verify_parent (id INTEGER PRIMARY KEY);\n",
-		"utf8",
-	);
-	await writeFile(
-		join(migrationsPath, "0002_verify_child.sql"),
-		"CREATE TABLE verify_child (id INTEGER PRIMARY KEY, parent_id INTEGER REFERENCES verify_parent(id));\n",
-		"utf8",
-	);
 	const boundary = new DatabaseBoundary(databasePath);
 	try {
 		const runner = new MigrationRunner(await MigrationSource.fromDirectory(migrationsPath));

@@ -223,7 +223,7 @@ P0-01 → P0-02
 
 #### S0-04 — Закрепить durable ingress idempotency и callback safety
 
-- **Status:** `pending`
+- **Status:** `completed`
 - **Objective:** Один раз обрабатывать command/update/callback, возвращать safe replay result и отвергать actor/hash conflicts.
 - **Requirements:** FR-R01; AC-019 foundation.
 - **Dependencies:** `S0-03`.
@@ -238,12 +238,12 @@ P0-01 → P0-02
 - **Exit criteria:** Duplicate paths не создают второго effect; constraints/FKs доказаны fresh DB; replay result versioned и safe.
 - **Completion evidence:**
   - Commit SHA: `SELF`
-  - Changed files:
-  - Focused checks:
-  - Aggregate checks: `Deferred to S0-07`
-  - Acceptance evidence:
-  - Review result:
-  - Notes/deviations:
+  - Changed files: `migrations/0001_s0-04-ingress-foundation.sql`, `src/application/commands/canonical-input.ts`, `src/application/commands/command-contracts.ts`, `src/application/commands/safe-result.ts`, `src/application/commands/command-executor.ts`, `src/application/commands/require-active-actor.ts`, `src/application/commands/callback-action.ts`, `src/application/ports/callback-action-store.ts`, `src/application/ports/durable-command-store.ts`, `src/application/ports/ingress-crypto.ts`, `src/application/ports/telegram-user-lookup.ts`, `src/application/ports/transaction-runner.ts`, `src/infrastructure/crypto/canonical-input-hash.ts`, `src/infrastructure/crypto/ingress-codecs.ts`, `src/infrastructure/database/drizzle-schema.ts`, `src/infrastructure/database/migrations.ts`, `src/infrastructure/database/telegram-user-repository.ts`, `src/infrastructure/database/callback-action-repository.ts`, `src/infrastructure/database/durable-command-repository.ts`, `src/infrastructure/database/ingress-retention.ts`, `src/infrastructure/database/transaction-runner.ts`, `src/infrastructure/time/system-clock.ts`, `src/cli/db-verify.ts`, `test/unit/s0-04-contracts.test.ts`, `test/unit/s0-04-import-boundary.test.ts`, `test/integration/s0-04-schema.test.ts`, `test/integration/s0-04-ingress.test.ts`, `IMPLEMENTATION_PLAN.md`
+  - Focused checks: Node `v24.18.0`; pnpm `11.15.1`; `pnpm exec vitest run --project integration -t "command replay|input hash conflict|duplicate update|actor-bound callback|retention"` — 5/5 PASS; S0-04 ingress integration — 6/6 PASS; S0-04 schema integration — 3/3 PASS; S0-04 contract/boundary unit — 5/5 PASS; `pnpm db:verify` — PASS; `rg 'infrastructure|node:sqlite|drizzle-orm' src/application src/domain` — no matches; no `Date.now` in runtime source
+  - Aggregate checks: `pnpm check` — PASS; full unit — 22/22 PASS; full integration — 18/18 PASS; `pnpm typecheck` — PASS; `pnpm lint` — PASS; build — PASS; empty runtime/e2e-fake suites remain fail-closed with expected exit 1
+  - Acceptance evidence: `DurableCommandExecutor` derives source/correlation from tagged actor/context, binds the tagged actor and UTC occurred-at milliseconds into the canonical input hash, inserts transient receipts and Telegram processed updates atomically, returns only parsed versioned SafeResult on exact replay, rejects hash/source/update/actor/time conflicts without effect, reports persistent in-progress incidents, and rolls back effect/receipt on failure. Callback service accepts only injected action allowlists, validates opaque `cb_` tokens, private decimal Telegram actor, mode/expiry/entity/version, stores only SHA-256 hash, fences foreign/unknown/stale/expired actions, returns neutral unavailable for callback actor-collision conflicts, consumes one-shot result atomically, replays consumed results, and keeps reusable actions unconsumed. SafeResult persistence validates plain data-only objects and serializes a fresh allowlisted snapshot, rejecting custom prototypes, accessors, symbols, and `toJSON` traps. `RequireActiveActor` is lookup-only and fail-closed for blocked/missing/group/channel/admin/runner actors. Clock-based retention removes only old processed updates outside latest 50,000 and their completed Telegram receipts while preserving operator/runner/in-progress rows; expired callback cleanup is explicit repository-scoped only. Canonical fresh/repeat/upgrade migration and SQL FK/CHECK/UNIQUE/integrity evidence remain green; no profiles/product/outbox/network/grammY changes.
+  - Review result: `Orchestrator review — PASS after TD 4.1 dependency-direction and actor-bound replay hardening; independent Sol max deferred to S0-07`
+  - Notes/deviations: Application/domain now depend only on application ports/contracts; SQLite/crypto details are infrastructure adapters over the shared boundary. No commit/push/remote/PR/deploy/production actions; no repositories for product commands, no retention scheduler, no outbox/product events, and no raw Telegram token/content in durable results/logs.
 - **Stop conditions:** Нужен product-specific callback payload либо обход actor binding.
 
 #### S0-05 — Создать atomic outbox и product-event stores

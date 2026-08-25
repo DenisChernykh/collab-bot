@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
+import type { Clock } from "../../application/ports/clock.js";
+import { SystemClock } from "../time/system-clock.js";
 import { DatabaseBoundary, type DatabaseContext } from "./database-boundary.js";
 
 const MIGRATION_FILENAME = /^(\d{4})_([a-z][a-z0-9_-]*)\.sql$/;
@@ -64,7 +66,10 @@ export class MigrationSource {
 }
 
 export class MigrationRunner {
-	constructor(private readonly source: MigrationSource) {}
+	constructor(
+		private readonly source: MigrationSource,
+		private readonly clock: Clock = new SystemClock(),
+	) {}
 
 	async migrate(boundary: DatabaseBoundary): Promise<MigrationResult> {
 		return boundary.withClient(async (context) => {
@@ -74,13 +79,17 @@ export class MigrationRunner {
 
 			const pending = this.source.all().slice(applied.length);
 			for (const migration of pending) {
+				const appliedAt = this.clock.now().getTime();
+				if (!Number.isFinite(appliedAt)) {
+					throw new Error("migration clock returned an invalid date");
+				}
 				await boundary.withTransaction(async ({ client }) => {
 					client.exec(migration.sql);
 					client
 						.prepare(
 							`INSERT INTO ${HISTORY_TABLE} (id, filename, checksum, applied_at) VALUES (?, ?, ?, ?)`,
 						)
-						.run(migration.id, migration.filename, migration.checksum, Date.now());
+						.run(migration.id, migration.filename, migration.checksum, appliedAt);
 				});
 			}
 			return { applied: pending.map((migration) => migration.id), noOp: pending.length === 0 };
