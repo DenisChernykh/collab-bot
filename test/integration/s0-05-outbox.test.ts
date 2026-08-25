@@ -32,10 +32,15 @@ const EVENT_ID = "22222222-2222-4222-8222-222222222222";
 
 async function withDatabase<T>(work: (boundary: DatabaseBoundary, clock: FakeClock) => Promise<T>): Promise<T> {
 	const directory = await mkdtemp(join(tmpdir(), "collaboration-s0-05-outbox-"));
+	const migrationsPath = join(directory, "migrations");
+	await mkdir(migrationsPath);
 	const boundary = new DatabaseBoundary(join(directory, "app.sqlite"));
 	const clock = new FakeClock(10 * DAY_MS);
 	try {
-		const source = await MigrationSource.fromDirectory(canonicalMigrationsPath);
+		for (const filename of ["0001_s0-04-ingress-foundation.sql", "0002_s0-05-outbox-events.sql"]) {
+			await copyFile(join(canonicalMigrationsPath, filename), join(migrationsPath, filename));
+		}
+		const source = await MigrationSource.fromDirectory(migrationsPath);
 		const runner = new MigrationRunner(source, clock);
 		expect((await runner.migrate(boundary)).applied).toEqual([1, 2]);
 		expect((await runner.migrate(boundary)).applied).toEqual([]);

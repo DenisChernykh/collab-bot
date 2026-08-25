@@ -36,7 +36,7 @@
 |---|---|---:|---|
 | P0 — Repository baseline | `completed` | 2 | Репозиторий и execution rules |
 | S0 — Compact foundation | `completed` | 7 | Проверенный foundation без operational platform |
-| S1 — Profile vertical | `pending` | 2 | Реальный бот открывается, пользователь создаёт и видит профиль |
+| S1 — Profile vertical | `in_progress` | 2 | Реальный бот открывается, пользователь создаёт и видит профиль |
 | S2 — Card publication vertical | `pending` | 2 | Автор создаёт и публикует карточку в real showcase |
 | S3 — Marketplace vertical | `pending` | 2 | Два пользователя проходят отклик, решение и обмен контактами |
 | S4 — Shareable launch | `pending` | 1 | Admin hide, полный real journey и готовая к распространению ссылка |
@@ -100,18 +100,25 @@ P0-01 → P0-02
 
 #### S1-01 — Profile state and privacy boundary
 
-- **Status:** `pending`
+- **Status:** `completed`
 - **Objective:** Persist one active profile with public fields/platform and separate private contact.
 - **Requirements:** `LFR-01`, `LFR-10`; `LAC-01`, private-contact part of `LAC-05`.
 - **Dependencies:** `S0-07`.
 - **Read first:** PRD §4–§7, §19.1, §20.1; TD profile schema/value types and §22 S1.
 - **Scope:** Minimal profile migration, domain/application repository and focused SQLite tests.
-- **Do not touch:** grammY UI, cards, analytics, multi-profile history UI, native channel picker.
+- **Do not touch:** grammY UI, cards, analytics, multi-profile history UI, native channel picker (the picker and its fallback belong to S1-02).
 - **Invariants:** Decimal Telegram IDs remain strings/bigints without unsafe Number conversion; public projection never contains private contact; exactly one active profile per Telegram user.
 - **Tests first:** create/read/edit, duplicate update replay, public/private projection, restart persistence.
-- **Verification:** focused unit/integration tests, migration checks, `pnpm check` if within target runtime.
+- **Verification:** focused unit/integration tests, fresh and previous-version migration checks, `pnpm db:verify`, `pnpm check`, `git diff --check`, and staged secret scan.
 - **Exit criteria:** Profile state and privacy checks pass; one commit `S1-01: persist private-safe user profiles`.
-- **Evidence:** Fill changed files, exact commands/results, acceptance proof, review/deviations and `Commit SHA: SELF` before commit.
+- **Evidence:**
+  - Commit SHA: `SELF`
+  - Changed files: `migrations/0003_s1-01-profile-state.sql`, `src/domain/profiles/profile.ts`, `src/application/ports/profile-repository.ts`, `src/application/profiles/profile-service.ts`, `src/infrastructure/database/drizzle-schema.ts`, `src/infrastructure/database/profile-repository.ts`, `test/integration/s1-01-profile.test.ts`, `test/unit/s1-01-profile-domain.test.ts`, and S0 migration-fixture adjustments in `test/integration/s0-05-outbox.test.ts` and `test/runtime/s0-06-delivery.test.ts`.
+  - Preflight: `main` at `8f1e91d` before this unit, no remote, clean tree, Node `v24.18.1`, pnpm `11.15.1`.
+  - Focused checks: profile domain `4 passed`; profile integration `5 passed`; fresh migration and previous-version upgrade are covered by the profile integration suite.
+  - Aggregate checks: `pnpm db:verify` PASS; `pnpm check` PASS (`unit 26`, `integration 30`, `runtime 21`, build); `git diff --check` PASS; secret scan PASS.
+  - Acceptance evidence: `profiles`/`profile_platforms`/`profile_topics` persist the profile aggregate; partial unique index leaves exactly one active profile per Telegram user; create/read/edit/restart/replay pass; public projection has no `privateContact`; a 21-digit Telegram ID remains a string; platform URL, topic, audience and private-contact validation pass.
+  - Review/deviations: focused read-only launch-blocker review found no S1-01 blocker; stage-final independent review remains at the S1 gate after S1-02. Existing S0-05/S0-06 tests now use explicit two-migration fixtures so their historical foundation assertions remain valid after adding migration 0003.
 - **Stop conditions:** Requires product fields beyond PRD, native Telegram network, or more than one profile.
 
 #### S1-02 — Main menu and profile wizard
@@ -120,8 +127,9 @@ P0-01 → P0-02
 - **Objective:** Let a user complete, view and edit the profile from `/start` through fake tests and the same manually runnable real Telegram bot.
 - **Requirements:** `LFR-01`, `LFR-10`; `LAC-01`, `LAC-08`–`LAC-09`.
 - **Dependencies:** `S1-01`.
-- **Scope:** Minimal grammY long-polling entrypoint, config/migration wiring, `getMe` identity check, basic one-shot SIGINT/SIGTERM shutdown, fake adapter, menu/profile wizard and restart journey.
-- **Do not touch:** Showcase/channel capability, card flows, native channel request, product events, generic form/runtime framework, heartbeat/status DB, Unix socket, cleanup scheduler, LaunchAgent or backup automation. Never write a real token into repository files, fixtures, SQLite or logs.
+- **Scope:** Minimal grammY long-polling entrypoint, config/migration wiring, `getMe` identity check, basic one-shot SIGINT/SIGTERM shutdown, fake adapter, menu/profile wizard and restart journey. For `telegram_channel`, use Telegram's native channel request first and a manual public-URL fallback when Telegram returns no username or the user declines.
+- **Do not touch:** Showcase/channel capability, card flows, product events, generic form/runtime framework, heartbeat/status DB, Unix socket, cleanup scheduler, LaunchAgent or backup automation. Never write a real token into repository files, fixtures, SQLite or logs.
+- **Execution exception:** By explicit user direction, the approved native channel request + manual fallback is in S1-02 even though it may exceed the default 12 source/test files or roughly 90-minute unit target. Keep it as this single unit; do not add another S1 unit or widen the rest of the runtime scope.
 - **Invariants:** Profile creation is deferred until user chooses create/apply; duplicate callback returns current state; logs redact raw contact/input.
 - **Tests first:** `/start`, create/edit/view, cancel/resume, duplicate callback, restart, startup order, wrong expected bot identity and basic signal shutdown.
 - **Verification:** focused fake-adapter/runtime journey, `pnpm check`, one stage-final critical review; after separate credentials/network authorization, manual real Telegram `/start → create → view → edit → restart` checkpoint.

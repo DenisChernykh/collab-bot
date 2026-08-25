@@ -3,6 +3,7 @@ import {
 	check,
 	index,
 	integer,
+	primaryKey,
 	sqliteTable,
 	text,
 	uniqueIndex,
@@ -37,6 +38,69 @@ export const telegramUsers = sqliteTable(
 			"telegram_users_timestamp_coherence",
 			sql`typeof(${table.createdAt}) = 'integer' AND ${table.createdAt} >= 0 AND typeof(${table.updatedAt}) = 'integer' AND ${table.updatedAt} >= ${table.createdAt}`,
 		),
+	],
+);
+
+export const profiles = sqliteTable(
+	"profiles",
+	{
+		id: text("id").primaryKey(),
+		telegramUserId: text("telegram_user_id")
+			.notNull()
+			.references(() => telegramUsers.telegramUserId),
+		type: text("type", { enum: ["blogger", "telegram_channel", "venue_or_brand"] as const }).notNull(),
+		displayName: text("display_name").notNull(),
+		description: text("description").notNull(),
+		cityCode: text("city_code").notNull(),
+		privateContact: text("private_contact").notNull(),
+		status: text("status", { enum: ["active", "archived"] as const }).notNull(),
+		createdAt: integer("created_at").notNull(),
+		updatedAt: integer("updated_at").notNull(),
+	},
+	(table) => [
+		uniqueIndex("profiles_one_active_per_user")
+			.on(table.telegramUserId)
+			.where(sql`${table.status} = 'active'`),
+		index("profiles_telegram_user_status").on(table.telegramUserId, table.status),
+		check("profiles_city_code", sql`${table.cityCode} = 'ekaterinburg'`),
+		check("profiles_display_name_nonempty", sql`length(${table.displayName}) > 0`),
+		check("profiles_description_nonempty", sql`length(${table.description}) > 0`),
+		check("profiles_private_contact_nonempty", sql`length(${table.privateContact}) > 0`),
+		check("profiles_timestamp_coherence", sql`${table.updatedAt} >= ${table.createdAt}`),
+	],
+);
+
+export const profilePlatforms = sqliteTable(
+	"profile_platforms",
+	{
+		id: text("id").primaryKey(),
+		profileId: text("profile_id")
+			.notNull()
+			.references(() => profiles.id, { onDelete: "cascade" }),
+		platformType: text("platform_type", { enum: ["telegram", "instagram", "vk", "tiktok", "youtube", "website", "other"] as const }).notNull(),
+		url: text("url").notNull(),
+		title: text("title"),
+		username: text("username"),
+		telegramChatId: text("telegram_chat_id"),
+		audienceSize: integer("audience_size"),
+	},
+	(table) => [
+		index("profile_platforms_profile_id").on(table.profileId),
+		check("profile_platforms_url_nonempty", sql`length(${table.url}) > 0`),
+		check("profile_platforms_audience_nonnegative", sql`${table.audienceSize} IS NULL OR ${table.audienceSize} >= 0`),
+	],
+);
+
+export const profileTopics = sqliteTable(
+	"profile_topics",
+	{
+		profileId: text("profile_id")
+			.notNull()
+			.references(() => profiles.id, { onDelete: "cascade" }),
+		topic: text("topic", { enum: ["lifestyle", "food", "beauty", "travel", "city", "events", "family", "sport", "business", "other"] as const }).notNull(),
+	},
+	(table) => [
+		primaryKey({ columns: [table.profileId, table.topic] }),
 	],
 );
 

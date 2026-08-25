@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -64,10 +64,15 @@ class FailingDeadline implements ProviderDeadline {
 
 async function withRuntime<T>(work: (context: RuntimeContext) => Promise<T>, deadline: ProviderDeadline = new ImmediateDeadline()): Promise<T> {
 	const directory = await mkdtemp(join(tmpdir(), "collaboration-s0-06-runtime-"));
+	const migrationDirectory = join(directory, "migrations");
+	await mkdir(migrationDirectory);
+	for (const filename of ["0001_s0-04-ingress-foundation.sql", "0002_s0-05-outbox-events.sql"]) {
+		await copyFile(join(migrationsPath, filename), join(migrationDirectory, filename));
+	}
 	const boundary = new DatabaseBoundary(join(directory, "app.sqlite"));
 	const clock = new FakeClock(DAY_MS);
 	try {
-		const source = await MigrationSource.fromDirectory(migrationsPath);
+		const source = await MigrationSource.fromDirectory(migrationDirectory);
 		const migrations = new MigrationRunner(source, clock);
 		expect((await migrations.migrate(boundary)).applied).toEqual([1, 2]);
 		await migrations.verify(boundary);
