@@ -1,0 +1,36 @@
+{
+	"name": "collaboration-bot",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"engines": {
+		"node": ">=24.18.0 <25",
+		"pnpm": ">=11.15.1 <12"
+	},
+	"packageManager": "pnpm@11.15.1",
+	"scripts": {
+		"lint": "eslint .",
+		"typecheck": "tsc --noEmit",
+		"test:unit": "vitest run --project unit",
+		"test:integration": "vitest run --project integration",
+		"test:runtime": "vitest run --project runtime",
+		"test:e2e:fake": "vitest run --project e2e-fake",
+		"build": "tsc -p tsconfig.build.json",
+		"check": "pnpm lint && pnpm typecheck && pnpm test:unit && pnpm build"
+	},
+	"dependencies": {
+		"date-fns": "4.4.0",
+		"date-fns-tz": "3.2.0",
+		"drizzle-orm": "0.45.2",
+		"grammy": "1.45.1"
+	},
+	"devDependencies": {
+		"@eslint/js": "9.39.5",
+		"@types/node": "24.13.3",
+		"drizzle-kit": "0.31.10",
+		"eslint": "9.39.5",
+		"typescript": "5.9.3",
+		"typescript-eslint": "8.67.0",
+		"vitest": "4.1.11"
+	}
+}

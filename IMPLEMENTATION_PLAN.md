@@ -26,7 +26,7 @@
 | Stage | Status | Units | Результат |
 |---|---|---:|---|
 | P0 — Repository baseline | `completed` | 2 | Локальный Git baseline и правила проекта |
-| S0 — Foundation | `pending` | 7 | Надёжная инфраструктурная основа без product flows |
+| S0 — Foundation | `in_progress` | 7 | Надёжная инфраструктурная основа без product flows |
 | S1 — Profiles | `pending` | 3 | Профиль и deferred Telegram wizard |
 | S2 — Drafts and publication | `pending` | 5 | Draft lifecycle и надёжная showcase publication |
 | S3 — Feed and applications | `pending` | 5 | Core marketplace до `matched/contact/restart` |
@@ -148,7 +148,7 @@ P0-01 → P0-02
 
 #### S0-01 — Создать toolchain contracts и pure config boundary
 
-- **Status:** `pending`
+- **Status:** `completed`
 - **Objective:** Получить минимальный strict ESM TypeScript project с закреплёнными версиями, исполнимыми scripts и pure config parser без real credentials.
 - **Requirements:** Инфраструктура; косвенная основа всех FR/AC.
 - **Dependencies:** `P0-02`.
@@ -158,17 +158,17 @@ P0-01 → P0-02
 - **Do not touch:** SQLite/product schemas, Telegram network adapter, product modules, production env/plist.
 - **Invariants:** Node `>=24.18.0 <25`; pnpm `>=11.15.1 <12`, `packageManager=pnpm@11.15.1`; strict ESM; без NestJS/dotenv/HTTP/Docker.
 - **Tests first:** Invalid/missing/duplicate config values, decimal IDs without Number conversion, fixed timezone, username normalization, unknown-key warning.
-- **Implementation notes:** Parser принимает explicit key/value input. Создать canonical scripts `lint`, `typecheck`, `test:unit`, `test:integration`, `test:runtime`, `test:e2e:fake`, `build`, `check`; пустые gates не должны маскировать отсутствие tests.
+- **Implementation notes:** Parser принимает explicit key/value input. Создать canonical scripts `lint`, `typecheck`, `test:unit`, `test:integration`, `test:runtime`, `test:e2e:fake`, `build`, `check`; `pnpm check` запускает только применимые непустые suites; отдельные пустые suite scripts fail-closed без `--passWithNoTests` и подключаются к aggregate после первого реального теста.
 - **Verification:** `node --version`; `pnpm --version`; `pnpm lint`; `pnpm typecheck`; focused config tests; `pnpm build`; `pnpm check`.
-- **Exit criteria:** Clean install воспроизводим lockfile; все scripts реальны и зелёные; config tests не читают filesystem/Telegram; запрещённые dependencies отсутствуют.
+- **Exit criteria:** Clean install воспроизводим lockfile; все применимые scripts зелёные; отдельные пустые suite scripts fail-closed без `--passWithNoTests` и подключаются к aggregate после первого реального теста; config tests не читают filesystem/Telegram; запрещённые dependencies отсутствуют.
 - **Completion evidence:**
   - Commit SHA: `SELF`
-  - Changed files:
-  - Focused checks:
-  - Aggregate checks: `pnpm check`
-  - Acceptance evidence:
-  - Review result:
-  - Notes/deviations:
+  - Changed files: `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `tsconfig.json`, `tsconfig.build.json`, `eslint.config.js`, `vitest.config.ts`, `src/config/parse-config.ts`, `test/unit/config.test.ts`, `IMPLEMENTATION_PLAN.md`
+  - Focused checks: `node --version` (`v24.18.0`); `pnpm --version` (`11.15.1`); ordinary `pnpm install` PASS with reproducible lock and no blocked-build warning/error; `pnpm test:unit` (6/6 PASS); `pnpm lint` PASS; `pnpm typecheck` PASS; `pnpm build` PASS; empty `pnpm test:integration` exits 1 as expected; parser/test import `rg` check PASS; forbidden dependency audit PASS; staged secret scan PASS
+  - Aggregate checks: `pnpm check` — PASS
+  - Acceptance evidence: strict NodeNext ESM package with explicit `.js` imports, exact Node/pnpm engines and package manager, lockfile-pinned approved dependency branches, canonical scripts, pure explicit-input config parser, synthetic validation tests including duplicate admin IDs and process.env isolation with `finally` restoration, separate source/import `rg` proof of no filesystem/Telegram dependency, and build output under `dist/`; `check` runs only applicable non-empty lint/typecheck/unit/build gates while empty suites fail closed without `--passWithNoTests`
+  - Review result: `Orchestrator review — PASS (local S0-01 diff and applicable gates); independent Sol max deferred to S0-07`
+  - Notes/deviations: No SQLite/schema, Telegram adapter, product module, credential, or production file changes; `pnpm-workspace.yaml` contains only explicit `allowBuilds: esbuild: true`; no `minimumReleaseAgeExclude`, `onlyBuiltDependencies`, `--ignore-scripts`, frozen install, or store override; `typescript-eslint@8.67.0` is an exact stable patch in the approved 8.x branch, without release-age exclusions; no scope deviations
 - **Stop conditions:** Required tool version unavailable, repository policy конфликтует с TD или dependency требует неутверждённой архитектуры.
 
 #### S0-02 — Добавить безопасные domain/runtime primitives
