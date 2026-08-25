@@ -1,7 +1,7 @@
 # Collaboration Bot — solo-launch implementation plan
 
 - Статус документа: `Approved execution registry`
-- Версия: `0.3`
+- Версия: `0.4`
 - Дата: `2026-08-25`
 - Цель: как можно быстрее получить работающий Telegram-цикл для ручного распространения
 - Ограничение: один stage за пользовательскую авторизацию, один локальный commit на unit, без push/PR/deploy
@@ -175,6 +175,23 @@ P0-01 → P0-02
 - **Exit criteria:** `LAC-02` passes locally and the existing bot runtime exposes the flow. With separately authorized credentials/channel, the author can publish a real test card immediately after S2; one commit `S2-02: publish and list collaboration cards`.
 - **Evidence:** Fill exact evidence and `Commit SHA: SELF`.
 - **Stop conditions:** Local implementation cannot pass without real Telegram or requires deferred reconciliation/status infrastructure. The hands-on checkpoint itself pauses for separate authorization.
+
+### Future capability (non-blocking)
+
+#### FUT-01 — Telegram-only automatic audience count
+
+- **Status:** `future` — отдельная узкая карточка между S2 и S3; не является stage, не добавляется в граф зависимостей и не меняет ровно две S1 units.
+- **Objective:** После успешного сохранения профиля без явно введённого размера аудитории best-effort получить число подписчиков canonical public Telegram-канала через Bot API и сохранить происхождение значения.
+- **Requirements:** PRD §7.2–§7.3 и TD §8.3, §10; только Telegram-канал с canonical public username и доступным chat identity.
+- **Dependencies:** `S1-02` для canonical URL/native `ChatShared` identity; существующие profile platform repository и `Clock`. Не блокирует S3 и не требует showcase capability.
+- **Scope:** Application port/adaptor для `getChatMemberCount`; один вызов после commit успешного create/update профиля, только когда `audience_size` отсутствует и есть canonical Telegram username плюс `telegram_chat_id` (предпочтительно) или `@username` (fallback). Вызов выполняется вне SQLite transaction; успех записывается короткой атомарной transaction.
+- **Schema contract:** Текущая `profile_platforms` содержит только `audience_size`, поэтому provenance/timestamp ещё не совместимы с текущей схемой как хранимые поля. Эта карточка включает только additive migration со nullable `audience_source` (`manual` | `telegram_api`) и `audience_observed_at` (UTC integer milliseconds, non-negative); существующие rows остаются валидными. Manual input записывает `manual`, успешный Bot API count — `telegram_api`; явное manual значение не перезаписывается автоматикой.
+- **Failure policy:** `getChatMemberCount` errors, no access, private/inaccessible channel, missing username/chat identity и unknown/invalid channel — fail soft: профиль и session не откатываются, текущий manual value сохраняется, пользователь может ввести значение вручную. Для non-Telegram HTTPS не делается Bot API call и сохраняется explicit manual entry.
+- **Do not touch:** Instagram, VK, TikTok, YouTube и другие platform integrations; OAuth; scraping; scheduler, worker, periodic refresh, background polling, auto-retry loop, showcase permissions или изменение S1 evidence.
+- **Tests first:** failing unit tests для eligibility/target precedence и classifier; fresh/upgrade SQLite migration tests для nullable provenance/checks; fake Bot API success by chat ID and `@username`, 403/no-access/private failure, duplicate command and manual-value preservation; fake profile E2E proving automatic fill and manual fallback; no-network assertion for non-Telegram.
+- **Acceptance:** Eligible canonical Telegram platform makes at most one user-triggered post-commit lookup per profile save when audience is missing; successful non-negative count is persisted with `source=telegram_api` and timestamp; manual and non-Telegram paths remain explicit; failure is visible only as safe fallback and never creates a partial profile mutation. Local/fake evidence must not claim real Telegram accuracy.
+- **Verification/evidence:** focused unit/SQLite/fake E2E, fresh and upgrade migrations, `pnpm db:verify`, `pnpm check`, `git diff --check`, changed-file and secret scans. Real Bot API count comparison, access/no-access behavior and exact bot identity are a separately authorized real-Telegram checkpoint; no credentials/network are part of the local card.
+- **Stop conditions:** source/timestamp cannot be added without destructive migration; the API requires a policy beyond best-effort manual fallback; implementation needs periodic refresh, another platform integration, OAuth/scraping, real credentials/network for local acceptance, or a new product field/policy.
 
 ### S3 — Marketplace vertical
 
