@@ -15,6 +15,9 @@ import { DatabaseBoundary } from "../infrastructure/database/database-boundary.j
 import { MigrationRunner, MigrationSource } from "../infrastructure/database/migrations.js";
 import { SqliteProfileRepository } from "../infrastructure/database/profile-repository.js";
 import { SqliteProfileSessionRepository } from "../infrastructure/database/profile-session-repository.js";
+import { SqliteCollaborationRepository } from "../infrastructure/database/collaboration-repository.js";
+import { SqliteCollaborationSessionRepository } from "../infrastructure/database/collaboration-session-repository.js";
+import { CollaborationDraftService } from "../application/collaborations/collaboration-draft-service.js";
 import { SqliteDurableCommandStore } from "../infrastructure/database/durable-command-repository.js";
 import { DatabaseBoundaryTransactionRunner } from "../infrastructure/database/transaction-runner.js";
 import { SqliteTelegramUserRepository } from "../infrastructure/database/telegram-user-repository.js";
@@ -59,6 +62,14 @@ export async function createBotRuntime(options: BotRuntimeOptions): Promise<BotR
 		const bot = options.bot ?? (options.botFactory ?? ((token) => new Bot(token)))(options.config.botToken);
 		const userRepository = new SqliteTelegramUserRepository(boundary);
 		const transactionRunner = new DatabaseBoundaryTransactionRunner(boundary);
+		const profileSessionRepository = new SqliteProfileSessionRepository(boundary);
+		const collaborationDraftService = new CollaborationDraftService(
+			new SqliteCollaborationRepository(boundary),
+			new SqliteCollaborationSessionRepository(boundary),
+			transactionRunner,
+			clock,
+			profileSessionRepository,
+		);
 		const durableCommandExecutor = new DurableCommandExecutor(transactionRunner, new SqliteDurableCommandStore(boundary), { hash: hashCanonicalInput }, clock);
 		let inFlight = 0;
 		let drainResolve: (() => void) | undefined;
@@ -77,11 +88,12 @@ export async function createBotRuntime(options: BotRuntimeOptions): Promise<BotR
 				transactionRunner,
 				clock,
 			),
-			sessionRepository: new SqliteProfileSessionRepository(boundary),
+				sessionRepository: profileSessionRepository,
 			telegramUserRepository: userRepository,
 			durableCommandExecutor,
 			clock,
-			helpContact: options.config.helpContact,
+				helpContact: options.config.helpContact,
+				collaborationDraftService,
 		});
 		const logger = new SafeLogger((entry) => options.logSink?.(JSON.stringify(entry)), clock, "bot");
 		bot.catch((error: BotError) => {

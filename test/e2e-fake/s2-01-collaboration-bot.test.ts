@@ -1,0 +1,152 @@
+import { fileURLToPath } from "node:url";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { Bot } from "grammy";
+import type { Update, UserFromGetMe } from "grammy/types";
+import { describe, expect, it } from "vitest";
+
+import { CollaborationDraftService } from "../../src/application/collaborations/collaboration-draft-service.js";
+import { DurableCommandExecutor } from "../../src/application/commands/command-executor.js";
+import { ProfileService } from "../../src/application/profiles/profile-service.js";
+import { hashCanonicalInput } from "../../src/infrastructure/crypto/canonical-input-hash.js";
+import { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
+import { SqliteCollaborationRepository } from "../../src/infrastructure/database/collaboration-repository.js";
+import { SqliteCollaborationSessionRepository } from "../../src/infrastructure/database/collaboration-session-repository.js";
+import { SqliteDurableCommandStore } from "../../src/infrastructure/database/durable-command-repository.js";
+import { MigrationRunner, MigrationSource } from "../../src/infrastructure/database/migrations.js";
+import { SqliteProfileRepository } from "../../src/infrastructure/database/profile-repository.js";
+import { SqliteProfileSessionRepository } from "../../src/infrastructure/database/profile-session-repository.js";
+import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/database/transaction-runner.js";
+import { SqliteTelegramUserRepository } from "../../src/infrastructure/database/telegram-user-repository.js";
+import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
+import { FakeTelegramApi } from "../../src/infrastructure/testing/fake-telegram-api.js";
+import { registerProfileBot } from "../../src/bot/profile-bot.js";
+
+const migrationsPath = fileURLToPath(new URL("../../migrations/", import.meta.url));
+
+describe("S2-01 fake collaboration wizard", () => {
+	it("does not let an old Cancel callback delete a replacement draft or coexist with profile editing", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "collaboration-s2-01-stale-cancel-"));
+		const boundary = new DatabaseBoundary(join(directory, "app.sqlite"));
+		const clock = new FakeClock(new Date("2023-11-14T10:00:00.000Z"));
+		const fake = new FakeTelegramApi({ token: "fake-token", botInfo: { id: 777, is_bot: true, first_name: "Collab", username: "collab_bot" } as unknown as UserFromGetMe });
+		try {
+			await new MigrationRunner(await MigrationSource.fromDirectory(migrationsPath), clock).migrate(boundary);
+			await seedProfile(boundary, clock);
+			const bot = buildBot(boundary, clock, fake);
+			await bot.init();
+			await bot.handleUpdate({ update_id: 1, message: privateMessage(1, "/start") });
+			await bot.handleUpdate({ update_id: 2, callback_query: callback(2, callbackData(fake, "collaboration:start")) });
+			const oldCancel = callbackData(fake, "collaboration:cancel");
+			await bot.handleUpdate({ update_id: 3, callback_query: callback(3, oldCancel) });
+			await bot.handleUpdate({ update_id: 4, callback_query: callback(4, "collaboration:start") });
+			const replacement = await boundary.query<{ id: string }>("SELECT id FROM collaborations WHERE status = 'draft'");
+			expect(replacement).toHaveLength(1);
+			await bot.handleUpdate({ update_id: 5, callback_query: callback(5, oldCancel) });
+			expect(await boundary.query<{ id: string }>("SELECT id FROM collaborations WHERE status = 'draft'")).toEqual(replacement);
+			await bot.handleUpdate({ update_id: 6, callback_query: callback(6, "profile:edit") });
+			expect(await boundary.query("SELECT telegram_user_id FROM profile_sessions")).toEqual([]);
+			await bot.handleUpdate({ update_id: 7, message: privateMessage(7, "/cancel") });
+			expect(await boundary.query("SELECT id FROM collaborations")).toEqual([]);
+			expect(await boundary.query("SELECT telegram_user_id FROM profile_sessions")).toEqual([]);
+		} finally { await boundary.close(); await rm(directory, { recursive: true, force: true }); }
+	});
+
+	it("creates, resumes, previews and replay-safely cancels a draft", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "collaboration-s2-01-e2e-"));
+		const databasePath = join(directory, "app.sqlite");
+		const clock = new FakeClock(new Date("2023-11-14T10:00:00.000Z"));
+		const fake = new FakeTelegramApi({ token: "fake-token", botInfo: { id: 777, is_bot: true, first_name: "Collab", username: "collab_bot" } as unknown as UserFromGetMe });
+		let boundary = new DatabaseBoundary(databasePath);
+		try {
+			const source = await MigrationSource.fromDirectory(migrationsPath);
+			await new MigrationRunner(source, clock).migrate(boundary);
+			await seedProfile(boundary, clock);
+			const firstBot = buildBot(boundary, clock, fake);
+			await firstBot.init();
+			await firstBot.handleUpdate({ update_id: 1, message: privateMessage(1, "/start") });
+			await firstBot.handleUpdate({ update_id: 2, callback_query: callback(2, callbackData(fake, "collaboration:start")) });
+			await firstBot.handleUpdate({ update_id: 3, callback_query: callback(3, callbackData(fake, "collaboration:format:joint_content")) });
+			await firstBot.handleUpdate({ update_id: 4, callback_query: callback(4, callbackData(fake, "collaboration:target:blogger")) });
+			await firstBot.handleUpdate({ update_id: 5, message: privateMessage(5, "Город") });
+			await firstBot.handleUpdate({ update_id: 6, message: privateMessage(6, "<Городской проект>") });
+			await firstBot.handleUpdate({ update_id: 7, message: privateMessage(7, "Снимем совместный материал для аудитории.") });
+			await firstBot.handleUpdate({ update_id: 8, message: privateMessage(8, "Нужен партнёр для съёмки и согласования.") });
+			await firstBot.handleUpdate({ update_id: 9, message: privateMessage(9, "2") });
+			await firstBot.handleUpdate({ update_id: 10, message: privateMessage(10, "20.11.2023") });
+			await firstBot.handleUpdate({ update_id: 11, message: privateMessage(11, "25.11.2023") });
+			expect(String(fake.lastMessage()?.text)).toContain("&lt;Городской проект&gt;");
+			expect(String(fake.lastMessage()?.text)).not.toContain("public_token");
+			expect(await boundary.query<{ status: string }>("SELECT status FROM collaborations WHERE author_profile_id = (SELECT id FROM profiles WHERE telegram_user_id = '100')")).toEqual([{ status: "draft" }]);
+			await boundary.close();
+			boundary = new DatabaseBoundary(databasePath);
+			const restarted = buildBot(boundary, clock, fake);
+			await restarted.init();
+			await restarted.handleUpdate({ update_id: 12, message: privateMessage(12, "/start") });
+			await restarted.handleUpdate({ update_id: 13, callback_query: callback(13, callbackData(fake, "collaboration:start")) });
+			expect(String(fake.lastMessage()?.text)).toContain("&lt;Городской проект&gt;");
+			await restarted.handleUpdate({ update_id: 14, message: privateMessage(14, "/cancel") });
+			expect(await boundary.query("SELECT id FROM collaborations")).toEqual([]);
+			expect(await boundary.query("SELECT telegram_user_id FROM collaboration_sessions")).toEqual([]);
+		} finally { await boundary.close(); await rm(directory, { recursive: true, force: true }); }
+	});
+
+	it("defers to the profile wizard and resumes collaboration after profile completion", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "collaboration-s2-01-deferred-"));
+		const boundary = new DatabaseBoundary(join(directory, "app.sqlite"));
+		const clock = new FakeClock(new Date("2023-11-14T10:00:00.000Z"));
+		const fake = new FakeTelegramApi({ token: "fake-token", botInfo: { id: 777, is_bot: true, first_name: "Collab", username: "collab_bot" } as unknown as UserFromGetMe });
+		try {
+			await new MigrationRunner(await MigrationSource.fromDirectory(migrationsPath), clock).migrate(boundary);
+			const bot = buildBot(boundary, clock, fake);
+			await bot.init();
+			await bot.handleUpdate({ update_id: 1, message: privateMessage(1, "/start") });
+			await bot.handleUpdate({ update_id: 2, callback_query: callback(2, callbackData(fake, "collaboration:start")) });
+			await bot.handleUpdate({ update_id: 3, callback_query: callback(3, callbackData(fake, "profile:type:blogger")) });
+			await bot.handleUpdate({ update_id: 4, message: privateMessage(4, "Alice Creator") });
+			await bot.handleUpdate({ update_id: 5, message: privateMessage(5, "Город") });
+			await bot.handleUpdate({ update_id: 6, message: privateMessage(6, "Ищу партнёров для городских проектов.") });
+			await bot.handleUpdate({ update_id: 7, callback_query: callback(7, callbackData(fake, "profile:platform:other")) });
+			await bot.handleUpdate({ update_id: 8, message: privateMessage(8, "https://example.com/alice") });
+			await bot.handleUpdate({ update_id: 9, message: privateMessage(9, "100") });
+			await bot.handleUpdate({ update_id: 10, callback_query: callback(10, callbackData(fake, "profile:apply")) });
+			expect(String(fake.lastMessage()?.text)).toContain("Выберите формат коллаборации");
+			expect(await boundary.query("SELECT status FROM collaborations")).toEqual([{ status: "draft" }]);
+			expect(await boundary.query("SELECT state_json FROM profile_sessions")).toEqual([]);
+		} finally { await boundary.close(); await rm(directory, { recursive: true, force: true }); }
+	});
+});
+
+function buildBot(boundary: DatabaseBoundary, clock: FakeClock, fake: FakeTelegramApi): Bot {
+	const transactionRunner = new DatabaseBoundaryTransactionRunner(boundary);
+	const profileSessions = new SqliteProfileSessionRepository(boundary);
+	const service = new CollaborationDraftService(new SqliteCollaborationRepository(boundary), new SqliteCollaborationSessionRepository(boundary), transactionRunner, clock, profileSessions);
+	const bot = new Bot("fake-token", { client: { fetch: fake.fetch } });
+	registerProfileBot(bot, {
+		profileService: new ProfileService(new SqliteProfileRepository(boundary), transactionRunner, clock),
+		sessionRepository: profileSessions,
+		telegramUserRepository: new SqliteTelegramUserRepository(boundary),
+		durableCommandExecutor: new DurableCommandExecutor(transactionRunner, new SqliteDurableCommandStore(boundary), { hash: hashCanonicalInput }, clock),
+		clock,
+		helpContact: "@helpdesk",
+		collaborationDraftService: service,
+	});
+	return bot;
+}
+
+async function seedProfile(boundary: DatabaseBoundary, clock: FakeClock): Promise<void> {
+	const now = clock.now().getTime();
+	await new SqliteTelegramUserRepository(boundary).upsert({ telegramUserId: "100", username: "alice", displayName: "Alice", updatedAt: now });
+	await new ProfileService(new SqliteProfileRepository(boundary), new DatabaseBoundaryTransactionRunner(boundary), clock).create("100", { type: "blogger", displayName: "Alice", description: "A useful local profile.", topics: ["city"], platforms: [{ platformType: "website", url: "https://example.com/alice" }] });
+}
+
+function privateMessage(messageId: number, text: string): NonNullable<Update["message"]> { return { message_id: messageId, date: 1_700_000_000, chat: { id: 100, type: "private" }, from: { id: 100, is_bot: false, first_name: "Alice", username: "alice" }, text } as NonNullable<Update["message"]>; }
+function callback(id: number, data: string): NonNullable<Update["callback_query"]> { return { id: `callback-${id}`, from: { id: 100, is_bot: false, first_name: "Alice", username: "alice" }, message: { ...privateMessage(id, "") }, chat_instance: "instance", data } as NonNullable<Update["callback_query"]>; }
+function callbackData(fake: FakeTelegramApi, prefix: string): string {
+	const button = fake.lastMessage()?.reply_markup?.inline_keyboard?.flat().find((candidate) => String((candidate as { callback_data?: unknown }).callback_data).startsWith(prefix));
+	const data = (button as { callback_data?: unknown } | undefined)?.callback_data;
+	if (typeof data !== "string") throw new Error(`callback ${prefix} was not rendered`);
+	return data;
+}

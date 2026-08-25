@@ -126,6 +126,75 @@ export const profileSessions = sqliteTable(
 	],
 );
 
+export const collaborations = sqliteTable(
+	"collaborations",
+	{
+		id: text("id").primaryKey(),
+		publicToken: text("public_token"),
+		authorProfileId: text("author_profile_id")
+			.notNull()
+			.references(() => profiles.id),
+		format: text("format", { enum: ["advertising_integration", "barter", "joint_giveaway", "joint_content", "mutual_pr", "event", "other"] as const }),
+		targetProfileType: text("target_profile_type", { enum: ["blogger", "telegram_channel", "venue_or_brand", "any"] as const }),
+		title: text("title"),
+		offerText: text("offer_text"),
+		expectationText: text("expectation_text"),
+		slotsTotal: integer("slots_total"),
+		responseDeadlineAt: integer("response_deadline_at"),
+		eventDateLocal: text("event_date_local"),
+		cityCode: text("city_code"),
+		status: text("status", { enum: ["draft", "publishing", "published", "publication_failed", "matched", "completed", "cancelled", "expired", "hidden"] as const }).notNull(),
+		version: integer("version").notNull(),
+		projectionRevision: integer("projection_revision").notNull(),
+		createdAt: integer("created_at").notNull(),
+		updatedAt: integer("updated_at").notNull(),
+	},
+	(table) => [
+		uniqueIndex("collaborations_one_draft_per_profile").on(table.authorProfileId).where(sql`${table.status} = 'draft'`),
+		index("collaborations_author_created").on(table.authorProfileId, table.createdAt, table.id),
+		check("collaborations_city_code", sql`${table.cityCode} IS NULL OR ${table.cityCode} = 'ekaterinburg'`),
+		check("collaborations_version_nonnegative", sql`${table.version} >= 1`),
+		check("collaborations_projection_revision_nonnegative", sql`${table.projectionRevision} >= 0`),
+		check("collaborations_timestamp_coherence", sql`${table.updatedAt} >= ${table.createdAt}`),
+	],
+);
+
+export const collaborationTopics = sqliteTable(
+	"collaboration_topics",
+	{
+		collaborationId: text("collaboration_id")
+			.notNull()
+			.references(() => collaborations.id, { onDelete: "cascade" }),
+		topic: text("topic", { enum: ["lifestyle", "food", "beauty", "travel", "city", "events", "family", "sport", "business", "other"] as const }).notNull(),
+	},
+	(table) => [primaryKey({ columns: [table.collaborationId, table.topic] })],
+);
+
+export const collaborationSessions = sqliteTable(
+	"collaboration_sessions",
+	{
+		telegramUserId: text("telegram_user_id")
+			.primaryKey()
+			.references(() => telegramUsers.telegramUserId, { onDelete: "cascade" }),
+		collaborationId: text("collaboration_id")
+			.notNull()
+			.references(() => collaborations.id, { onDelete: "cascade" }),
+		flowType: text("flow_type", { enum: ["collaboration"] as const }).notNull(),
+		step: text("step").notNull(),
+		stateJson: text("state_json").notNull(),
+		revision: integer("revision").notNull(),
+		expiresAt: integer("expires_at").notNull(),
+		updatedAt: integer("updated_at").notNull(),
+	},
+	(table) => [
+		index("collaboration_sessions_expiry").on(table.expiresAt),
+		index("collaboration_sessions_collaboration").on(table.collaborationId),
+		check("collaboration_sessions_flow_type", sql`${table.flowType} = 'collaboration'`),
+		check("collaboration_sessions_state_json_valid", sql`json_valid(${table.stateJson}) = 1 AND json_type(${table.stateJson}) = 'object'`),
+		check("collaboration_sessions_revision_nonnegative", sql`${table.revision} >= 0`),
+	],
+);
+
 export const telegramActions = sqliteTable(
 	"telegram_actions",
 	{

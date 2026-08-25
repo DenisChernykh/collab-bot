@@ -146,9 +146,11 @@ P0-01 → P0-02
 
 ### S2 — Card publication vertical
 
+- **Status:** `in_progress`
+
 #### S2-01 — Draft, preview and deep-link identity
 
-- **Status:** `pending`
+- **Status:** `completed`
 - **Objective:** Let an author create, resume, cancel and preview a collaboration draft.
 - **Requirements:** `LFR-02`, `LFR-10`; draft/restart parts of `LAC-02`, `LAC-09`.
 - **Dependencies:** `S1-02`.
@@ -158,7 +160,13 @@ P0-01 → P0-02
 - **Tests first:** happy wizard, Back/Cancel/resume, invalid input, foreign actor, restart.
 - **Verification:** focused unit/integration/fake-adapter tests and migration checks.
 - **Exit criteria:** Exact preview and restart-safe draft flow pass; one commit `S2-01: create resumable collaboration drafts`.
-- **Evidence:** Fill plan evidence and `Commit SHA: SELF`.
+- **Evidence:**
+  - Commit SHA: `SELF` — local commit subject: `S2-01: create resumable collaboration drafts`.
+  - Changed files: `migrations/0006_s2-01-collaboration-drafts.sql`, `src/domain/collaborations/collaboration.ts`, `src/application/collaborations/collaboration-draft-service.ts`, `src/application/collaborations/collaboration-renderer.ts`, `src/application/ports/collaboration-repository.ts`, `src/application/ports/collaboration-session-repository.ts`, `src/infrastructure/database/collaboration-repository.ts`, `src/infrastructure/database/collaboration-session-repository.ts`, `src/infrastructure/database/drizzle-schema.ts`, `src/application/ports/profile-session-repository.ts`, `src/infrastructure/database/profile-session-repository.ts`, `src/bot/profile-bot.ts`, `src/runtime/bot-runtime.ts`, `test/unit/s2-01-collaboration-domain.test.ts`, `test/integration/s2-01-collaboration.test.ts`, `test/e2e-fake/s2-01-collaboration-bot.test.ts`, and this plan evidence.
+  - Focused checks: collaboration domain/renderer `3 passed`; fresh and `0005→0006` migration plus draft/session ownership/reopen/cancel integration `1 passed`; fake journey `profile → draft → preview → close/reopen → resume → /cancel` and deferred profile continuation `2 passed`; existing fake profile suite `3 passed`.
+  - Aggregate checks: `pnpm check` PASS — unit `29`, integration `35`, runtime `27`, build; final `pnpm test:e2e:fake` PASS — `5`; `pnpm db:verify` PASS; `pnpm typecheck`/`pnpm lint` PASS; `git diff --check` PASS. Staged secret-pattern scan PASS; no credentials or private database were used.
+  - Acceptance evidence: additive `0006` creates `collaborations`, `collaboration_topics` and durable `collaboration_sessions`; one draft per active author profile is SQL-enforced; `public_token` is nullable and remains `NULL` through S2-01; draft/session ownership is actor-bound; generation/revision callbacks, restart resume, invalid-input preservation, Back, Cancel and replay-safe deletion pass; profile absence stores typed `create_collaboration` continuation and profile completion resumes the draft flow; renderer HTML-escapes user fields and enforces the 4096 UTF-16 limit without outputting internal/public identity values.
+  - Review/deviations: no real Telegram, credentials, showcase channel mutation, process launch, private SQLite or network smoke was used. `pnpm db:verify` and Vitest required host-capable execution because the sandbox could not write existing `dist`/`.vite-temp`; the commands themselves passed. S2-02 remains pending.
 - **Stop conditions:** Requires new fields/policy or real channel mutation.
 
 #### S2-02 — Known-result showcase publication and own cards

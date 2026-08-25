@@ -27,6 +27,7 @@ export interface ProfileSessionState {
 	readonly step: ProfileSessionStep;
 	readonly draft: ProfileDraft;
 	readonly requestId?: number;
+	readonly continuation?: { readonly kind: "create_collaboration" };
 }
 
 export interface ProfileSessionRecord {

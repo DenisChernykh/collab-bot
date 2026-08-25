@@ -44,12 +44,16 @@ export class SqliteProfileSessionRepository implements ProfileSessionRepository 
 		}, record.telegramUserId)) {
 			throw new Error("invalid profile session record");
 		}
-		await this.boundary.execute(
-			`INSERT INTO profile_sessions (telegram_user_id, flow_type, step, state_json, revision, expires_at, updated_at)
-			 VALUES (?, 'profile', ?, ?, ?, ?, ?)
-			 ON CONFLICT(telegram_user_id) DO UPDATE SET flow_type = 'profile', step = excluded.step, state_json = excluded.state_json, revision = excluded.revision, expires_at = excluded.expires_at, updated_at = excluded.updated_at`,
-			[record.telegramUserId, record.state.step, JSON.stringify(record.state), record.revision, record.expiresAt, record.updatedAt],
-		);
+		await this.boundary.withTransaction(async () => {
+			const collaborationRows = await this.boundary.query<{ collaboration_id: unknown }>("SELECT collaboration_id FROM collaboration_sessions WHERE telegram_user_id = ? AND expires_at > ?", [record.telegramUserId, record.updatedAt]);
+			if (collaborationRows.length > 0) throw new Error("another wizard is already active");
+			await this.boundary.execute(
+				`INSERT INTO profile_sessions (telegram_user_id, flow_type, step, state_json, revision, expires_at, updated_at)
+				 VALUES (?, 'profile', ?, ?, ?, ?, ?)
+				 ON CONFLICT(telegram_user_id) DO UPDATE SET flow_type = 'profile', step = excluded.step, state_json = excluded.state_json, revision = excluded.revision, expires_at = excluded.expires_at, updated_at = excluded.updated_at`,
+				[record.telegramUserId, record.state.step, JSON.stringify(record.state), record.revision, record.expiresAt, record.updatedAt],
+			);
+		});
 	}
 
 	async delete(telegramUserId: string): Promise<void> {
@@ -93,5 +97,6 @@ function isProfileSessionState(value: unknown): value is ProfileSessionState {
 	const steps = new Set(["type", "display_name", "topics", "description", "platform", "platform_url", "audience", "review"]);
 	return candidate.version === 1 && typeof candidate.generation === "string" && /^[a-f0-9]{16}$/.test(candidate.generation) && typeof candidate.step === "string" && steps.has(candidate.step) &&
 		typeof candidate.draft === "object" && candidate.draft !== null && !Array.isArray(candidate.draft) &&
-		(candidate.requestId === undefined || (Number.isSafeInteger(candidate.requestId) && (candidate.requestId as number) >= -2147483648 && (candidate.requestId as number) <= 2147483647));
+		(candidate.requestId === undefined || (Number.isSafeInteger(candidate.requestId) && (candidate.requestId as number) >= -2147483648 && (candidate.requestId as number) <= 2147483647)) &&
+		(candidate.continuation === undefined || (typeof candidate.continuation === "object" && candidate.continuation !== null && !Array.isArray(candidate.continuation) && (candidate.continuation as { kind?: unknown }).kind === "create_collaboration"));
 }
