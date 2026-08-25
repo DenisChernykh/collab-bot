@@ -246,7 +246,10 @@ describe("S1-02 fake Telegram profile journey", () => {
 			await bot.handleUpdate({ update_id: 7, callback_query: callback(7, callbackData(fake, "profile:platform:telegram")) });
 			expect(fake.lastMessage()?.reply_markup?.keyboard?.flat().find((button) => (button as { text?: string }).text === "Указать другую ссылку")).toBeDefined();
 			await bot.handleUpdate({ update_id: 8, message: privateMessage(8, "Указать другую ссылку") });
-			await bot.handleUpdate({ update_id: 9, message: privateMessage(9, "https://example.com/direct") });
+			await bot.handleUpdate({ update_id: 9, message: privateMessage(9, "https://t.me/+private_invite") });
+			expect(String(fake.lastMessage()?.text)).toContain("Нужна публичная ссылка вида https://t.me/channel_name");
+			expect(await new SqliteProfileSessionRepository(boundary).findActive("100", clock.now().getTime())).toMatchObject({ state: { step: "platform_url" } });
+			await bot.handleUpdate({ update_id: 10, message: privateMessage(10, "https://example.com/direct") });
 			expect(String(fake.lastMessage()?.text)).toContain("Укажите размер аудитории");
 			expect(await new SqliteProfileSessionRepository(boundary).findActive("100", clock.now().getTime())).toMatchObject({ state: { step: "audience", draft: { platform: { platformType: "other", url: "https://example.com/direct" } } } });
 		} finally {

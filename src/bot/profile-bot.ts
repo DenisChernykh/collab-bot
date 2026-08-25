@@ -409,6 +409,10 @@ async function choosePlatform(ctx: Context, options: ProfileBotOptions, userId: 
 async function acceptPlatformUrl(ctx: Context, options: ProfileBotOptions, userId: string, state: ProfileSessionState, value: string): Promise<void> {
 		if (!isAbsoluteHttps(value)) { await ctx.reply("Нужна абсолютная ссылка https://..."); return; }
 		const username = telegramUsernameFromUrl(value);
+		if (isTelegramHost(value) && username === undefined) {
+			await ctx.reply("Нужна публичная ссылка вида https://t.me/channel_name. Приглашения в закрытые каналы не подходят.");
+			return;
+		}
 		const platform = username === undefined
 			? { platformType: "other" as const, url: value }
 			: { platformType: "telegram" as const, url: `https://t.me/${username}`, username };
@@ -557,6 +561,7 @@ function profileTypeLabel(type: ProfileType): string { return PROFILE_TYPE_LABEL
 function topicLabel(topic: Topic): string { return TOPIC_LABELS[topic]; }
 
 function isAbsoluteHttps(value: string): boolean { try { const url = new URL(value); return url.protocol === "https:" && url.username === "" && url.password === ""; } catch { return false; } }
+function isTelegramHost(value: string): boolean { try { return new URL(value).hostname.toLowerCase() === "t.me"; } catch { return false; } }
 function telegramUsernameFromUrl(value: string): string | undefined { if (!isAbsoluteHttps(value)) return undefined; try { const url = new URL(value); if (url.hostname.toLowerCase() !== "t.me") return undefined; return normalizeTelegramUsername(url.pathname.slice(1).replace(/\/$/, "")); } catch { return undefined; } }
 function normalizeTelegramUsername(value: string): string | undefined { const normalized = value.trim().replace(/^@+/, ""); return /^[A-Za-z0-9_]{5,32}$/.test(normalized) ? normalized : undefined; }
 function uniqueRequestId(candidate: number, previous: number | undefined): number { return Number.isSafeInteger(candidate) && candidate >= -2_147_483_648 && candidate <= 2_147_483_647 && candidate !== previous ? candidate : (previous === 2_147_483_647 ? 1 : 2_147_483_647); }
