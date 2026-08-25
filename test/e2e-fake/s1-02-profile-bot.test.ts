@@ -151,7 +151,7 @@ describe("S1-02 fake Telegram profile journey", () => {
 			await restartedBot.handleUpdate({ update_id: 25, message: privateMessage(25, "Alice Studio") });
 			await restartedBot.handleUpdate({ update_id: 26, message: privateMessage(26, "Город") });
 			await restartedBot.handleUpdate({ update_id: 27, message: privateMessage(27, "Ищу партнёров для обновлённого городского проекта.") });
-			await restartedBot.handleUpdate({ update_id: 28, callback_query: callback(28, callbackData(fake, "profile:platform:website")) });
+			await restartedBot.handleUpdate({ update_id: 28, callback_query: callback(28, callbackData(fake, "profile:platform:other")) });
 			await restartedBot.handleUpdate({ update_id: 29, message: privateMessage(29, "https://example.com/alice") });
 			await restartedBot.handleUpdate({ update_id: 30, message: privateMessage(30, "100") });
 			await restartedBot.handleUpdate({ update_id: 31, message: privateMessage(31, "@new_contact") });
@@ -208,6 +208,47 @@ describe("S1-02 fake Telegram profile journey", () => {
 			expect(String(fake.lastMessage()?.text)).toContain("Укажите размер аудитории");
 			expect(String(fake.lastMessage()?.text)).not.toContain("предложенную площадку");
 			expect(await new SqliteProfileSessionRepository(boundary).findActive("100", clock.now().getTime())).toMatchObject({ state: { step: "audience", draft: { platform: { url: "https://t.me/direct_channel", username: "direct_channel" } } } });
+		} finally {
+			await boundary.close();
+			await rm(directory, { recursive: true, force: true });
+		}
+	});
+
+	it("routes the reply-button generic link flow to platformType other", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "collaboration-s1-02-generic-url-"));
+		const databasePath = join(directory, "app.sqlite");
+		const clock = new FakeClock(1_700_000_000_000);
+		const fake = new FakeTelegramApi({
+			token: "fake-token",
+			botInfo: { id: 777, is_bot: true, first_name: "Collab", username: "collab_bot" } as unknown as UserFromGetMe,
+		});
+		const boundary = new DatabaseBoundary(databasePath);
+		try {
+			const source = await MigrationSource.fromDirectory(migrationsPath);
+			await new MigrationRunner(source, clock).migrate(boundary);
+			const bot = new Bot("fake-token", { client: { fetch: fake.fetch } });
+			registerProfileBot(bot, {
+				profileService: new ProfileService(new SqliteProfileRepository(boundary), new DatabaseBoundaryTransactionRunner(boundary), clock),
+				sessionRepository: new SqliteProfileSessionRepository(boundary),
+				telegramUserRepository: new SqliteTelegramUserRepository(boundary),
+				durableCommandExecutor: new DurableCommandExecutor(new DatabaseBoundaryTransactionRunner(boundary), new SqliteDurableCommandStore(boundary), { hash: hashCanonicalInput }, clock),
+				clock,
+				helpContact: "@helpdesk",
+				requestIdFactory: () => 12349,
+			});
+			await bot.init();
+			await bot.handleUpdate({ update_id: 1, message: privateMessage(1, "/profile") });
+			await bot.handleUpdate({ update_id: 2, callback_query: callback(2, "profile:create") });
+			await bot.handleUpdate({ update_id: 3, message: privateMessage(3, "Блогер") });
+			await bot.handleUpdate({ update_id: 4, message: privateMessage(4, "Other Creator") });
+			await bot.handleUpdate({ update_id: 5, message: privateMessage(5, "Город") });
+			await bot.handleUpdate({ update_id: 6, message: privateMessage(6, "Ищу партнёров для универсальной ссылки.") });
+			await bot.handleUpdate({ update_id: 7, callback_query: callback(7, callbackData(fake, "profile:platform:telegram")) });
+			expect(fake.lastMessage()?.reply_markup?.keyboard?.flat().find((button) => (button as { text?: string }).text === "Указать другую ссылку")).toBeDefined();
+			await bot.handleUpdate({ update_id: 8, message: privateMessage(8, "Указать другую ссылку") });
+			await bot.handleUpdate({ update_id: 9, message: privateMessage(9, "https://example.com/direct") });
+			expect(String(fake.lastMessage()?.text)).toContain("Укажите размер аудитории");
+			expect(await new SqliteProfileSessionRepository(boundary).findActive("100", clock.now().getTime())).toMatchObject({ state: { step: "audience", draft: { platform: { platformType: "other", url: "https://example.com/direct" } } } });
 		} finally {
 			await boundary.close();
 			await rm(directory, { recursive: true, force: true });

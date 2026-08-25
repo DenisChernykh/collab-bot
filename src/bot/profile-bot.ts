@@ -331,16 +331,12 @@ async function advanceText(ctx: Context, options: ProfileBotOptions, userId: str
 		}
 		case "platform":
 			if (value === "Указать другую ссылку" || value === "Ввести ссылку вручную" || value.toLowerCase() === "manual") {
-				const saved = await saveState(options, userId, { ...state, step: "platform_url", draft: { ...state.draft, platform: { platformType: "telegram", url: "https://t.me/manual" } } });
-				await ctx.reply("Укажите другую публичную ссылку вида https://t.me/channel_name.", { reply_markup: cancelKeyboard(saved) });
-				return;
-			}
-			if (telegramUsernameFromUrl(value) !== undefined) {
-				await acceptPlatformUrl(ctx, options, userId, state, value);
+				const saved = await saveState(options, userId, { ...state, step: "platform_url", draft: withoutPlatform(state.draft) });
+				await ctx.reply("Укажите другую публичную ссылку в формате https://...", { reply_markup: cancelKeyboard(saved) });
 				return;
 			}
 			if (isAbsoluteHttps(value)) {
-				await ctx.reply("Эта ссылка не ведёт на публичный Telegram-канал. Для сайта или соцсети выберите «Указать другую ссылку» и отправьте другую ссылку.", { reply_markup: platformKeyboard(session) });
+				await acceptPlatformUrl(ctx, options, userId, state, value);
 				return;
 			}
 			await choosePlatform(ctx, options, userId, value, options.requestIdFactory ?? (() => randomInt(1, 2_147_483_647)));
@@ -406,21 +402,17 @@ async function choosePlatform(ctx: Context, options: ProfileBotOptions, userId: 
 			await ctx.reply(PROFILE_LINK_CHOICE_HINT, { reply_markup: keyboard });
 			return;
 		}
-		const saved = await saveState(options, userId, withoutRequestId({ ...session.state, step: "platform_url", draft: { ...withoutPlatform(session.state.draft), platform: { platformType, url: "https://example.com/manual" } } }));
-		await ctx.reply("Укажите другую публичную ссылку https://...", { reply_markup: cancelKeyboard(saved) });
+		const saved = await saveState(options, userId, withoutRequestId({ ...session.state, step: "platform_url", draft: withoutPlatform(session.state.draft) }));
+		await ctx.reply("Укажите другую публичную ссылку в формате https://...", { reply_markup: cancelKeyboard(saved) });
 }
 
 async function acceptPlatformUrl(ctx: Context, options: ProfileBotOptions, userId: string, state: ProfileSessionState, value: string): Promise<void> {
-		const platformType = state.draft.platform?.platformType ?? "telegram";
 		if (!isAbsoluteHttps(value)) { await ctx.reply("Нужна абсолютная ссылка https://..."); return; }
-		let saved;
-		if (platformType === "telegram") {
-			const username = telegramUsernameFromUrl(value);
-			if (username === undefined) { await ctx.reply("Для Telegram-канала нужна публичная ссылка вида https://t.me/channel_name."); return; }
-			saved = await saveState(options, userId, withoutRequestId({ ...state, step: "audience", draft: { ...state.draft, platform: { platformType: "telegram", url: `https://t.me/${username}`, username } } }));
-		} else {
-			saved = await saveState(options, userId, withoutRequestId({ ...state, step: "audience", draft: { ...state.draft, platform: { platformType, url: value } } }));
-		}
+		const username = telegramUsernameFromUrl(value);
+		const platform = username === undefined
+			? { platformType: "other" as const, url: value }
+			: { platformType: "telegram" as const, url: `https://t.me/${username}`, username };
+		const saved = await saveState(options, userId, withoutRequestId({ ...state, step: "audience", draft: { ...state.draft, platform } }));
 		await ctx.reply("Укажите размер аудитории числом или отправьте `-`.", { reply_markup: cancelKeyboard(saved) });
 }
 
@@ -615,4 +607,4 @@ function resumeKeyboard(identity: SessionIdentity): InlineKeyboard { return new 
 function reviewKeyboard(identity: SessionIdentity): InlineKeyboard { return new InlineKeyboard().text("Сохранить профиль", revisionCallback("profile:apply", identity)).row().text("Отменить заполнение", revisionCallback("profile:cancel", identity)); }
 function cancelKeyboard(identity: SessionIdentity): InlineKeyboard { return new InlineKeyboard().text("Отменить заполнение", revisionCallback("profile:cancel", identity)); }
 function typeKeyboard(identity: SessionIdentity): InlineKeyboard { return new InlineKeyboard().text("Блогер", revisionCallback("profile:type:blogger", identity)).row().text("Telegram-канал", revisionCallback("profile:type:telegram_channel", identity)).row().text("Заведение или бренд", revisionCallback("profile:type:venue_or_brand", identity)); }
-function platformKeyboard(identity: SessionIdentity): InlineKeyboard { return new InlineKeyboard().text("Выбрать Telegram-канал", revisionCallback("profile:platform:telegram", identity)).row().text("Указать другую ссылку", revisionCallback("profile:platform:website", identity)); }
+function platformKeyboard(identity: SessionIdentity): InlineKeyboard { return new InlineKeyboard().text("Выбрать Telegram-канал", revisionCallback("profile:platform:telegram", identity)).row().text("Указать другую ссылку", revisionCallback("profile:platform:other", identity)); }
