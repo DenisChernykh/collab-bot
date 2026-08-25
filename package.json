@@ -16,7 +16,9 @@
 		"test:runtime": "vitest run --project runtime",
 		"test:e2e:fake": "vitest run --project e2e-fake",
 		"build": "tsc -p tsconfig.build.json",
-		"check": "pnpm lint && pnpm typecheck && pnpm test:unit && pnpm build"
+		"db:migrate": "pnpm build && node dist/cli/db-migrate.js",
+		"db:verify": "pnpm build && node dist/cli/db-verify.js",
+		"check": "pnpm lint && pnpm typecheck && pnpm test:unit && pnpm test:integration && pnpm build"
 	},
 	"dependencies": {
 		"date-fns": "4.4.0",

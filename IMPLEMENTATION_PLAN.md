@@ -198,7 +198,7 @@ P0-01 → P0-02
 
 #### S0-03 — Реализовать SQLite boundary и migration harness
 
-- **Status:** `pending`
+- **Status:** `completed`
 - **Objective:** Открывать temporary SQLite с обязательными pragmas/defensive mode, сериализовать nested transactions и применять проверяемую migration history.
 - **Requirements:** FR-R01 foundation; AC-019 foundation.
 - **Dependencies:** `S0-02`.
@@ -213,12 +213,12 @@ P0-01 → P0-02
 - **Exit criteria:** Fresh/upgrade paths и integrity_check зелёные; connection closes deterministically; repository root/production path не затронуты.
 - **Completion evidence:**
   - Commit SHA: `SELF`
-  - Changed files:
-  - Focused checks:
-  - Aggregate checks: `Deferred to S0-07`
-  - Acceptance evidence:
-  - Review result:
-  - Notes/deviations:
+  - Changed files: `package.json`, `src/infrastructure/database/database-boundary.ts`, `src/infrastructure/database/migrations.ts`, `src/cli/db-migrate.ts`, `src/cli/db-verify.ts`, `test/integration/s0-03-database.test.ts`, `IMPLEMENTATION_PLAN.md`
+  - Focused checks: `node --version` (`v24.18.0`); `pnpm --version` (`11.15.1`); native `node:sqlite`/`DatabaseSync` smoke — PASS; typed Drizzle `run`/`all`/`get`/`values` parameter-and-result contract plus transaction/FIFO boundary — PASS; `pnpm exec vitest run --project integration -t "fresh migration|upgrade fixture|transaction rollback|foreign keys"` — 3/3 PASS; full integration — 9/9 PASS; explicit temporary `db:migrate` — PASS; `pnpm db:verify` — PASS; `db:migrate` without explicit paths — expected exit 1; `db:verify` with explicit/broad args — expected exit 1; runtime/e2e empty suites remain fail-closed with expected exit 1.
+  - Aggregate checks: `pnpm lint` — PASS; `pnpm typecheck` — PASS; `pnpm test:unit` — 17/17 PASS; `pnpm build` — PASS; `pnpm check` — PASS (unit 17/17, integration 9/9).
+  - Acceptance evidence: Native `DatabaseSync` opens file-backed paths with timeout 5000, defensive mode, extensions disabled, `foreign_keys=ON`, WAL, and `busy_timeout=5000`; typed Drizzle sqlite-proxy delegates through the exact native client and proves parameterized raw `run` result `{rows: [...]}`, row-list `all`, single-row/undefined `get`, and array `values` shapes; FIFO `AsyncLocalStorage` boundary serializes ordinary awaited facade use, `BEGIN IMMEDIATE` transactions, nested client reuse, rollback-only propagation, deterministic close, and after-close rejection; immutable ordered SQL source validates filenames/gaps, SHA-256 checksums, applied prefix/history, repeat no-op, transactional failure rollback, and upgrade fixtures; verification runs `foreign_key_check` and `integrity_check`; CLIs reject implicit/environment/root paths and `db:verify` uses only temporary fixtures; no product tables/schema, PostgreSQL, worker, or production DB artifacts.
+  - Review result: `Orchestrator review — PASS (native DatabaseSync ownership and sqlite-proxy compatibility adapter contract verified); independent Sol max deferred to S0-07`
+  - Notes/deviations: Orchestrator-approved compatibility deviation: installed `drizzle-orm@0.45.2` exposes no `node-sqlite` export, so its typed `sqlite-proxy` adapter delegates to the exact native `DatabaseSync`; `DatabaseSync` remains the sole client and transaction owner. No product migrations, credentials, remote, or production files changed.
 - **Stop conditions:** Native SQLite/Drizzle contract требует другой stack либо migration окажется destructive.
 
 #### S0-04 — Закрепить durable ingress idempotency и callback safety
