@@ -75,6 +75,8 @@ describe("S1-02 fake Telegram profile journey", () => {
 			await bot.handleUpdate({ update_id: 10, callback_query: callback(10, callbackData(fake, "profile:platform:telegram")) });
 			const picker = fake.lastMessage()?.reply_markup?.keyboard?.flat().find((button) => "request_chat" in button);
 			expect(picker).toMatchObject({ request_chat: { request_id: 12345, chat_is_channel: true, request_username: true, request_title: true } });
+			expect(String(fake.lastMessage()?.text)).toContain("Указать другую ссылку");
+			expect(fake.lastMessage()?.reply_markup?.keyboard?.flat().find((button) => (button as { text?: string }).text === "Указать другую ссылку")).toBeDefined();
 
 			await boundary.close();
 			boundary = new DatabaseBoundary(databasePath);
@@ -165,6 +167,47 @@ describe("S1-02 fake Telegram profile journey", () => {
 			const callsBeforeGroupUpdate = fake.calls.length;
 			await restartedBot.handleUpdate({ update_id: 33, message: { ...privateMessage(33, "/start"), chat: { id: -100, type: "group", title: "Group" } } });
 			expect(fake.calls.length).toBe(callsBeforeGroupUpdate);
+		} finally {
+			await boundary.close();
+			await rm(directory, { recursive: true, force: true });
+		}
+	});
+
+	it("accepts a direct public Telegram URL after channel selection", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "collaboration-s1-02-direct-url-"));
+		const databasePath = join(directory, "app.sqlite");
+		const clock = new FakeClock(1_700_000_000_000);
+		const fake = new FakeTelegramApi({
+			token: "fake-token",
+			botInfo: { id: 777, is_bot: true, first_name: "Collab", username: "collab_bot" } as unknown as UserFromGetMe,
+		});
+		const boundary = new DatabaseBoundary(databasePath);
+		try {
+			const source = await MigrationSource.fromDirectory(migrationsPath);
+			await new MigrationRunner(source, clock).migrate(boundary);
+			const bot = new Bot("fake-token", { client: { fetch: fake.fetch } });
+			const profileService = new ProfileService(new SqliteProfileRepository(boundary), new DatabaseBoundaryTransactionRunner(boundary), clock);
+			registerProfileBot(bot, {
+				profileService,
+				sessionRepository: new SqliteProfileSessionRepository(boundary),
+				telegramUserRepository: new SqliteTelegramUserRepository(boundary),
+				durableCommandExecutor: new DurableCommandExecutor(new DatabaseBoundaryTransactionRunner(boundary), new SqliteDurableCommandStore(boundary), { hash: hashCanonicalInput }, clock),
+				clock,
+				helpContact: "@helpdesk",
+				requestIdFactory: () => 12348,
+			});
+			await bot.init();
+			await bot.handleUpdate({ update_id: 1, message: privateMessage(1, "/profile") });
+			await bot.handleUpdate({ update_id: 2, callback_query: callback(2, "profile:create") });
+			await bot.handleUpdate({ update_id: 3, message: privateMessage(3, "Блогер") });
+			await bot.handleUpdate({ update_id: 4, message: privateMessage(4, "Direct Creator") });
+			await bot.handleUpdate({ update_id: 5, message: privateMessage(5, "Город") });
+			await bot.handleUpdate({ update_id: 6, message: privateMessage(6, "Ищу партнёров для прямой ссылки.") });
+			await bot.handleUpdate({ update_id: 7, callback_query: callback(7, callbackData(fake, "profile:platform:telegram")) });
+			await bot.handleUpdate({ update_id: 8, message: privateMessage(8, "https://t.me/direct_channel") });
+			expect(String(fake.lastMessage()?.text)).toContain("Укажите размер аудитории");
+			expect(String(fake.lastMessage()?.text)).not.toContain("предложенную площадку");
+			expect(await new SqliteProfileSessionRepository(boundary).findActive("100", clock.now().getTime())).toMatchObject({ state: { step: "audience", draft: { platform: { url: "https://t.me/direct_channel", username: "direct_channel" } } } });
 		} finally {
 			await boundary.close();
 			await rm(directory, { recursive: true, force: true });
