@@ -173,7 +173,7 @@ P0-01 → P0-02
 
 #### S0-02 — Добавить безопасные domain/runtime primitives
 
-- **Status:** `pending`
+- **Status:** `completed`
 - **Objective:** Централизовать enums, time/deadline policy, fake clock, UUID/opaque-token generation и redacting JSON logger.
 - **Requirements:** Инфраструктура; поддерживает FR-C04, FR-E01, FR-R01, но AC пока не закрывает.
 - **Dependencies:** `S0-01`.
@@ -188,12 +188,12 @@ P0-01 → P0-02
 - **Exit criteria:** Primitives имеют focused coverage; no Telegram/DB imports in domain; secrets/raw content отсутствуют в logger snapshots.
 - **Completion evidence:**
   - Commit SHA: `SELF`
-  - Changed files:
-  - Focused checks:
-  - Aggregate checks: `Deferred to S0-07`
-  - Acceptance evidence:
-  - Review result:
-  - Notes/deviations:
+  - Changed files: `src/domain/value-objects/enums.ts`, `src/application/ports/clock.ts`, `src/infrastructure/time/fake-clock.ts`, `src/infrastructure/time/deadline.ts`, `src/infrastructure/crypto/tokens.ts`, `src/infrastructure/logging/safe-logger.ts`, `test/unit/s0-02-primitives.test.ts`, `IMPLEMENTATION_PLAN.md`
+  - Focused checks: `pnpm exec vitest run -t "canonical enums|inclusive deadline|opaque token|logger redaction"` — 9/9 PASS; `pnpm typecheck` — PASS; `pnpm lint` — PASS; domain/application import-boundary `rg` check — PASS (no grammY/Drizzle/SQLite/process.env/node:fs/framework imports)
+  - Aggregate checks: `pnpm check` — PASS (`pnpm lint`, `pnpm typecheck`, `pnpm test:unit` 17/17, `pnpm build`)
+  - Acceptance evidence: Canonical PRD enums have one domain declaration with runtime parsers; strict `DD.MM.YYYY` calendar validation rejects rollover and invalid public `LocalDate` components, converting inclusive local end-of-day in `Asia/Yekaterinburg` to UTC ms; mutation/due boundary is proven at `<=`/`>`; defensive fake clock copies dates and rejects non-finite resulting state; UUID, 128-bit unpadded base64url public/callback tokens, deterministic SHA-256 hashes, and batch uniqueness sanity are covered; injected structured logger validates bounded module/event/outcome identifiers, internal/decimal IDs, non-negative durations, exact error allowlists, rejects sensitive/nested/raw values, and serializes errors without message/stack.
+  - Review result: `Orchestrator review — PASS (local S0-02 diff and focused/aggregate gates); independent Sol max deferred to S0-07`
+  - Notes/deviations: No product aggregates/use cases, DB/schema, grammY handlers, production logging, credentials, or network changes; no scope deviations.
 - **Stop conditions:** Enum/date policy расходится с PRD или требуется новый user-visible validation rule.
 
 #### S0-03 — Реализовать SQLite boundary и migration harness
