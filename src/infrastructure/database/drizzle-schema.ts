@@ -142,3 +142,61 @@ export const processedUpdates = sqliteTable(
 		check("processed_updates_processed_at_nonnegative", sql`typeof(${table.processedAt}) = 'integer' AND ${table.processedAt} >= 0`),
 	],
 );
+
+export const outboxDeliveries = sqliteTable(
+	"outbox_deliveries",
+	{
+		id: text("id").primaryKey(),
+		idempotencyKey: text("idempotency_key").notNull(),
+		kind: text("kind", { enum: ["dm_send", "channel_send", "channel_edit", "channel_delete"] as const }).notNull(),
+		recipientChatId: text("recipient_chat_id").notNull(),
+		messageId: integer("message_id"),
+		payloadJson: text("payload_json").notNull(),
+		status: text("status", { enum: [
+			"prepared", "dispatching", "sent", "retryable_failed", "ambiguous", "permanent_failed", "superseded", "cancelled",
+		] as const }).notNull(),
+		attemptCount: integer("attempt_count").notNull(),
+		claimToken: text("claim_token"),
+		dispatchStartedAt: integer("dispatch_started_at"),
+		requestDeadlineAt: integer("request_deadline_at"),
+		nextAttemptAt: integer("next_attempt_at"),
+		telegramRetryAfter: integer("telegram_retry_after"),
+		lastErrorKind: text("last_error_kind"),
+		createdAt: integer("created_at").notNull(),
+		updatedAt: integer("updated_at").notNull(),
+	},
+	(table) => [
+		uniqueIndex("outbox_deliveries_idempotency_key").on(table.idempotencyKey),
+		index("outbox_deliveries_due").on(table.status, table.nextAttemptAt, table.createdAt),
+		index("outbox_deliveries_dispatching").on(table.status, table.dispatchStartedAt),
+		index("outbox_deliveries_recipient").on(table.recipientChatId, table.status),
+		check("outbox_deliveries_attempt_nonnegative", sql`typeof(${table.attemptCount}) = 'integer' AND ${table.attemptCount} >= 0`),
+		check("outbox_deliveries_payload_json_valid", sql`json_valid(${table.payloadJson}) = 1`),
+		check("outbox_deliveries_updated_at_coherence", sql`typeof(${table.createdAt}) = 'integer' AND ${table.createdAt} >= 0 AND typeof(${table.updatedAt}) = 'integer' AND ${table.updatedAt} >= ${table.createdAt}`),
+	],
+);
+
+export const productEvents = sqliteTable(
+	"product_events",
+	{
+		eventId: text("event_id").primaryKey(),
+		eventType: text("event_type", { enum: [
+			"bot_started", "profile_started", "profile_completed", "collaboration_draft_started", "collaboration_published",
+			"collaboration_viewed", "application_submitted", "application_accepted", "collaboration_matched",
+			"completion_reported", "collaboration_bilateral_confirmed", "collaboration_hidden", "user_blocked",
+		] as const }).notNull(),
+		idempotencyKey: text("idempotency_key").notNull(),
+		actorTelegramUserId: text("actor_telegram_user_id"),
+		profileId: text("profile_id"),
+		collaborationId: text("collaboration_id"),
+		applicationId: text("application_id"),
+		safeAttributesJson: text("safe_attributes_json").notNull(),
+		occurredAt: integer("occurred_at").notNull(),
+	},
+	(table) => [
+		uniqueIndex("product_events_idempotency_key").on(table.idempotencyKey),
+		index("product_events_type_occurred").on(table.eventType, table.occurredAt),
+		index("product_events_actor_occurred").on(table.actorTelegramUserId, table.occurredAt),
+		check("product_events_safe_attributes_json_valid", sql`json_valid(${table.safeAttributesJson}) = 1 AND json_type(${table.safeAttributesJson}) = 'object'`),
+	],
+);

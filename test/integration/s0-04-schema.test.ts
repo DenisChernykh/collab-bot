@@ -19,14 +19,20 @@ const canonicalMigrationsPath = fileURLToPath(new URL("../../migrations/", impor
 
 async function withCanonicalDatabase<T>(work: (boundary: DatabaseBoundary) => Promise<T>): Promise<T> {
 	const directory = await mkdtemp(join(tmpdir(), "collaboration-s0-04-schema-"));
+	const migrationsPath = join(directory, "migrations");
+	await mkdir(migrationsPath);
+	await copyFile(
+		join(canonicalMigrationsPath, "0001_s0-04-ingress-foundation.sql"),
+		join(migrationsPath, "0001_s0-04-ingress-foundation.sql"),
+	);
 	const boundary = new DatabaseBoundary(join(directory, "app.sqlite"));
 	try {
-			const source = await MigrationSource.fromDirectory(canonicalMigrationsPath);
-			const runner = new MigrationRunner(source);
-			expect((await runner.migrate(boundary)).applied).toEqual([1]);
-			expect((await runner.migrate(boundary)).applied).toEqual([]);
-			await runner.verify(boundary);
-			return await work(boundary);
+		const source = await MigrationSource.fromDirectory(migrationsPath);
+		const runner = new MigrationRunner(source);
+		expect((await runner.migrate(boundary)).applied).toEqual([1]);
+		expect((await runner.migrate(boundary)).applied).toEqual([]);
+		await runner.verify(boundary);
+		return await work(boundary);
 	} finally {
 		await boundary.close();
 		await rm(directory, { recursive: true, force: true });

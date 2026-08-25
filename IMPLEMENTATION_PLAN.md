@@ -248,7 +248,7 @@ P0-01 → P0-02
 
 #### S0-05 — Создать atomic outbox и product-event stores
 
-- **Status:** `pending`
+- **Status:** `completed`
 - **Objective:** Атомарно сохранять business effect companions: delivery intent и idempotent product event.
 - **Requirements:** FR-N01, FR-E01, FR-R01 foundation; AC-018/AC-019 foundation.
 - **Dependencies:** `S0-04`.
@@ -263,12 +263,12 @@ P0-01 → P0-02
 - **Exit criteria:** Schema constraints и atomicity доказаны; raw sensitive payload rejected; никаких внешних вызовов.
 - **Completion evidence:**
   - Commit SHA: `SELF`
-  - Changed files:
-  - Focused checks:
-  - Aggregate checks: `Deferred to S0-07`
-  - Acceptance evidence:
-  - Review result:
-  - Notes/deviations:
+  - Changed files: `migrations/0002_s0-05-outbox-events.sql`, `src/application/outbox/delivery-payload.ts`, `src/application/outbox/outbox-service.ts`, `src/application/outbox/product-event-service.ts`, `src/application/ports/outbox-delivery-store.ts`, `src/application/ports/product-event-store.ts`, `src/infrastructure/database/drizzle-schema.ts`, `src/infrastructure/database/outbox-delivery-repository.ts`, `src/infrastructure/database/product-event-repository.ts`, `test/integration/s0-04-schema.test.ts`, `test/integration/s0-05-outbox.test.ts`, `IMPLEMENTATION_PLAN.md`
+  - Focused checks: Node `v24.18.0`; pnpm `11.15.1`; `pnpm exec vitest run --project integration -t "outbox atomicity|event idempotency|cancelled delivery|scheduled prepared"` — 4/4 PASS; S0-05 integration — 7/7 PASS; full integration — 25/25 PASS; `pnpm db:verify` — PASS; application/domain import-boundary scan — no matches; `Date.now` scan — no matches; no SQLite/WAL/SHM artifacts.
+  - Aggregate checks: `pnpm check` — PASS; full unit — 22/22 PASS; full integration — 25/25 PASS; `pnpm typecheck` — PASS; `pnpm lint` — PASS; build — PASS; empty runtime/e2e-fake suites remain fail-closed with expected exit 1.
+  - Acceptance evidence: Immutable migration 0002 creates exactly `outbox_deliveries` and `product_events`, with TD/PRD kinds, statuses, event taxonomy, JSON/ID/timestamp/status-coherence/check/unique/index constraints, append-only product-event triggers, and no product/operator tables or invented foreign keys. Typed Drizzle mappings and shared-boundary SQLite repositories implement application-only ports and fail closed on corrupt row state. Outbox creation is prepared-only with semantic idempotency replay independent of caller UUID/time, including replay of an accepted scheduled intent after the Clock passes its `notBeforeAt`, typed ID/key conflicts, strict versioned kind/payload validation, optional explicit `notBeforeAt` prepared scheduling (UTC ms, future-only for new keys, replay/conflict-bound), UUID-addressed prepared-only cancellation (including known edit/delete targets), and safe unclaimed supersede; S0-06 claim/provider outcomes are not exposed. Product events are append-only, exact-taxonomy, semantic-idempotent, Clock-based, and accept only explicitly policy-approved safe attributes; arbitrary strings/content/tokens/custom serialization are rejected. Atomic companion tests prove business probe + delivery + event commit and rollback after delivery insertion; no provider/network calls or future product event emission.
+  - Review result: `Orchestrator review — PASS after S0-06 scope separation, semantic replay, status-coherence, append-only, and post-insert rollback hardening; independent Sol max deferred to S0-07`
+  - Notes/deviations: S0-05 deliberately stops before S0-06 claim/fencing/provider recovery. User-authorized local amendment adds scheduled prepared support before downstream S0-06; no push/remote/PR/deploy/production actions; no credentials or raw callback/public/BOT tokens in durable payloads/logs.
 - **Stop conditions:** Notification/product event требует несуществующего PRD type либо safe envelope невозможно выразить без raw secret/content.
 
 #### S0-06 — Реализовать fake Telegram transport и delivery recovery
