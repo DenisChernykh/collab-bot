@@ -13,6 +13,7 @@ import { DatabaseBoundary } from "../../src/infrastructure/database/database-bou
 import { MigrationRunner, MigrationSource } from "../../src/infrastructure/database/migrations.js";
 import { SqliteDurableCommandStore } from "../../src/infrastructure/database/durable-command-repository.js";
 import { SqliteProfileRepository } from "../../src/infrastructure/database/profile-repository.js";
+import { SqliteProfileSessionRepository } from "../../src/infrastructure/database/profile-session-repository.js";
 import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/database/transaction-runner.js";
 import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
 import { ProfileService, type ProfileInput } from "../../src/application/profiles/profile-service.js";
@@ -167,10 +168,11 @@ describe("S1-01 profile state and privacy boundary", () => {
 		}
 	});
 
-	it("upgrades a S1-02 database without private contact and preserves profile data", async () => {
+	it("upgrades a S1-02 database without private contact and preserves profile and session data", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "collaboration-s1-03-contactless-upgrade-"));
 		const migrationsPath = join(directory, "migrations");
-		const boundary = new DatabaseBoundary(join(directory, "app.sqlite"));
+		const databasePath = join(directory, "app.sqlite");
+		const boundary = new DatabaseBoundary(databasePath);
 		try {
 			await mkdir(migrationsPath);
 			for (const filename of [
@@ -183,10 +185,12 @@ describe("S1-01 profile state and privacy boundary", () => {
 			}
 			const previousSource = await MigrationSource.fromDirectory(migrationsPath);
 			expect((await new MigrationRunner(previousSource).migrate(boundary)).applied).toEqual([1, 2, 3, 4]);
-			await boundary.execute(
-				"INSERT INTO telegram_users (telegram_user_id, username, display_name, status, blocked_at, created_at, updated_at) VALUES (?, ?, ?, 'active', NULL, ?, ?)",
-				["100", "alice", "Alice", 1_700_000_000_000, 1_700_000_000_000],
-			);
+			for (const [telegramUserId, username, displayName] of [["100", "alice", "Alice"], ["101", "bob", "Bob"]] as const) {
+				await boundary.execute(
+					"INSERT INTO telegram_users (telegram_user_id, username, display_name, status, blocked_at, created_at, updated_at) VALUES (?, ?, ?, 'active', NULL, ?, ?)",
+					[telegramUserId, username, displayName, 1_700_000_000_000, 1_700_000_000_000],
+				);
+			}
 			await boundary.execute(
 				"INSERT INTO profiles (id, telegram_user_id, type, display_name, description, city_code, private_contact, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 				["11111111-1111-4111-8111-111111111111", "100", "blogger", "Alice", "Городской профиль", "ekaterinburg", "@old_contact", "active", 1_700_000_000_000, 1_700_000_000_000],
@@ -201,7 +205,53 @@ describe("S1-01 profile state and privacy boundary", () => {
 			);
 			await boundary.execute(
 				"INSERT INTO profile_sessions (telegram_user_id, flow_type, step, state_json, revision, expires_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-				["100", "profile", "review", JSON.stringify({ version: 1, generation: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", draft: {} }), 3, 1_700_000_100_000, 1_700_000_000_000],
+				[
+					"100",
+					"profile",
+					"private_contact",
+					JSON.stringify({
+						version: 1,
+						generation: "aaaaaaaaaaaaaaaa",
+						step: "private_contact",
+						draft: {
+							type: "blogger",
+							displayName: "Alice",
+							description: "Городской профиль для старого сеанса.",
+							topics: ["city"],
+							platform: { platformType: "website", url: "https://example.com/alice" },
+							privateContact: "@legacy_alice",
+						},
+						requestId: 7,
+					}),
+					3,
+					1_700_000_100_000,
+					1_700_000_000_000,
+				],
+			);
+			await boundary.execute(
+				"INSERT INTO profile_sessions (telegram_user_id, flow_type, step, state_json, revision, expires_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+				[
+					"101",
+					"profile",
+					"review",
+					JSON.stringify({
+						version: 1,
+						generation: "bbbbbbbbbbbbbbbb",
+						step: "review",
+						draft: {
+							type: "venue_or_brand",
+							displayName: "Bob",
+							description: "Городской профиль для проверки review.",
+							topics: ["business"],
+							platform: { platformType: "website", url: "https://example.com/bob" },
+							privateContact: "@legacy_bob",
+						},
+						requestId: -1,
+					}),
+					4,
+					1_700_000_100_000,
+					1_700_000_000_000,
+				],
 			);
 			await copyFile(join(canonicalMigrationsPath, "0005_s1-03-telegram-first-contact.sql"), join(migrationsPath, "0005_s1-03-telegram-first-contact.sql"));
 			const upgradedSource = await MigrationSource.fromDirectory(migrationsPath);
@@ -223,7 +273,45 @@ describe("S1-01 profile state and privacy boundary", () => {
 				audience_size: 42,
 			}]);
 			expect(await boundary.query("SELECT profile_id, topic FROM profile_topics")).toEqual([{ profile_id: "11111111-1111-4111-8111-111111111111", topic: "city" }]);
-			expect(await boundary.query("SELECT telegram_user_id, flow_type, step, revision FROM profile_sessions")).toEqual([{ telegram_user_id: "100", flow_type: "profile", step: "review", revision: 3 }]);
+			expect(await boundary.query("SELECT telegram_user_id, flow_type, step, revision FROM profile_sessions ORDER BY telegram_user_id")).toEqual([
+				{ telegram_user_id: "100", flow_type: "profile", step: "review", revision: 3 },
+				{ telegram_user_id: "101", flow_type: "profile", step: "review", revision: 4 },
+			]);
+			await boundary.close();
+
+			const reopened = new DatabaseBoundary(databasePath);
+			try {
+				expect(await new MigrationRunner(upgradedSource).migrate(reopened)).toMatchObject({ applied: [], noOp: true });
+				await expect(new MigrationRunner(upgradedSource).verify(reopened)).resolves.toBeUndefined();
+				const sessions = new SqliteProfileSessionRepository(reopened);
+				const migratedPrivateContact = await sessions.findActive("100", 1_700_000_000_000);
+				const migratedReview = await sessions.findActive("101", 1_700_000_000_000);
+				expect(migratedPrivateContact).toMatchObject({
+					revision: 3,
+					expiresAt: 1_700_000_100_000,
+					updatedAt: 1_700_000_000_000,
+					state: { generation: "aaaaaaaaaaaaaaaa", step: "review", requestId: 7 },
+				});
+				expect(migratedPrivateContact?.state.draft).not.toHaveProperty("privateContact");
+				expect(migratedReview).toMatchObject({
+					revision: 4,
+					state: { generation: "bbbbbbbbbbbbbbbb", step: "review", requestId: -1 },
+				});
+				expect(migratedReview?.state.draft).not.toHaveProperty("privateContact");
+				expect(await reopened.query("SELECT telegram_user_id, step, json_extract(state_json, '$.step') AS json_step, json_extract(state_json, '$.draft.privateContact') AS private_contact FROM profile_sessions ORDER BY telegram_user_id")).toEqual([
+					{ telegram_user_id: "100", step: "review", json_step: "review", private_contact: null },
+					{ telegram_user_id: "101", step: "review", json_step: "review", private_contact: null },
+				]);
+				const migratedProfile = await createService(reopened).getOwn("100");
+				expect(migratedProfile).toMatchObject({
+					displayName: "Alice",
+					platforms: [{ url: "https://t.me/alice_channel", audienceSize: 42 }],
+					topics: ["city"],
+				});
+				expect(migratedProfile).not.toHaveProperty("privateContact");
+			} finally {
+				await reopened.close();
+			}
 		} finally {
 			await boundary.close();
 			await rm(directory, { recursive: true, force: true });

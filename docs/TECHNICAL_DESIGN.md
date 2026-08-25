@@ -363,6 +363,7 @@ PRAGMA busy_timeout = 5000;
 - Update-flow отдельно выполняет `pnpm db:migrate` и останавливается при ошибке.
 - Каждая migration проверяется на fresh database и upgrade fixture предыдущей версии.
 - Destructive migration требует отдельного backup/restore rehearsal; явно авторизованное privacy-positive удаление чувствительного contact-поля является исключением: удалённые значения не копируются в legacy/backup table, а upgrade rehearsal доказывает сохранение всех остальных authoritative rows.
+- Migration `0005_s1-03-telegram-first-contact.sql` также очищает `$.draft.privateContact` во всех `profile_sessions` и нормализует legacy `private_contact` в table/JSON step к `review` в одной migration transaction; generation, request ID, revision, expiry, timestamps и остальные draft fields сохраняются.
 
 ## 8. Data model
 
