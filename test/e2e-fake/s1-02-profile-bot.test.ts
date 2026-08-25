@@ -139,7 +139,7 @@ describe("S1-02 fake Telegram profile journey", () => {
 			const mainMenuCallback = fake.lastMessage()?.reply_markup?.inline_keyboard?.flat().find((button) => (button as { callback_data?: string }).callback_data === "menu:home");
 			expect(mainMenuCallback).toBeDefined();
 			await restartedBot.handleUpdate({ update_id: 20, callback_query: callback(20, "menu:home") });
-			expect(String(fake.lastMessage()?.text)).toContain("Вместе в Екатеринбурге");
+			expect(String(fake.lastMessage()?.text)).toContain("Давай вместе");
 
 			await restartedBot.handleUpdate({ update_id: 21, callback_query: callback(21, "profile:edit") });
 			await restartedBot.handleUpdate({ update_id: 22, message: privateMessage(22, "/cancel") });

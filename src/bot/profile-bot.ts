@@ -169,7 +169,7 @@ async function handleText(ctx: Context, options: ProfileBotOptions, userId: stri
 		return;
 	}
 	if (command === "/help") {
-		await ctx.reply(`«Вместе в Екатеринбурге» помогает блогерам, Telegram-каналам, заведениям и брендам находить партнёров для совместных проектов.\n\nСейчас вы можете создать и отредактировать свой профиль. По вопросам работы бота: ${options.helpContact}`);
+		await ctx.reply(`«Давай вместе» помогает блогерам, Telegram-каналам, заведениям и брендам находить партнёров для совместных проектов.\n\nСейчас сервис работает в Екатеринбурге. Вы можете создать и отредактировать свой профиль. По вопросам работы бота: ${options.helpContact}`);
 		return;
 	}
 	if (command === "/cancel") {
@@ -477,7 +477,7 @@ async function renderMenu(ctx: Context, options: ProfileBotOptions, userId: stri
 	const session = await activeSession(options, userId);
 	const keyboard = menuKeyboard();
 	if (session !== undefined) keyboard.row().text("▶️ Продолжить профиль", "profile:resume");
-	await ctx.reply("Добро пожаловать во «Вместе в Екатеринбурге» — сервис для поиска партнёров и совместных проектов.\n\nВыберите, что хотите сделать:", { reply_markup: keyboard });
+	await ctx.reply("Добро пожаловать в «Давай вместе» — сервис для поиска партнёров и совместных проектов.\n\nСейчас мы начинаем с Екатеринбурга. Выберите, что хотите сделать:", { reply_markup: keyboard });
 }
 
 	async function renderStep(ctx: Context, options: ProfileBotOptions, userId: string, session: ProfileSessionRecord): Promise<void> {
