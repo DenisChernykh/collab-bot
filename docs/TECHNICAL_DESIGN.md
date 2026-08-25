@@ -1,8 +1,8 @@
 # Collaboration Bot — Technical Design
 
-- Статус: `Approved for MVP implementation planning`
-- Версия: `0.2`
-- Дата: `2026-08-24`
+- Статус: `Approved for solo-launch implementation`
+- Версия: `0.3`
+- Дата: `2026-08-25`
 - Product source of truth: `docs/PRD.md`
 
 ## 1. Назначение и границы
@@ -24,6 +24,23 @@
 В MVP отсутствуют HTTP API, Mini App, веб-приложение, PostgreSQL, Redis, BullMQ, Docker и интеграция с Giveaway Bot.
 
 Далее `Giveaway Bot` означает действующий бот розыгрышей из repository `gift-bot`; это один продукт, а не два разных бота.
+
+### 1.1. Граница первого запуска
+
+Первый запуск рассчитан на ручное распространение и единицы или десятки пользователей без технического user cap. Его единственная цель — быстро провести реального пользователя по `LFR-01`–`LFR-11` из PRD. Масштабирование, аналитика и полноценная операционная платформа не являются предварительными условиями.
+
+Обязательный технический минимум:
+
+- secrets не находятся в Git, БД, тестовых данных или логах;
+- один вручную управляемый Node.js process и одна SQLite;
+- миграции, foreign keys и базовая проверка целостности;
+- повтор Telegram update/callback не дублирует бизнес-решение;
+- Telegram network call не выполняется внутри SQLite transaction;
+- закрытый контакт раскрывается только принятой паре;
+- ошибки видны в безопасных JSON logs, а процесс можно вручную перезапустить;
+- перед изменением реальных данных допускается ручная копия SQLite-файла при остановленном процессе.
+
+Heartbeat/status storage, scheduled cleanup/retention, exact Unix-socket admission, automated backup/restore, LaunchAgent tooling, completion reminders, product analytics и сложные moderation races отложены. Детальные разделы ниже сохраняют проектные решения для возможного продолжения, но не расширяют scope первого запуска. Канонический список и условия возврата находятся в [`DEFERRED_PLATFORM_CAPABILITIES.md`](./DEFERRED_PLATFORM_CAPABILITIES.md).
 
 ## 2. Архитектурное решение
 
@@ -105,7 +122,7 @@ Collaboration Bot — один Node.js process
   ├── domain policies
   ├── SQLite repositories
   ├── delivery runner
-  ├── deadline/completion runner
+  ├── deadline/completion runner (Later)
   └── JSON logs
   │
   ▼
@@ -126,14 +143,16 @@ Long polling не требует публичного HTTPS, домена или
 2. открывает SQLite и применяет миграции;
 3. проверяет production bot identity через `getMe`;
 4. проверяет showcase channel и права;
-5. восстанавливает durable work;
-6. запускает delivery и deadline runners;
+5. восстанавливает уже реализованную durable delivery work;
+6. запускает delivery runner;
 7. запускает long polling;
-8. при SIGINT/SIGTERM останавливает admission, polling и runners, ждёт in-flight work и закрывает SQLite.
+8. при SIGINT/SIGTERM прекращает polling и новую delivery work, затем закрывает SQLite.
 
 Отдельный migrator process и worker в MVP отсутствуют. Миграции также доступны явной командой для update-flow.
 
-### 3.3. Availability boundary
+### 3.3. Later: automated availability boundary
+
+Первый запуск выполняется вручную и не обещает фоновую доступность. Следующее описание относится к будущему LaunchAgent-варианту.
 
 Mac LaunchAgent работает только после входа пользователя в GUI-сессию и пока Mac не спит и не выключен.
 
@@ -146,7 +165,9 @@ Mac LaunchAgent работает только после входа пользо
 
 SLA и high availability не заявляются.
 
-### 3.4. Single-instance admission
+### 3.4. Later: single-instance admission
+
+В первом запуске автор вручную обеспечивает запуск ровно одного process. Описанный ниже Unix-socket механизм не реализуется до появления повторяющихся конфликтов запуска или автоматического supervisor-а.
 
 До открытия SQLite runtime захватывает Unix domain socket `.../CollaborationBot/run/collaboration-bot.sock` через `node:net`. Это защищает и от второго LaunchAgent, и от ручного запуска:
 
@@ -613,7 +634,7 @@ Append-only audit только изменяющих admin-команд:
 
 Action types: `hide_collaboration`, `restore_collaboration`, `block_user`, `unblock_user`, `retry_failed_publication`, `reconcile_publication_found`, `confirm_orphan_removed_and_retry`, `reconcile_published_edit_apply`, `reconcile_published_edit_rollback` и `reconcile_hidden_deletion`. Audit row создаётся в той же transaction, что command receipt и state transition. Author-initiated safe retry доказывается собственным `command_receipt` и не записывается в admin-only `operator_actions`.
 
-### 8.17. `product_events`
+### 8.17. Later: `product_events`
 
 Append-only:
 
@@ -626,7 +647,7 @@ Append-only:
 
 Raw user content, contacts and tokens are forbidden.
 
-### 8.18. `runtime_health`
+### 8.18. Later: `runtime_health`
 
 Одна singleton-row хранит только operational state: `process_started_at`, `last_heartbeat_at`, `last_poll_at`, `last_deadline_pass_at`, `showcase_capability`, `showcase_checked_at`, `last_graceful_shutdown_at`, `last_backup_at` и `updated_at`. Runtime обновляет heartbeat не чаще раза в 30 секунд. Это позволяет команде `status` отличать persisted last-known state от live PID check. Старый timestamp не выдаётся за текущую готовность.
 
@@ -952,7 +973,7 @@ Telegram Bot API не предоставляет application idempotency key д�
 - recovery считает `dispatching` stale через 60 секунд после `dispatch_started_at`; такая delivery классифицируется как `ambiguous` для send и retryable для known-target edit/delete;
 - provider outcome применяется только при совпавшем `claim_token`; поздний ответ старого claim не перезаписывает recovery result.
 
-### 13.2. Deadline runner
+### 13.2. Later: deadline runner
 
 - проход при startup;
 - затем не реже одного раза в минуту;
@@ -961,11 +982,15 @@ Telegram Bot API не предоставляет application idempotency key д�
 - catch-up после сна Mac;
 - next pass idempotent.
 
-### 13.3. Completion reminder
+### 13.3. Later: completion reminder
 
 При `completed` создаётся первый prompt всем сторонам. `Ответить позже` одной transaction завершает command receipt и создаёт ровно один scheduled outbox intent не ранее чем через 72 часа с key `completion-reminder:<application_id>:<reporter_profile_id>`. Повтор callback возвращает receipt result, а UNIQUE semantic key запрещает второй reminder. Если сторона сохраняет итоговый report до claim, ещё не отправленный reminder становится `superseded`; после первой reminder delivery новая не создаётся. Внешний cron не нужен.
 
-### 13.4. Graceful shutdown
+### 13.4. Basic shutdown и Later hardening
+
+Для первого запуска достаточно один раз обработать SIGINT/SIGTERM: прекратить polling, не брать новую работу и закрыть SQLite после уже выполняющейся операции. Persisted heartbeat, in-flight registry, 20-секундный watchdog и доказательство всех repeated-signal races относятся к Later.
+
+Возможный Later hardening flow:
 
 SIGINT/SIGTERM однократно переводит runtime в `draining`:
 
@@ -978,7 +1003,7 @@ SIGINT/SIGTERM однократно переводит runtime в `draining`:
 
 Повторный signal не запускает второй shutdown flow. Single-instance socket и LaunchAgent ThrottleInterval не дают новому process открыть DB до выхода старого.
 
-### 13.5. Cleanup runner
+### 13.5. Later: cleanup runner
 
 Не чаще раза в сутки:
 
@@ -1041,13 +1066,13 @@ Business entities, operator audit и product events автоматически �
 
 По решению PRD нет premode, report и product rate limits. Технические ограничения Telegram payload/concurrency и input lengths сохраняются, но не используются как продуктовый антиспам.
 
-Admin hide/block является единственным MVP enforcement.
+Admin hide является единственным enforcement первого запуска. Block/unblock относится к Later.
 
 ## 16. Configuration
 
 ### 16.1. Required production variables
 
-S0 реализует pure parser, который принимает явный key/value input и проверяется только синтетическими fixtures: он не читает файл, не требует реальных credentials и не вызывает Telegram. Проверка exact env-file path, current-user ownership, mode 0600, production content, `getMe` identity и channel capabilities принадлежит S5 preflight. Отдельный `APP_ENV` не вводится.
+S0 реализует pure parser, который принимает явный key/value input и проверяется только синтетическими fixtures: он не читает файл, не требует реальных credentials и не вызывает Telegram. Проверка exact env-file path, current-user ownership, mode 0600, production content и `getMe` identity добавляется в S1 runtime; showcase channel capabilities добавляются вместе с publication flow в S2. Отдельный `APP_ENV` не вводится.
 
 ```ini
 BOT_TOKEN=<secret>
@@ -1072,7 +1097,7 @@ Pure parser validation в S0:
 - admin list non-empty and unique;
 - `DATABASE_PATH` является absolute non-root path.
 
-S5 external preflight до polling и любых Bot API mutations отдельно проверяет exact env-file path, regular-file/no-symlink, current-user ownership и mode 0600; фактический database parent не совпадает с repository root и доступен на запись. Затем `getMe.id`/normalized username сверяются с expected pair, а configured channel ID и права post/edit/delete — с exact showcase topology.
+S1 external preflight до polling и любых Bot API mutations отдельно проверяет exact env-file path, regular-file/no-symlink, current-user ownership и mode 0600; фактический database parent не совпадает с repository root и доступен на запись. Затем `getMe.id`/normalized username сверяются с expected pair. Начиная с S2 отдельно проверяются configured channel ID и права post/edit/delete для exact showcase topology.
 
 ### 16.2. Environment boundaries
 
@@ -1081,7 +1106,7 @@ S5 external preflight до polling и любых Bot API mutations отдель�
 - Plist содержит путь к env, но не secret values.
 - Приложение читает только allowlisted keys из `process.env`, затем выполняет схемную validation; implicit env-file discovery нет.
 
-## 17. macOS LaunchAgent
+## 17. Later: macOS LaunchAgent
 
 ### 17.1. Identity and paths
 
@@ -1173,7 +1198,7 @@ PID/loaded-state читаются из launchd, counts — read-only query из 
 
 `logs` читает ограниченный хвост stdout/stderr и не загружает файл целиком. Автоматической ротации в MVP нет: `status` предупреждает при stdout/stderr больше 10 MiB. `rotate-logs` fail closed, если bot запущен, и после stop переименовывает только два точных configured log files в generations `.1`–`.5` с mode 0600. Это осознанная manual-operations граница дешёвого MVP.
 
-## 18. Backup and restore
+## 18. Later: automated backup and restore
 
 ### 18.1. Objectives
 
@@ -1228,7 +1253,7 @@ JSON event содержит:
 
 ### 19.2. Runtime signals
 
-Без Prometheus/Grafana MVP обязан иметь структурированные events:
+Первый запуск обязан логировать `runtime_ready`, `poll_started`, `poll_failed`, delivery errors и shutdown. Остальные persisted status/heartbeat signals относятся к Later. Возможный расширенный набор:
 
 - `runtime_ready` / `runtime_degraded`;
 - `poll_started` / `poll_failed`;
@@ -1238,7 +1263,7 @@ JSON event содержит:
 - `backup_created/failed`;
 - `shutdown_started/completed`.
 
-### 19.3. Product analytics
+### 19.3. Later: product analytics
 
 `CalculatePilotFunnel` является read-only query/CLI и агрегирует `product_events` и authoritative entities. Внешний analytics SDK не добавляется.
 
@@ -1298,17 +1323,26 @@ Fake Bot API проверяет:
 
 ### 20.4. Runtime
 
+First-launch/runtime foundation checks:
+
 - startup order;
 - wrong bot ID/username fail closed;
 - showcase degraded mode;
 - recovery of prepared/retryable/dispatching work;
 - provider-call timeout, stale claim fencing и superseded projection edits;
+
+Later runtime checks:
+
 - catch-up deadlines;
 - graceful shutdown with in-flight update and delivery;
 - repeated SIGTERM;
 - no second polling instance in operations preflight.
 
 ### 20.5. End-to-end fake journey
+
+Обязательный first-launch journey: `profile → publish → browse/deep link → apply → accept/reject → pairwise contact → own lists → admin hide → restart`. Completion, block/unblock и analytics не входят в этот gate.
+
+Расширенный Later journey (не является first-launch gate):
 
 Actors:
 
@@ -1329,9 +1363,11 @@ Journey:
 8. admin hides another card and blocks its author;
 9. restart preserves all state and produces no duplicate effects.
 
-S3 checkpoint выполняет шаги 1–6 и restart-проверку из шага 9: это core marketplace до `matched`, pairwise contact и restart, но не полный PRD MVP. S4 выполняет весь путь 1–9, включая completion и moderation, и только тогда доказывает Functional MVP на fake API.
+S3 checkpoint выполняет steps 1–6 и restart-проверку: это core marketplace до `matched`, pairwise contact и restart. S4 выполняет обязательный first-launch journey выше, включая admin hide. Completion, block/unblock и прочие steps расширенного journey остаются Later и не требуются для локального launch candidate.
 
 ### 20.6. Real Telegram smoke
+
+Первый запуск проверяет exact bot/channel identity и основной journey из §20.5 при ручном старте. LaunchAgent restart, backup/restore и log-rotation checks из расширенного списка ниже относятся к Later.
 
 Перед публичным запуском на отдельном test bot/channel:
 
@@ -1340,17 +1376,22 @@ S3 checkpoint выполняет шаги 1–6 и restart-проверку из
 - native channel chooser on supported client и manual fallback;
 - publish/deep link/apply/accept/contact;
 - multi-slot;
-- deadline catch-up after restart;
-- hide/restore/block;
-- ambiguous failure simulation where feasible;
-- LaunchAgent restart;
-- backup/restore rehearsal;
-- оба LaunchAgent label, backup catch-up и log-size warning/rotation;
+- own lists, admin hide и restart persistence;
 - подтверждение, что Giveaway Bot token/process/database/posts не затронуты.
 
-Для smoke используются канонические Collaboration Bot LaunchAgent labels и paths с отдельным test bot/channel в exact external env file. Readiness evidence привязано к exact `getMe.id`, нормализованному `getMe.username`, `SHOWCASE_CHANNEL_ID` и checksum проверенного env-файла; значения сверяются с `EXPECTED_BOT_ID`/`EXPECTED_BOT_USERNAME`. Любая смена identity, channel или env checksum инвалидирует evidence и требует повторить identity/channel preflight, functional smoke и применимые LaunchAgent checks. Второй постоянный test topology не создаётся.
+Отдельный Later smoke, только после явного возврата capability:
+
+- deadline catch-up after restart;
+- restore/block и ambiguous failure simulation where feasible;
+- LaunchAgent restart;
+- backup/restore rehearsal;
+- оба LaunchAgent label, backup catch-up и log-size warning/rotation.
+
+Для Later smoke используются канонические Collaboration Bot LaunchAgent labels и paths с отдельным test bot/channel в exact external env file. Readiness evidence привязано к exact `getMe.id`, нормализованному `getMe.username`, `SHOWCASE_CHANNEL_ID` и checksum проверенного env-файла; значения сверяются с `EXPECTED_BOT_ID`/`EXPECTED_BOT_USERNAME`. Любая смена identity, channel или env checksum инвалидирует evidence и требует повторить identity/channel preflight, functional smoke и применимые Later checks. Второй постоянный test topology не создаётся.
 
 ## 21. Traceability
+
+Для первого запуска authoritative traceability задают PRD `LFR-*`/`LAC-*` и §22 этого документа. Следующие таблицы сохраняют расширенный backlog и не добавляют launch requirements.
 
 | PRD | Use case / owner | Data and invariant | Telegram entrypoint | Failure policy | Tests | Slice |
 |---|---|---|---|---|---|---|
@@ -1372,7 +1413,7 @@ S3 checkpoint выполняет шаги 1–6 и restart-проверку из
 | FR-M02 | Block/Unblock | user status, card/application cascades, audit | `/admin` block/unblock | atomic cascade; unblock revives nothing | SQLite, race E2E | S4 |
 | FR-N01 | delivery runner | outbox UNIQUE key, claim token/deadline/status | automatic DMs/status views | retry known; send ambiguity terminal incident | SQLite, adapter, runtime | S0/S4 |
 | FR-E01 | product-event store / analytics/funnel query | append-only product events UNIQUE key | owning flows и operator read-only command | event atomic with effect; raw content forbidden | SQLite, adapter, query snapshot | S0–S4 |
-| FR-R01 | receipts/runtime/session recovery | receipts, updates, actions, sessions, runtime health | all ingress and ops status | replay exact result; bounded drain/recovery | SQLite, runtime, smoke | S0–S5 |
+| FR-R01 | receipts/runtime/session recovery | receipts, updates, actions, sessions, runtime health | all ingress and ops status | replay exact result; bounded drain/recovery | SQLite, runtime, smoke | S0–S4 |
 
 ### 21.1. Acceptance execution map
 
@@ -1397,7 +1438,7 @@ S3 checkpoint выполняет шаги 1–6 и restart-проверку из
 | AC-017 | block cascade with preserved accepted contact | SQLite + E2E | S4 |
 | AC-018 | DM failure after committed decision | fake API + SQLite | S4 |
 | AC-019 | duplicate update/callback effect counts | runtime + SQLite | S0–S4 |
-| AC-020 | separate bot/channel full journey and Giveaway Bot isolation | real smoke report | S5 |
+| AC-020 | separate bot/channel full journey and Giveaway Bot isolation | real smoke report | S4 |
 | AC-021 | draft/topics/session deletion and replay | SQLite + adapter | S2 |
 | AC-022 | concurrent active-profile partial UNIQUE | adversarial SQLite integration | S1 |
 | AC-023 | negative/mismatched outcome matrix | unit + SQLite | S4 |
@@ -1405,101 +1446,84 @@ S3 checkpoint выполняет шаги 1–6 и restart-проверку из
 | AC-025 | cancellation cascade with failed outbound | SQLite + fake API | S3 |
 | AC-026 | concurrent block/accept serialization-winner policy | adversarial SQLite E2E | S4 |
 
-`AC-001`–`AC-026` из PRD входят в acceptance report. Ни один AC не закрывается только unit-тестом, если он заявляет Telegram, SQLite, restart или LaunchAgent behavior.
+Для первого запуска acceptance report использует только `LAC-01`–`LAC-12` из PRD. `AC-001`–`AC-026` выше остаются расширенным backlog; они не блокируют первый запуск, если не представлены в `LAC-*`.
 
 ## 22. Implementation slices for an AI agent
 
 ### S0. Foundation
 
-Добавить только:
+Сохранить уже реализованный компактный foundation:
 
 - package/toolchain contracts;
 - pure config parser/validation без filesystem, credentials и Telegram;
-- logger;
+- redacting logger;
 - SQLite boundary и migration harness;
-- полная schema-only `telegram_users` из §8.1 как FK foundation без Upsert/repository/profile behavior;
+- schema-only `telegram_users` как FK foundation;
 - command receipts/processed updates;
-- outbox и product-event stores с atomic ports, claim fencing/provider deadline;
-- runtime health singleton;
+- существующий outbox/delivery ledger с claim fencing/provider deadline;
+- принятый в `S0-05` schema-only `product_events` primitive без обязательной записи событий или funnel query;
 - fake clock/token generator;
-- graceful runtime skeleton;
 - базовые architecture tests.
 
-Exit:
+Не добавлять в S0 новую product-event policy/emission, runtime health singleton/heartbeat, cleanup scheduler, Unix socket, LaunchAgent или backup tooling. Уже принятый `product_events` schema primitive не делает product analytics обязательной. Базовый shutdown создаётся только вместе с первым реальным bot runtime, когда у него появляется текущий consumer.
 
-- fresh DB bootstrap;
-- lint/test/build;
-- duplicate command test;
-- clean startup/shutdown без product modules.
+Exit: fresh DB bootstrap, lint/test/build, duplicate command test и aggregate gate без product modules.
 
-### S1. Profiles
+### S1. Profile vertical
 
-Добавить:
+Добавить один пользовательский vertical slice:
 
-- telegram-user identity snapshot behavior/repository поверх S0 FK foundation;
-- profile/topics/platforms;
-- deferred profile wizard;
-- native channel choice/manual fallback;
-- public/private profile projections.
-- `bot_started`, `profile_started` и `profile_completed` в owning profile/runtime transactions.
+- `/start` и главное меню;
+- telegram-user snapshot;
+- один profile, public platform и private contact;
+- create/edit/view wizard;
+- минимальный grammY long-polling entrypoint, config/migration wiring, `getMe` identity check и basic signal shutdown;
+- restart и duplicate-update tests на fake Telegram adapter;
+- после отдельной credentials/network авторизации — ранний real Telegram profile smoke.
 
-Exit: AC-001–AC-003, AC-022, restart wizard test и concurrent active-profile guard.
+Не добавлять generic form/runtime framework, showcase capability, heartbeat/status storage, Unix socket, cleanup scheduler, LaunchAgent или backup automation.
 
-### S2. Collaboration drafts and showcase publication
+Exit: `LAC-01`, профиль виден пользователю, private contact не попадает в публичную projection, compiled bot можно вручную запустить и сразу потрогать в Telegram после отдельной авторизации.
 
-Добавить:
-
-- collaboration aggregate;
-- draft wizard/preview;
-- transactional draft cancellation;
-- public token/deep link;
-- initial channel publication/attempt ledger и reconciliation;
-- durable staged edit before first application;
-- own collaboration list.
-- operator-actions foundation для admin publication retry/reconciliation;
-- `collaboration_draft_started` и `collaboration_published` в owning workflows.
-
-Exit: AC-004–AC-007, AC-021, AC-024 и known/ambiguous/deadline publication tests.
-
-### S3. Feed and applications
+### S2. Card and publication vertical
 
 Добавить:
 
-- browse filters/session;
-- submit/withdraw;
-- atomic accept/reject;
-- multi-slot/manual close/deadline;
-- pairwise contact notifications;
-- projection-revision channel slot/status updates.
-- `collaboration_viewed`, `application_submitted`, `application_accepted` и `collaboration_matched` в owning transactions.
+- draft wizard, resume/cancel и preview;
+- collaboration fields и opaque deep-link token;
+- публикацию в одном showcase-канале через существующий delivery ledger;
+- `Мои карточки`;
+- только известный `message_id` делает карточку доступной.
 
-Exit: AC-008–AC-014, AC-025, adversarial last-slot concurrency, every intermediate slot render и core fake journey только до `matched`, pairwise contact и restart. Это checkpoint marketplace core, а не полный PRD MVP.
+Не добавлять automated reconciliation UI, staged edit, deadline runner или product events.
 
-### S4. Completion, moderation and analytics
+Exit: `LAC-02`, restart draft test и safe known-failure behavior на fake Telegram API; после отдельной авторизации тот же runnable bot проходит real checkpoint публикации в showcase.
 
-Добавить:
-
-- completion reports/reminder;
-- hide/restore;
-- block/unblock cascade;
-- `completion_reported`, `collaboration_bilateral_confirmed`, `collaboration_hidden` и `user_blocked` в owning transactions;
-- проверка полной product-event coverage и funnel query без deferred retrofit;
-- admin incidents;
-- notification matrix completion.
-
-Exit: AC-015–AC-019, AC-023, AC-026, полный fake journey из §20.5 и Functional MVP complete. Функциональная готовность не является deployment/production evidence; AC-020 остаётся S5.
-
-### S5. Production operations
+### S3. Marketplace vertical
 
 Добавить:
 
-- exact bot/channel preflight;
-- bot/backup LaunchAgent CLI;
-- persisted status, logs и controlled rotation;
-- backup/prune/verify/restore runbook;
-- deployment docs and full real smoke.
+- простую ленту и deep link;
+- submit application;
+- accept/reject и закрытие набора при заполнении мест или вручную;
+- pairwise contact query/notification;
+- `Мои отклики` и authoritative statuses.
 
-Exit: AC-020, catch-up backup, sidecar-safe restore rehearsal, exact tested bot/channel identity и separate Giveaway Bot non-interference evidence. Production readiness относится только к этой проверенной identity/topology и не заявляет hosted/24×7 SLA.
+Не добавлять completion, reminders, automatic deadline processing или analytics.
+
+Exit: `LAC-03`–`LAC-06`, `LAC-08`–`LAC-09` и core fake journey до контакта; после отдельной авторизации тот же flow проверяется двумя real Telegram accounts.
+
+### S4. Minimal administration and shareable launch
+
+Добавить allowlisted lookup/hide без restore/block/unblock и выполнить полный fake journey из `LAC-10`. Ошибка DM не откатывает принятое решение; hidden карточка исчезает из ленты и перестаёт принимать отклики. После отдельной credentials/Telegram авторизации выполнить exact bot/channel preflight, полный real journey, restart и выдать короткие manual start/stop/database-copy instructions.
+
+Не добавлять daemon/supervisor, LaunchAgent, heartbeat/status DB, scheduled cleanup, automated backup/restore или SLA claims.
+
+Exit: `LAC-07`, `LAC-10`, `LAC-11` на local/fake evidence и отдельно авторизованный `LAC-12` для exact bot/channel identity. После этого пользователь может вручную отправить ссылку другим людям; отдельного позднего runtime-composition stage нет.
+
+### D1. Deferred platform capabilities
+
+Неисполняемый backlog находится в [`DEFERRED_PLATFORM_CAPABILITIES.md`](./DEFERRED_PLATFORM_CAPABILITIES.md). Возврат к capability разрешён только по указанному там trigger или по отдельному решению автора проекта. Само наличие проектного описания не делает capability обязательной.
 
 ### 22.1. Delivery discipline
 
@@ -1554,6 +1578,19 @@ Mini App добавляется как HTTP adapter к тем же application u
 Redis, BullMQ и отдельный worker добавляются только при измеримом backlog, delayed/prioritized jobs либо необходимости process isolation. Они не требуются только потому, что существуют уведомления.
 
 ## 24. Self-review checklist
+
+First-launch checklist:
+
+- [ ] Пройден `LAC-10` на fake Telegram.
+- [ ] Private contact доступен только принятой паре.
+- [ ] Duplicate update/callback не дублирует business state или delivery intent.
+- [ ] Bot API не вызывается внутри SQLite transaction.
+- [ ] Token, contact, raw input и opaque public/callback tokens отсутствуют в logs/fixtures/Git.
+- [ ] Один process можно вручную запустить, остановить и перезапустить без потери сохранённых решений.
+- [ ] Admin hide убирает карточку из authoritative feed.
+- [ ] Deferred capabilities не реализованы без текущего consumer.
+
+Расширенный Later checklist:
 
 - [ ] Все enum совпадают с PRD.
 - [ ] Все `FR-*` и `AC-*` имеют traceability.
