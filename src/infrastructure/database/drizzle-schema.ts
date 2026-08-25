@@ -104,6 +104,30 @@ export const profileTopics = sqliteTable(
 	],
 );
 
+export const profileSessions = sqliteTable(
+	"profile_sessions",
+	{
+		telegramUserId: text("telegram_user_id")
+			.primaryKey()
+			.references(() => telegramUsers.telegramUserId, { onDelete: "cascade" }),
+		flowType: text("flow_type", { enum: ["profile"] as const }).notNull(),
+		step: text("step").notNull(),
+		stateJson: text("state_json").notNull(),
+		revision: integer("revision").notNull(),
+		expiresAt: integer("expires_at").notNull(),
+		updatedAt: integer("updated_at").notNull(),
+	},
+	(table) => [
+		index("profile_sessions_expiry").on(table.expiresAt),
+		check("profile_sessions_flow_type", sql`${table.flowType} = 'profile'`),
+		check("profile_sessions_step_nonempty", sql`length(${table.step}) > 0`),
+		check("profile_sessions_state_json_valid", sql`json_valid(${table.stateJson}) = 1 AND json_type(${table.stateJson}) = 'object'`),
+		check("profile_sessions_revision_nonnegative", sql`typeof(${table.revision}) = 'integer' AND ${table.revision} >= 0`),
+		check("profile_sessions_expiry_nonnegative", sql`typeof(${table.expiresAt}) = 'integer' AND ${table.expiresAt} >= 0`),
+		check("profile_sessions_updated_at_nonnegative", sql`typeof(${table.updatedAt}) = 'integer' AND ${table.updatedAt} >= 0`),
+	],
+);
+
 export const telegramActions = sqliteTable(
 	"telegram_actions",
 	{
