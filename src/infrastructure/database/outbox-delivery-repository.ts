@@ -91,6 +91,85 @@ export class SqliteOutboxDeliveryRepository implements OutboxDeliveryStore {
 		);
 	}
 
+	async claimDue(now: number, claimToken: string, requestDeadlineAt: number): Promise<OutboxDeliveryRecord | undefined> {
+		return this.boundary.withTransaction(async () => {
+			const candidates = await this.boundary.query<{ id: string }>(
+				"SELECT id FROM outbox_deliveries WHERE (status = 'prepared' AND (next_attempt_at IS NULL OR next_attempt_at <= ?)) OR (status = 'retryable_failed' AND next_attempt_at IS NOT NULL AND next_attempt_at <= ?) ORDER BY COALESCE(next_attempt_at, created_at), created_at, id LIMIT 1",
+				[now, now],
+			);
+			const candidate = candidates[0];
+			if (candidate === undefined) return undefined;
+			const result = await this.boundary.execute(
+				"UPDATE outbox_deliveries SET status = 'dispatching', attempt_count = attempt_count + 1, claim_token = ?, dispatch_started_at = ?, request_deadline_at = ?, next_attempt_at = NULL, telegram_retry_after = NULL, last_error_kind = NULL, updated_at = ? WHERE id = ? AND ((status = 'prepared' AND (next_attempt_at IS NULL OR next_attempt_at <= ?)) OR (status = 'retryable_failed' AND next_attempt_at IS NOT NULL AND next_attempt_at <= ?))",
+				[claimToken, now, requestDeadlineAt, now, candidate.id, now, now],
+			) as { changes?: number };
+			if (result.changes !== 1) return undefined;
+			return this.readById(candidate.id);
+		});
+	}
+
+	async markSent(id: string, claimToken: string, updatedAt: number, messageId: number): Promise<boolean> {
+		return this.conditional(
+			"UPDATE outbox_deliveries SET status = 'sent', message_id = ?, claim_token = NULL, dispatch_started_at = NULL, request_deadline_at = NULL, next_attempt_at = NULL, telegram_retry_after = NULL, last_error_kind = NULL, updated_at = ? WHERE id = ? AND status = 'dispatching' AND claim_token = ?",
+			[messageId, updatedAt, id, claimToken],
+		);
+	}
+
+	async markRetryable(
+		id: string,
+		claimToken: string,
+		updatedAt: number,
+		nextAttemptAt: number,
+		lastErrorKind: DeliveryErrorKind,
+		telegramRetryAfter: number | null,
+	): Promise<boolean> {
+		return this.conditional(
+			"UPDATE outbox_deliveries SET status = 'retryable_failed', claim_token = NULL, dispatch_started_at = NULL, request_deadline_at = NULL, next_attempt_at = ?, telegram_retry_after = ?, last_error_kind = ?, updated_at = ? WHERE id = ? AND status = 'dispatching' AND claim_token = ?",
+			[nextAttemptAt, telegramRetryAfter, lastErrorKind, updatedAt, id, claimToken],
+		);
+	}
+
+	async markAmbiguous(id: string, claimToken: string, updatedAt: number, lastErrorKind: DeliveryErrorKind): Promise<boolean> {
+		return this.conditional(
+			"UPDATE outbox_deliveries SET status = 'ambiguous', claim_token = NULL, dispatch_started_at = NULL, request_deadline_at = NULL, next_attempt_at = NULL, telegram_retry_after = NULL, last_error_kind = ?, updated_at = ? WHERE id = ? AND status = 'dispatching' AND claim_token = ?",
+			[lastErrorKind, updatedAt, id, claimToken],
+		);
+	}
+
+	async markPermanent(id: string, claimToken: string, updatedAt: number, lastErrorKind: DeliveryErrorKind): Promise<boolean> {
+		return this.conditional(
+			"UPDATE outbox_deliveries SET status = 'permanent_failed', claim_token = NULL, dispatch_started_at = NULL, request_deadline_at = NULL, next_attempt_at = NULL, telegram_retry_after = NULL, last_error_kind = ?, updated_at = ? WHERE id = ? AND status = 'dispatching' AND claim_token = ?",
+			[lastErrorKind, updatedAt, id, claimToken],
+		);
+	}
+
+	async recoverStale(now: number, staleBefore: number, retryAtByAttempt: readonly (number | null)[]): Promise<number> {
+		if (!Number.isSafeInteger(now) || now < 0 || !Number.isSafeInteger(staleBefore) || retryAtByAttempt.length !== 4 || retryAtByAttempt.some((value) => value !== null && (!Number.isSafeInteger(value) || value < 0))) {
+			throw new OutboxStoreCorruptError();
+		}
+		return this.boundary.withTransaction(async () => {
+			const staleRows = await this.boundary.query<{ id: unknown; kind: unknown; attempt_count: unknown }>(
+				"SELECT id, kind, attempt_count FROM outbox_deliveries WHERE status = 'dispatching' AND dispatch_started_at IS NOT NULL AND dispatch_started_at <= ? ORDER BY dispatch_started_at, id",
+				[staleBefore],
+			);
+			let changed = 0;
+			for (const row of staleRows) {
+				if (typeof row.id !== "string" || typeof row.kind !== "string" || !Number.isSafeInteger(row.attempt_count) || (row.attempt_count as number) < 1) {
+					throw new OutboxStoreCorruptError();
+				}
+				const knownTarget = row.kind === "channel_edit" || row.kind === "channel_delete";
+				const retryAt = knownTarget && (row.attempt_count as number) <= 4 ? retryAtByAttempt[(row.attempt_count as number) - 1] ?? null : null;
+				const status = knownTarget ? retryAt === null ? "permanent_failed" : "retryable_failed" : "ambiguous";
+				const result = await this.boundary.execute(
+					"UPDATE outbox_deliveries SET status = ?, claim_token = NULL, dispatch_started_at = NULL, request_deadline_at = NULL, next_attempt_at = ?, telegram_retry_after = NULL, last_error_kind = 'provider_timeout', updated_at = ? WHERE id = ? AND status = 'dispatching' AND dispatch_started_at IS NOT NULL AND dispatch_started_at <= ?",
+					[status, retryAt, now, row.id, staleBefore],
+				) as { changes?: number };
+				if (result.changes === 1) changed += 1;
+			}
+			return changed;
+		});
+	}
+
 	private async find(column: "id" | "idempotency_key", value: string): Promise<OutboxDeliveryRecord | undefined> {
 		const rows = await this.boundary.query<OutboxRow>(
 			`SELECT id, idempotency_key, kind, recipient_chat_id, message_id, payload_json, status, attempt_count, claim_token, dispatch_started_at, request_deadline_at, next_attempt_at, telegram_retry_after, last_error_kind, created_at, updated_at FROM outbox_deliveries WHERE ${column} = ?`,
@@ -98,6 +177,20 @@ export class SqliteOutboxDeliveryRepository implements OutboxDeliveryStore {
 		);
 		const row = rows[0];
 		return row === undefined ? undefined : mapRow(row);
+	}
+
+	private async readById(id: string): Promise<OutboxDeliveryRecord | undefined> {
+		const rows = await this.boundary.query<OutboxRow>(
+			"SELECT id, idempotency_key, kind, recipient_chat_id, message_id, payload_json, status, attempt_count, claim_token, dispatch_started_at, request_deadline_at, next_attempt_at, telegram_retry_after, last_error_kind, created_at, updated_at FROM outbox_deliveries WHERE id = ?",
+			[id],
+		);
+		const row = rows[0];
+		return row === undefined ? undefined : mapRow(row);
+	}
+
+	private async conditional(sql: string, parameters: readonly (string | number | null)[]): Promise<boolean> {
+		const result = await this.boundary.execute(sql, parameters) as { changes?: number };
+		return result.changes === 1;
 	}
 
 	private async requireChanged(sql: string, parameters: readonly (string | number | null)[]): Promise<void> {

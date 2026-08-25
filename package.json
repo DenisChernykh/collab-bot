@@ -18,7 +18,7 @@
 		"build": "tsc -p tsconfig.build.json",
 		"db:migrate": "pnpm build && node dist/cli/db-migrate.js",
 		"db:verify": "pnpm build && node dist/cli/db-verify.js",
-		"check": "pnpm lint && pnpm typecheck && pnpm test:unit && pnpm test:integration && pnpm build"
+		"check": "pnpm lint && pnpm typecheck && pnpm test:unit && pnpm test:integration && pnpm test:runtime && pnpm build"
 	},
 	"dependencies": {
 		"date-fns": "4.4.0",

@@ -39,6 +39,7 @@ export interface OutboxDeliveryRecord {
 	readonly dispatchStartedAt: number | null;
 	readonly requestDeadlineAt: number | null;
 	readonly nextAttemptAt: number | null;
+	/** Telegram retry_after seconds; nextAttemptAt remains UTC milliseconds. */
 	readonly telegramRetryAfter: number | null;
 	readonly lastErrorKind: DeliveryErrorKind | null;
 	readonly createdAt: number;
@@ -51,6 +52,19 @@ export interface OutboxDeliveryStore {
 	insert(record: OutboxDeliveryRecord): Promise<void>;
 	cancel(id: string, updatedAt: number): Promise<void>;
 	supersede(id: string, updatedAt: number): Promise<void>;
+	claimDue(now: number, claimToken: string, requestDeadlineAt: number): Promise<OutboxDeliveryRecord | undefined>;
+	markSent(id: string, claimToken: string, updatedAt: number, messageId: number): Promise<boolean>;
+	markRetryable(
+		id: string,
+		claimToken: string,
+		updatedAt: number,
+		nextAttemptAt: number,
+		lastErrorKind: DeliveryErrorKind,
+		telegramRetryAfter: number | null,
+	): Promise<boolean>;
+	markAmbiguous(id: string, claimToken: string, updatedAt: number, lastErrorKind: DeliveryErrorKind): Promise<boolean>;
+	markPermanent(id: string, claimToken: string, updatedAt: number, lastErrorKind: DeliveryErrorKind): Promise<boolean>;
+	recoverStale(now: number, staleBefore: number, retryAtByAttempt: readonly (number | null)[]): Promise<number>;
 }
 
 export class OutboxStoreCorruptError extends Error {

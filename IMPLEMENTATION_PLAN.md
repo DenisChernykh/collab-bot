@@ -273,7 +273,7 @@ P0-01 → P0-02
 
 #### S0-06 — Реализовать fake Telegram transport и delivery recovery
 
-- **Status:** `pending`
+- **Status:** `completed`
 - **Objective:** Детерминированно dispatch-ить due deliveries через fake Bot API с classification, bounded retry, ambiguity policy, provider deadline и claim fencing.
 - **Requirements:** FR-N01, FR-R01, FR-V01 foundation; AC-006, AC-018, AC-019, AC-024 foundation.
 - **Dependencies:** `S0-05`.
@@ -288,12 +288,12 @@ P0-01 → P0-02
 - **Exit criteria:** Required outcome matrix deterministic; no duplicate provider call for ambiguous send; recovery/fencing tests pass after simulated crash.
 - **Completion evidence:**
   - Commit SHA: `SELF`
-  - Changed files:
-  - Focused checks:
-  - Aggregate checks: `Deferred to S0-07`
-  - Acceptance evidence:
-  - Review result:
-  - Notes/deviations:
+  - Changed files: `package.json`, `src/application/outbox/delivery-runner.ts`, `src/application/ports/claim-token.ts`, `src/application/ports/outbox-delivery-store.ts`, `src/application/ports/provider-deadline.ts`, `src/application/ports/telegram-transport.ts`, `src/infrastructure/crypto/claim-token.ts`, `src/infrastructure/database/outbox-delivery-repository.ts`, `src/infrastructure/testing/fake-telegram-transport.ts`, `src/infrastructure/time/provider-deadline.ts`, `test/runtime/s0-06-delivery.test.ts`, `IMPLEMENTATION_PLAN.md`
+  - Focused checks: Node `v24.18.0`; pnpm `11.15.1`; `pnpm exec vitest run -t "fake Bot API|ambiguous send|claim fencing|provider deadline|retry_after"` — 7/7 PASS; `pnpm test:runtime` — 21/21 PASS; `pnpm db:verify` — PASS; application/domain import-boundary scan — no matches; `Date.now` scan — no matches; single `PROVIDER_DEADLINE_MS` contract scan — PASS; no SQLite/WAL/SHM artifacts.
+  - Aggregate checks: `pnpm check` — PASS; full unit — 22/22 PASS; full integration — 25/25 PASS; `pnpm lint` — PASS; `pnpm typecheck` — PASS; build — PASS; `pnpm test:e2e:fake` remains empty and fail-closed with expected exit 1.
+  - Acceptance evidence: Application-only Telegram transport, provider-deadline, and claim-token ports are implemented with no grammY/network dependency. Fake transport queues success/failure/deferred outcomes and records only method, target IDs, text length, and SHA-256 text hash. SQLite claim is transactional and concurrency-one: prepared intents are due only when `next_attempt_at` is null or `<= now`, retryable intents use the same due fence, and terminal/cancelled/superseded rows are excluded. Shutdown admission is checked before recovery and again immediately before claim, so pre-aborted and queued runs make no recovery/claim/provider call. Claim increments attempts, stores a random token and the single 15-second `PROVIDER_DEADLINE_MS` deadline, then commits before provider execution. Outcomes are fenced by `status='dispatching' AND claim_token=?`; known success, not-modified/not-found equivalents, 429/pre-send retry, permanent 403/invalid-chat/not-found, ambiguous send timeout/after-possible-send, edit/delete retry, bounded 1/2/4/8-second policy, and fifth-known-attempt terminal state are covered. Stale recovery is atomic and attempt-aware (known-target attempts 1–4 retry with 1/2/4/8 seconds, fifth becomes permanent; sends become ambiguous), while restarted/separate-runner late outcomes are fenced. Shutdown abort is distinct from provider timeout, returns an explicit safe `shutdown` outcome, and leaves dispatching durable for S0-07 startup recovery. Unsafe epoch/retry-after arithmetic fails closed without persisting non-safe values; valid 429 retry is never earlier than `retry_after`. No provider call occurs inside the SQLite claim transaction, no raw request/response body or credential is stored/logged, and no product lifecycle/event behavior is added.
+  - Review result: `Orchestrator review — PASS after scheduled due fencing, attempt-aware stale recovery, shutdown admission fix, deadline/shutdown distinction, and safe arithmetic; independent Sol max deferred to S0-07`
+  - Notes/deviations: Local commit only; no push/remote/PR/deploy/production actions, real Telegram/network, grammY polling, product renderer, publication lifecycle, or S0-07 runtime lifecycle work. `S0-07` remains `pending`; S0 stage remains `in_progress` pending its runtime lifecycle and independent review gate.
 - **Stop conditions:** Test requires real Telegram/network или classification невозможно вывести из TD.
 
 #### S0-07 — Завершить runtime lifecycle и S0 gate
