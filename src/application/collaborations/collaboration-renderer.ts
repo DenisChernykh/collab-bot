@@ -2,7 +2,7 @@ import { DomainValidationError } from "../../domain/value-objects/enums.js";
 import { MAX_TELEGRAM_MESSAGE_UTF16_LENGTH, type CollaborationRecord } from "../../domain/collaborations/collaboration.js";
 import type { CollaborationDraftInput } from "../../domain/collaborations/collaboration.js";
 
-export function renderCollaborationCard(value: CollaborationRecord | CollaborationDraftInput): string {
+export function renderCollaborationCard(value: CollaborationRecord | CollaborationDraftInput, options: { readonly expired?: boolean } = {}): string {
 	const format = "format" in value && value.format !== undefined && value.format !== null ? value.format : "—";
 	const target = "targetProfileType" in value && value.targetProfileType !== undefined && value.targetProfileType !== null ? value.targetProfileType : "—";
 	const topics = "topics" in value && value.topics !== undefined && value.topics.length > 0 ? value.topics.join(", ") : "—";
@@ -29,6 +29,7 @@ export function renderCollaborationCard(value: CollaborationRecord | Collaborati
 		`Дедлайн откликов: ${escapeHtml(String(deadline))}`,
 		`Дата проведения: ${escapeHtml(String(eventDate))}`,
 		"Город: Екатеринбург",
+		...(options.expired ? ["", "<b>Приём откликов завершён</b>"] : []),
 	].join("\n");
 	assertTelegramTextFits(rendered);
 	return rendered;

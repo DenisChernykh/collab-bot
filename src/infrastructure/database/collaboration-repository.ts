@@ -55,6 +55,16 @@ export class SqliteCollaborationRepository implements CollaborationRepository {
 		return rows[0] === undefined ? undefined : this.readAggregate(rows[0]);
 	}
 
+	async findByIdForTelegramUser(telegramUserId: string, collaborationId: string): Promise<CollaborationRecord | undefined> {
+		const rows = await this.boundary.query<CollaborationRow>(this.selectSql("c.id = ? AND p.telegram_user_id = ?"), [collaborationId, telegramUserId]);
+		return rows[0] === undefined ? undefined : this.readAggregate(rows[0]);
+	}
+
+	async findById(collaborationId: string): Promise<CollaborationRecord | undefined> {
+		const rows = await this.boundary.query<CollaborationRow>(this.selectSql("c.id = ?"), [collaborationId]);
+		return rows[0] === undefined ? undefined : this.readAggregate(rows[0]);
+	}
+
 	async createDraft(telegramUserId: string, now: number): Promise<CollaborationRecord> {
 		return this.boundary.withTransaction(async () => {
 			const profileRows = await this.boundary.query<{ id?: unknown }>("SELECT id FROM profiles WHERE telegram_user_id = ? AND status = 'active'", [telegramUserId]);

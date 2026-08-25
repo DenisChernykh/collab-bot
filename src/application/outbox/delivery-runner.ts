@@ -2,6 +2,7 @@ import type { Clock } from "../ports/clock.js";
 import type { ClaimTokenGenerator } from "../ports/claim-token.js";
 import type {
 	DeliveryErrorKind,
+	OutboxDeliveryKind,
 	OutboxDeliveryRecord,
 	OutboxDeliveryStore,
 } from "../ports/outbox-delivery-store.js";
@@ -38,6 +39,8 @@ type FailureDisposition =
 
 export class DeliveryRunner {
 	private queue: Promise<void> = Promise.resolve();
+	private readonly afterRun: ((result: DeliveryRunResult) => Promise<void>) | undefined;
+	private readonly allowedKinds: (() => readonly OutboxDeliveryKind[]) | undefined;
 
 	constructor(
 		private readonly store: OutboxDeliveryStore,
@@ -45,10 +48,16 @@ export class DeliveryRunner {
 		private readonly deadline: ProviderDeadline,
 		private readonly claimTokens: ClaimTokenGenerator,
 		private readonly clock: Clock,
-	) {}
+		afterRun?: (result: DeliveryRunResult) => Promise<void>,
+		allowedKinds?: () => readonly OutboxDeliveryKind[],
+	) { this.afterRun = afterRun; this.allowedKinds = allowedKinds; }
 
 	runOnce(shutdownSignal?: AbortSignal): Promise<DeliveryRunResult> {
-		const result = this.queue.then(() => this.runOnceInternal(shutdownSignal));
+		const result = this.queue.then(async () => {
+			const outcome = await this.runOnceInternal(shutdownSignal);
+			if (this.afterRun !== undefined && outcome.deliveryId !== undefined) await this.afterRun(outcome);
+			return outcome;
+		});
 		this.queue = result.then(() => undefined, () => undefined);
 		return result;
 	}
@@ -69,7 +78,7 @@ export class DeliveryRunner {
 			if (requestDeadlineAt === null) return { outcome: "unsafe" };
 			if (shutdownSignal?.aborted) return { outcome: "shutdown" };
 			const claimToken = this.claimTokens.generate();
-			const record = await this.store.claimDue(now, claimToken, requestDeadlineAt);
+			const record = await this.store.claimDue(now, claimToken, requestDeadlineAt, this.allowedKinds?.());
 			if (record === undefined) return { outcome: "idle" };
 
 			try {
@@ -134,13 +143,13 @@ export class DeliveryRunner {
 
 function toRequest(record: OutboxDeliveryRecord, signal: AbortSignal): TelegramTransportRequest {
 	if (record.payload.method === "send") {
-		return { method: "send", chatId: record.recipientChatId, text: record.payload.text, signal };
+		return { method: "send", chatId: record.recipientChatId, text: record.payload.text, ...(record.payload.replyMarkup === undefined ? {} : { replyMarkup: record.payload.replyMarkup }), signal };
 	}
 	if (record.messageId === null) {
 		throw new TelegramTransportError({ code: "unknown" });
 	}
 	if (record.payload.method === "edit") {
-		return { method: "edit", chatId: record.recipientChatId, messageId: record.messageId, text: record.payload.text, signal };
+		return { method: "edit", chatId: record.recipientChatId, messageId: record.messageId, text: record.payload.text, ...(record.payload.replyMarkup === undefined ? {} : { replyMarkup: record.payload.replyMarkup }), signal };
 	}
 	return { method: "delete", chatId: record.recipientChatId, messageId: record.messageId, signal };
 }

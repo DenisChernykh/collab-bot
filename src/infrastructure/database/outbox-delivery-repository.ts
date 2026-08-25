@@ -1,5 +1,6 @@
 import type {
 	DeliveryErrorKind,
+	OutboxDeliveryKind,
 	OutboxDeliveryRecord,
 	OutboxDeliveryStore,
 } from "../../application/ports/outbox-delivery-store.js";
@@ -84,6 +85,19 @@ export class SqliteOutboxDeliveryRepository implements OutboxDeliveryStore {
 		);
 	}
 
+	async cancelUnclaimed(id: string, updatedAt: number): Promise<boolean> {
+		const prepared = await this.boundary.execute(
+			"UPDATE outbox_deliveries SET status = 'cancelled', next_attempt_at = NULL, telegram_retry_after = NULL, last_error_kind = NULL, updated_at = ? WHERE id = ? AND status = 'prepared' AND claim_token IS NULL AND dispatch_started_at IS NULL AND request_deadline_at IS NULL AND message_id IS NULL",
+			[updatedAt, id],
+		) as { changes?: number };
+		if (prepared.changes === 1) return true;
+		const retryable = await this.boundary.execute(
+			"UPDATE outbox_deliveries SET status = 'permanent_failed', next_attempt_at = NULL, telegram_retry_after = NULL, last_error_kind = 'provider_timeout', updated_at = ? WHERE id = ? AND status = 'retryable_failed' AND claim_token IS NULL AND dispatch_started_at IS NULL AND request_deadline_at IS NULL AND message_id IS NULL",
+			[updatedAt, id],
+		) as { changes?: number };
+		return retryable.changes === 1;
+	}
+
 	async supersede(id: string, updatedAt: number): Promise<void> {
 		await this.requireChanged(
 			"UPDATE outbox_deliveries SET status = 'superseded', claim_token = NULL, dispatch_started_at = NULL, request_deadline_at = NULL, next_attempt_at = NULL, telegram_retry_after = NULL, last_error_kind = NULL, updated_at = ? WHERE id = ? AND status = 'prepared' AND attempt_count = 0 AND claim_token IS NULL AND dispatch_started_at IS NULL AND request_deadline_at IS NULL AND telegram_retry_after IS NULL AND last_error_kind IS NULL",
@@ -91,17 +105,20 @@ export class SqliteOutboxDeliveryRepository implements OutboxDeliveryStore {
 		);
 	}
 
-	async claimDue(now: number, claimToken: string, requestDeadlineAt: number): Promise<OutboxDeliveryRecord | undefined> {
+	async claimDue(now: number, claimToken: string, requestDeadlineAt: number, allowedKinds?: readonly OutboxDeliveryKind[]): Promise<OutboxDeliveryRecord | undefined> {
+		if (allowedKinds !== undefined && allowedKinds.length === 0) return undefined;
+		const kindClause = allowedKinds === undefined ? "" : ` AND kind IN (${allowedKinds.map(() => "?").join(", ")})`;
+		const kindParameters = allowedKinds ?? [];
 		return this.boundary.withTransaction(async () => {
 			const candidates = await this.boundary.query<{ id: string }>(
-				"SELECT id FROM outbox_deliveries WHERE (status = 'prepared' AND (next_attempt_at IS NULL OR next_attempt_at <= ?)) OR (status = 'retryable_failed' AND next_attempt_at IS NOT NULL AND next_attempt_at <= ?) ORDER BY COALESCE(next_attempt_at, created_at), created_at, id LIMIT 1",
-				[now, now],
+				`SELECT id FROM outbox_deliveries WHERE ((status = 'prepared' AND (next_attempt_at IS NULL OR next_attempt_at <= ?)) OR (status = 'retryable_failed' AND next_attempt_at IS NOT NULL AND next_attempt_at <= ?))${kindClause} ORDER BY COALESCE(next_attempt_at, created_at), created_at, id LIMIT 1`,
+				[now, now, ...kindParameters],
 			);
 			const candidate = candidates[0];
 			if (candidate === undefined) return undefined;
 			const result = await this.boundary.execute(
-				"UPDATE outbox_deliveries SET status = 'dispatching', attempt_count = attempt_count + 1, claim_token = ?, dispatch_started_at = ?, request_deadline_at = ?, next_attempt_at = NULL, telegram_retry_after = NULL, last_error_kind = NULL, updated_at = ? WHERE id = ? AND ((status = 'prepared' AND (next_attempt_at IS NULL OR next_attempt_at <= ?)) OR (status = 'retryable_failed' AND next_attempt_at IS NOT NULL AND next_attempt_at <= ?))",
-				[claimToken, now, requestDeadlineAt, now, candidate.id, now, now],
+				`UPDATE outbox_deliveries SET status = 'dispatching', attempt_count = attempt_count + 1, claim_token = ?, dispatch_started_at = ?, request_deadline_at = ?, next_attempt_at = NULL, telegram_retry_after = NULL, last_error_kind = NULL, updated_at = ? WHERE id = ? AND ((status = 'prepared' AND (next_attempt_at IS NULL OR next_attempt_at <= ?)) OR (status = 'retryable_failed' AND next_attempt_at IS NOT NULL AND next_attempt_at <= ?))${kindClause}`,
+				[claimToken, now, requestDeadlineAt, now, candidate.id, now, now, ...kindParameters],
 			) as { changes?: number };
 			if (result.changes !== 1) return undefined;
 			return this.readById(candidate.id);
@@ -244,7 +261,7 @@ function mapRow(row: OutboxRow): OutboxDeliveryRecord {
 		row.status === "retryable_failed" && (row.attempt_count === 0 || row.next_attempt_at === null || row.last_error_kind === null) ||
 		row.status === "ambiguous" && (row.attempt_count === 0 || row.next_attempt_at !== null || row.last_error_kind === null) ||
 		row.status === "prepared" && (row.attempt_count !== 0 || row.next_attempt_at !== null && (row.next_attempt_at as number) < (row.created_at as number) || row.telegram_retry_after !== null || row.last_error_kind !== null) ||
-		row.status === "cancelled" && (row.attempt_count !== 0 || ((row.kind === "dm_send" || row.kind === "channel_send") && row.message_id !== null))
+		row.status === "cancelled" && ((row.kind === "dm_send" || row.kind === "channel_send") && row.message_id !== null || row.claim_token !== null || row.dispatch_started_at !== null || row.request_deadline_at !== null || row.next_attempt_at !== null || row.telegram_retry_after !== null || row.last_error_kind !== null)
 	) {
 		throw new OutboxStoreCorruptError();
 	}

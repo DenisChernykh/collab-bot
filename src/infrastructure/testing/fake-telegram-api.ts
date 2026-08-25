@@ -12,6 +12,8 @@ export interface FakeTelegramMarkup {
 export interface FakeTelegramApiOptions {
 	readonly token: string;
 	readonly botInfo: UserFromGetMe;
+	readonly showcaseChannel?: { readonly id: string; readonly username: string; readonly type?: "channel" | "group" };
+	readonly showcaseMember?: { readonly status: "creator" | "administrator" | "member"; readonly can_post_messages?: boolean; readonly can_edit_messages?: boolean; readonly can_delete_messages?: boolean };
 }
 
 /** A local Bot API surface for grammY handleUpdate tests. It never opens a network socket. */
@@ -20,10 +22,14 @@ export class FakeTelegramApi {
 	private nextMessageId = 1;
 	private readonly token: string;
 	private readonly botInfo: UserFromGetMe;
+	private readonly showcaseChannel: { readonly id: string; readonly username: string; readonly type: "channel" | "group" };
+	private readonly showcaseMember: { readonly status: "creator" | "administrator" | "member"; readonly can_post_messages?: boolean; readonly can_edit_messages?: boolean; readonly can_delete_messages?: boolean };
 
 	constructor(options: FakeTelegramApiOptions) {
 		this.token = options.token;
 		this.botInfo = options.botInfo;
+		this.showcaseChannel = { type: "channel", ...(options.showcaseChannel ?? { id: "-1001", username: "showcase" }) };
+		this.showcaseMember = options.showcaseMember ?? { status: "administrator", can_post_messages: true, can_edit_messages: true, can_delete_messages: true };
 	}
 
 	readonly fetch = async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]): Promise<Response> => {
@@ -45,6 +51,13 @@ export class FakeTelegramApi {
 					text: payload.text ?? "",
 					reply_markup: parseMarkup(payload.reply_markup),
 				} });
+			case "getChat":
+				return response({ ok: true, result: { id: this.showcaseChannel.id, type: this.showcaseChannel.type, username: this.showcaseChannel.username } });
+			case "getChatMember":
+				return response({ ok: true, result: { user: this.botInfo, ...this.showcaseMember } });
+			case "editMessageText":
+			case "deleteMessage":
+				return response({ ok: true, result: true });
 			case "answerCallbackQuery":
 				return response({ ok: true, result: true });
 			case "getUpdates":

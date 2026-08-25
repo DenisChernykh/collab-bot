@@ -122,6 +122,12 @@ export class OutboxDeliveryService {
 		});
 	}
 
+	async cancelUnclaimed(id: string): Promise<boolean> {
+		assertUuid(id);
+		const now = clockMilliseconds(this.clock);
+		return this.transactionRunner.withTransaction(() => this.store.cancelUnclaimed(id, now));
+	}
+
 	async supersede(id: string): Promise<void> {
 		assertUuid(id);
 		const now = clockMilliseconds(this.clock);

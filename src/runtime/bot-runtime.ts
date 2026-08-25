@@ -23,6 +23,15 @@ import { DatabaseBoundaryTransactionRunner } from "../infrastructure/database/tr
 import { SqliteTelegramUserRepository } from "../infrastructure/database/telegram-user-repository.js";
 import { SafeLogger } from "../infrastructure/logging/safe-logger.js";
 import { SystemClock } from "../infrastructure/time/system-clock.js";
+import { SqliteOutboxDeliveryRepository } from "../infrastructure/database/outbox-delivery-repository.js";
+import { SqliteCollaborationPublicationRepository } from "../infrastructure/database/collaboration-publication-repository.js";
+import { CollaborationPublicationService } from "../application/collaborations/collaboration-publication-service.js";
+import { DeliveryRunner } from "../application/outbox/delivery-runner.js";
+import { SystemProviderDeadline } from "../infrastructure/time/provider-deadline.js";
+import { RandomClaimTokenGenerator } from "../infrastructure/crypto/claim-token.js";
+import { GrammyTelegramTransport } from "../infrastructure/telegram/grammy-telegram-transport.js";
+import { OUTBOX_DELIVERY_KINDS } from "../application/ports/outbox-delivery-store.js";
+import { preflightShowcase } from "./showcase-preflight.js";
 
 export const ALLOWED_UPDATES = ["message", "callback_query"] as const;
 
@@ -70,6 +79,19 @@ export async function createBotRuntime(options: BotRuntimeOptions): Promise<BotR
 			clock,
 			profileSessionRepository,
 		);
+		const capability = { canPublish: false, reason: "showcase preflight has not run" as string | null };
+		const outboxStore = new SqliteOutboxDeliveryRepository(boundary);
+		const collaborationPublicationService = new CollaborationPublicationService(
+			new SqliteCollaborationRepository(boundary),
+			new SqliteCollaborationPublicationRepository(boundary),
+			new SqliteCollaborationSessionRepository(boundary),
+			outboxStore,
+			transactionRunner,
+			clock,
+			capability,
+			options.config.showcaseChannelId,
+			options.config.expectedBotUsername,
+		);
 		const durableCommandExecutor = new DurableCommandExecutor(transactionRunner, new SqliteDurableCommandStore(boundary), { hash: hashCanonicalInput }, clock);
 		let inFlight = 0;
 		let drainResolve: (() => void) | undefined;
@@ -94,6 +116,7 @@ export async function createBotRuntime(options: BotRuntimeOptions): Promise<BotR
 			clock,
 				helpContact: options.config.helpContact,
 				collaborationDraftService,
+				collaborationPublicationService,
 		});
 		const logger = new SafeLogger((entry) => options.logSink?.(JSON.stringify(entry)), clock, "bot");
 		bot.catch((error: BotError) => {
@@ -104,6 +127,23 @@ export async function createBotRuntime(options: BotRuntimeOptions): Promise<BotR
 
 		type LifecycleState = "ready" | "starting" | "running" | "failed" | "stopping" | "stopped";
 		let lifecycle: LifecycleState = "ready";
+		const deliveryRunner = new DeliveryRunner(outboxStore, new GrammyTelegramTransport(bot), new SystemProviderDeadline(), new RandomClaimTokenGenerator(), clock, async (result) => {
+			if (result.deliveryId !== undefined) await collaborationPublicationService.projectDelivery(result.deliveryId, outboxStore);
+		}, () => capability.canPublish ? OUTBOX_DELIVERY_KINDS : ["dm_send"]);
+		let deliveryLoopStop = false;
+		let deliveryLoopPromise: Promise<void> | undefined;
+		const startDeliveryLoop = (): void => {
+			deliveryLoopStop = false;
+			deliveryLoopPromise = (async () => {
+				await deliveryRunner.recoverStale();
+				await collaborationPublicationService.projectTerminalOutcomes(outboxStore);
+				while (!deliveryLoopStop) {
+					if (capability.canPublish) await collaborationPublicationService.cancelExpiredPrepared();
+					await deliveryRunner.runOnce();
+					await new Promise<void>((resolve) => { const timer = setTimeout(resolve, 250); timer.unref?.(); });
+				}
+			})();
+		};
 		let shutdownPromise: Promise<void> | undefined;
 		const shutdown = async (): Promise<void> => {
 			if (shutdownPromise !== undefined) return shutdownPromise;
@@ -111,6 +151,7 @@ export async function createBotRuntime(options: BotRuntimeOptions): Promise<BotR
 			const shouldStopPolling = lifecycle === "starting" || lifecycle === "running";
 			lifecycle = "stopping";
 			shutdownPromise = (async () => {
+				deliveryLoopStop = true;
 				if (shouldStopPolling) {
 					try {
 						await bot.stop();
@@ -118,6 +159,7 @@ export async function createBotRuntime(options: BotRuntimeOptions): Promise<BotR
 						logger.error("poll_stop_failed", error);
 					}
 				}
+				if (deliveryLoopPromise !== undefined) await deliveryLoopPromise;
 				if (inFlight > 0) await new Promise<void>((resolveDrain) => { drainResolve = resolveDrain; });
 				await boundary.close();
 				lifecycle = "stopped";
@@ -131,6 +173,10 @@ export async function createBotRuntime(options: BotRuntimeOptions): Promise<BotR
 			lifecycle = "starting";
 			logger.info("runtime_ready");
 			try {
+				const preflight = await preflightShowcase(bot, options.config);
+				capability.canPublish = preflight.canPublish;
+				capability.reason = preflight.reason;
+				startDeliveryLoop();
 				await bot.start({
 					allowed_updates: ALLOWED_UPDATES,
 					onStart: () => {

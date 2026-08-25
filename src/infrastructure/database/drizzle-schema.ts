@@ -331,6 +331,24 @@ export const outboxDeliveries = sqliteTable(
 	],
 );
 
+export const channelPublications = sqliteTable(
+	"channel_publications",
+	{
+		collaborationId: text("collaboration_id").primaryKey().references(() => collaborations.id, { onDelete: "cascade" }),
+		channelChatId: text("channel_chat_id").notNull(),
+		messageId: integer("message_id"),
+		status: text("status", { enum: ["prepared", "sending", "published", "failed"] as const }).notNull(),
+		renderedTermsVersion: integer("rendered_terms_version").notNull(),
+		renderedProjectionRevision: integer("rendered_projection_revision").notNull(),
+		renderedHash: text("rendered_hash").notNull(),
+		currentAttemptNo: integer("current_attempt_no").notNull(),
+		lastDeliveryId: text("last_delivery_id").references(() => outboxDeliveries.id),
+		lastErrorKind: text("last_error_kind"),
+		updatedAt: integer("updated_at").notNull(),
+	},
+	(table) => [index("channel_publications_status").on(table.status, table.updatedAt)],
+);
+
 export const productEvents = sqliteTable(
 	"product_events",
 	{

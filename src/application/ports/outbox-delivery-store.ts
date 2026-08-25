@@ -51,8 +51,9 @@ export interface OutboxDeliveryStore {
 	findByIdempotencyKey(idempotencyKey: string): Promise<OutboxDeliveryRecord | undefined>;
 	insert(record: OutboxDeliveryRecord): Promise<void>;
 	cancel(id: string, updatedAt: number): Promise<void>;
+	cancelUnclaimed(id: string, updatedAt: number): Promise<boolean>;
 	supersede(id: string, updatedAt: number): Promise<void>;
-	claimDue(now: number, claimToken: string, requestDeadlineAt: number): Promise<OutboxDeliveryRecord | undefined>;
+	claimDue(now: number, claimToken: string, requestDeadlineAt: number, allowedKinds?: readonly OutboxDeliveryKind[]): Promise<OutboxDeliveryRecord | undefined>;
 	markSent(id: string, claimToken: string, updatedAt: number, messageId: number): Promise<boolean>;
 	markRetryable(
 		id: string,

@@ -23,11 +23,12 @@ import {
 	type CollaborationDraftStartResult,
 } from "../application/collaborations/collaboration-draft-service.js";
 import { renderCollaborationCard } from "../application/collaborations/collaboration-renderer.js";
+import { CollaborationPublicationService, CollaborationNotPublishableError, PublicationUnavailableError } from "../application/collaborations/collaboration-publication-service.js";
 import type { CollaborationDraftInput, CollaborationDraftState, CollaborationWizardStep } from "../domain/collaborations/collaboration.js";
 import type { ProfileInput } from "../domain/profiles/profile.js";
 import { DomainValidationError, parseCollaborationFormat, parsePlatformType, parseProfileType, parseTargetProfileType, parseTopic, type PlatformType, type ProfileType, type Topic } from "../domain/value-objects/enums.js";
 
-const PROFILE_STATIC_CALLBACKS = new Set(["menu:home", "profile:create", "profile:resume", "profile:view", "profile:edit", "profile:unavailable", "collaboration:start", "collaboration:resume"]);
+const PROFILE_STATIC_CALLBACKS = new Set(["menu:home", "profile:create", "profile:resume", "profile:view", "profile:edit", "profile:unavailable", "collaboration:start", "collaboration:resume", "collaboration:own"]);
 const PROFILE_LINK_PROMPT = "Добавьте ссылку, по которой другие участники смогут познакомиться с вами.";
 const PROFILE_LINK_CHOICE_HINT = "Нажмите «Выбрать Telegram-канал» или «Указать другую ссылку». Для сайта или соцсети выберите «Указать другую ссылку» и отправьте ссылку.";
 const PROFILE_TYPE_LABELS: Record<ProfileType, string> = {
@@ -71,7 +72,7 @@ interface ProfileMutationCallback {
 	readonly generation: string;
 	readonly revision: number;
 }
-type CollaborationMutationKind = "format" | "target" | "back" | "cancel" | "preview";
+type CollaborationMutationKind = "format" | "target" | "back" | "cancel" | "preview" | "publish";
 interface CollaborationMutation {
 	readonly kind: CollaborationMutationKind;
 	readonly value?: string;
@@ -92,6 +93,7 @@ export interface ProfileBotOptions {
 	readonly helpContact: string;
 	readonly requestIdFactory?: () => number;
 	readonly collaborationDraftService?: CollaborationDraftService;
+	readonly collaborationPublicationService?: CollaborationPublicationService;
 }
 
 export interface RegisteredProfileBot {
@@ -175,6 +177,9 @@ export function registerProfileBot(bot: Bot, options: ProfileBotOptions): Regist
 			case "collaboration:resume":
 				await startOrResumeCollaboration(workCtx, options, userId);
 				return;
+			case "collaboration:own":
+				await renderOwnCollaborations(workCtx, options, userId);
+				return;
 			default:
 				if (data.startsWith("profile:type:")) {
 					await chooseType(workCtx, options, userId, data.slice("profile:type:".length));
@@ -212,6 +217,10 @@ async function handleText(ctx: Context, options: ProfileBotOptions, userId: stri
 	}
 	if (command === "/new") {
 		await startOrResumeCollaboration(ctx, options, userId);
+		return;
+	}
+	if (command === "/my_collaborations") {
+		await renderOwnCollaborations(ctx, options, userId);
 		return;
 	}
 	if (command === "/profile") {
@@ -556,7 +565,7 @@ async function startOrResumeCollaboration(ctx: Context, options: ProfileBotOptio
 async function renderCollaborationStep(ctx: Context, options: ProfileBotOptions, _userId: string, started: CollaborationDraftStartResult): Promise<void> {
 	const session = started.session;
 	const state = session.state;
-	const markup = collaborationKeyboard(state, session.revision);
+	const markup = collaborationKeyboard(state, session.revision, options);
 	if (state.step === "preview") {
 		await ctx.reply(renderCollaborationCard(state), { parse_mode: "HTML", reply_markup: markup });
 		return;
@@ -605,7 +614,7 @@ async function advanceCollaborationText(ctx: Context, options: ProfileBotOptions
 		await renderCollaborationStep(ctx, options, userId, saved);
 	} catch (error) {
 		if (error instanceof DomainValidationError) {
-			await ctx.reply("Значение не подходит — исправьте его, предыдущее корректное значение сохранено.", { reply_markup: collaborationKeyboard(session.state, session.revision) });
+			await ctx.reply("Значение не подходит — исправьте его, предыдущее корректное значение сохранено.", { reply_markup: collaborationKeyboard(session.state, session.revision, options) });
 			return;
 		}
 		if (error instanceof CollaborationDraftStaleError) {
@@ -634,6 +643,18 @@ async function handleCollaborationMutation(ctx: Context, options: ProfileBotOpti
 		await ctx.reply("Черновик коллаборации отменён.", { reply_markup: menuKeyboard(options) });
 		return;
 	}
+	if (mutation.kind === "publish") {
+		if (options.collaborationPublicationService === undefined) return;
+		try {
+			await options.collaborationPublicationService.publish(userId, session.collaborationId);
+			await ctx.reply("Публикация запущена.", { reply_markup: menuKeyboard(options) });
+		} catch (error) {
+			if (error instanceof PublicationUnavailableError) { await ctx.reply("Публикация временно недоступна. Черновик сохранён.", { reply_markup: collaborationKeyboard(session.state, session.revision, options) }); return; }
+			if (error instanceof CollaborationNotPublishableError) { await ctx.reply("Карточка уже опубликована или не готова к публикации.", { reply_markup: menuKeyboard(options) }); return; }
+			throw error;
+		}
+		return;
+	}
 	if (mutation.kind === "back") {
 		const previous = previousCollaborationStep(session.state.step);
 		if (previous === undefined) {
@@ -649,7 +670,7 @@ async function handleCollaborationMutation(ctx: Context, options: ProfileBotOpti
 			const saved = await service.saveStep(userId, session, {}, "preview");
 			await renderCollaborationStep(ctx, options, userId, saved);
 		} catch (error) {
-			if (error instanceof DomainValidationError) await ctx.reply("Заполните все поля корректно, чтобы открыть предпросмотр.", { reply_markup: collaborationKeyboard(session.state, session.revision) });
+			if (error instanceof DomainValidationError) await ctx.reply("Заполните все поля корректно, чтобы открыть предпросмотр.", { reply_markup: collaborationKeyboard(session.state, session.revision, options) });
 			else throw error;
 		}
 		return;
@@ -660,7 +681,7 @@ async function handleCollaborationMutation(ctx: Context, options: ProfileBotOpti
 		const saved = await service.saveStep(userId, session, next.input, next.step);
 		await renderCollaborationStep(ctx, options, userId, saved);
 	} catch (error) {
-		if (error instanceof DomainValidationError) await ctx.reply("Выберите корректное значение.", { reply_markup: collaborationKeyboard(session.state, session.revision) });
+		if (error instanceof DomainValidationError) await ctx.reply("Выберите корректное значение.", { reply_markup: collaborationKeyboard(session.state, session.revision, options) });
 		else throw error;
 	}
 }
@@ -671,6 +692,18 @@ async function renderMenu(ctx: Context, options: ProfileBotOptions, userId: stri
 	if (session !== undefined) keyboard.row().text("▶️ Продолжить профиль", "profile:resume");
 	if (options.collaborationDraftService !== undefined && (await options.collaborationDraftService.findSession(userId) !== undefined || await options.collaborationDraftService.findDraft(userId) !== undefined)) keyboard.row().text("▶️ Продолжить коллаборацию", "collaboration:resume");
 	await ctx.reply("Добро пожаловать в «Давай вместе» — сервис для поиска партнёров и совместных проектов.\n\nСейчас мы начинаем с Екатеринбурга. Выберите, что хотите сделать:", { reply_markup: keyboard });
+}
+
+async function renderOwnCollaborations(ctx: Context, options: ProfileBotOptions, userId: string): Promise<void> {
+	if (options.collaborationPublicationService === undefined) { await ctx.reply("Этот раздел пока готовится.", { reply_markup: menuKeyboard(options) }); return; }
+	const summaries = await options.collaborationPublicationService.listOwn(userId);
+	if (summaries.length === 0) { await ctx.reply("У вас пока нет коллабораций.", { reply_markup: menuKeyboard(options) }); return; }
+	const lines = summaries.map((summary) => `• ${summary.title ?? "Без названия"} — ${collaborationStatusLabel(summary.status)}`);
+	await ctx.reply(`Мои коллаборации\n\n${lines.join("\n")}`, { reply_markup: menuKeyboard(options) });
+}
+
+function collaborationStatusLabel(status: import("../domain/value-objects/enums.js").CollaborationStatus): string {
+	return ({ draft: "черновик", publishing: "публикация запущена", published: "опубликована", publication_failed: "ошибка публикации", expired: "истекла", matched: "совпадение", completed: "завершена", cancelled: "отменена", hidden: "скрыта" } as Record<string, string>)[status] ?? status;
 }
 
 	async function renderStep(ctx: Context, options: ProfileBotOptions, userId: string, session: ProfileSessionRecord): Promise<void> {
@@ -789,7 +822,7 @@ function withoutPlatform(draft: ProfileDraft): ProfileDraft {
 }
 
 function parseCollaborationMutationCallback(data: string): CollaborationMutation | undefined {
-	const match = /^collaboration:(format|target|back|cancel|preview)(?::([a-z_]+))?:g([a-f0-9]{16}):r(\d+)$/.exec(data);
+	const match = /^collaboration:(format|target|back|cancel|preview|publish)(?::([a-z_]+))?:g([a-f0-9]{16}):r(\d+)$/.exec(data);
 	if (match === null || match[1] === undefined || match[3] === undefined || match[4] === undefined) return undefined;
 	const revision = Number(match[4]);
 	if (!Number.isSafeInteger(revision) || revision < 0) return undefined;
@@ -829,7 +862,7 @@ function collaborationCallback(action: string, state: CollaborationDraftState, r
 	return `${action}:g${state.generation}:r${revision}`;
 }
 
-function collaborationKeyboard(state: CollaborationDraftState, revision: number): InlineKeyboard {
+function collaborationKeyboard(state: CollaborationDraftState, revision: number, options?: ProfileBotOptions): InlineKeyboard {
 	const keyboard = new InlineKeyboard();
 	if (state.step === "format") {
 		for (const [value, label] of [["advertising_integration", "Рекламная интеграция"], ["barter", "Бартер"], ["joint_giveaway", "Совместный розыгрыш"], ["joint_content", "Совместный контент"], ["mutual_pr", "Взаимопиар"], ["event", "Мероприятие"], ["other", "Другое"]] as const) keyboard.text(label, collaborationCallback(`collaboration:format:${value}`, state, revision)).row();
@@ -837,6 +870,7 @@ function collaborationKeyboard(state: CollaborationDraftState, revision: number)
 	} else if (state.step === "target_profile_type") {
 		for (const [value, label] of [["blogger", "Блогер"], ["telegram_channel", "Telegram-канал"], ["venue_or_brand", "Заведение или бренд"], ["any", "Любой партнёр"]] as const) keyboard.text(label, collaborationCallback(`collaboration:target:${value}`, state, revision)).row();
 	} else if (state.step === "preview") {
+		if (options?.collaborationPublicationService !== undefined) keyboard.text("📣 Опубликовать", collaborationCallback("collaboration:publish", state, revision)).row();
 		keyboard.text("← Назад", collaborationCallback("collaboration:back", state, revision)).row();
 		keyboard.text("Отменить черновик", collaborationCallback("collaboration:cancel", state, revision));
 		return keyboard;
@@ -849,7 +883,7 @@ function collaborationKeyboard(state: CollaborationDraftState, revision: number)
 
 function menuKeyboard(options?: ProfileBotOptions): InlineKeyboard {
 	const collaborationAction = options?.collaborationDraftService === undefined ? "profile:unavailable" : "collaboration:start";
-	return new InlineKeyboard().text("➕ Создать коллаборацию", collaborationAction).row().text("🔎 Найти коллаборацию", "profile:unavailable").row().text("📋 Мои коллаборации", "profile:unavailable").row().text("💬 Мои отклики", "profile:unavailable").row().text("👤 Мой профиль", "profile:view");
+	return new InlineKeyboard().text("➕ Создать коллаборацию", collaborationAction).row().text("🔎 Найти коллаборацию", "profile:unavailable").row().text("📋 Мои коллаборации", options?.collaborationPublicationService === undefined ? "profile:unavailable" : "collaboration:own").row().text("💬 Мои отклики", "profile:unavailable").row().text("👤 Мой профиль", "profile:view");
 }
 function createSessionGeneration(): string { return randomBytes(8).toString("hex"); }
 function revisionCallback(action: string, identity: SessionIdentity): string {
