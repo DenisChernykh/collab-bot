@@ -25,7 +25,7 @@
 
 | Stage | Status | Units | Результат |
 |---|---|---:|---|
-| P0 — Repository baseline | `in_progress` | 2 | Локальный Git baseline и правила проекта |
+| P0 — Repository baseline | `completed` | 2 | Локальный Git baseline и правила проекта |
 | S0 — Foundation | `pending` | 7 | Надёжная инфраструктурная основа без product flows |
 | S1 — Profiles | `pending` | 3 | Профиль и deferred Telegram wizard |
 | S2 — Drafts and publication | `pending` | 5 | Draft lifecycle и надёжная showcase publication |
@@ -121,7 +121,7 @@ P0-01 → P0-02
 
 #### P0-02 — Добавить README и правила исполнения агентом
 
-- **Status:** `pending`
+- **Status:** `completed`
 - **Objective:** Сделать repository self-describing и закрепить безопасный stage/unit protocol в README и root `AGENTS.md`.
 - **Requirements:** Инфраструктурный unit; напрямую не закрывает FR/AC.
 - **Dependencies:** `P0-01`.
@@ -136,12 +136,12 @@ P0-01 → P0-02
 - **Exit criteria:** Новый агент из root однозначно находит sources, следующую команду и запреты; P0 stage table/evidence обновлены; commit отдельный; tree clean.
 - **Completion evidence:**
   - Commit SHA: `SELF`
-  - Changed files:
-  - Focused checks:
+  - Changed files: `README.md`, `AGENTS.md`, `IMPLEMENTATION_PLAN.md`
+  - Focused checks: `git diff --check`; exact staged-name check; relative-link existence check; mandatory README/AGENTS statement checklist; forbidden-claim search with negative-context manual classification; plan §2 / Technical Design §22.1 comparison; staged high-confidence secret scan
   - Aggregate checks: `P0 documentation gate`
-  - Acceptance evidence:
-  - Review result:
-  - Notes/deviations:
+  - Acceptance evidence: README and AGENTS are root-discoverable, link the approved source hierarchy, describe the MVP/Later/Out boundary and intended-but-not-implemented architecture, state the exact next command `Выполни этап S0 по IMPLEMENTATION_PLAN.md`, and distinguish documentation baseline, Functional MVP, and production evidence; P0 table is `completed`
+  - Review result: `Sol max cycle 3/3 — PASS (local staged candidate; no runtime/production evidence)`
+  - Notes/deviations: No source, package/toolchain, runtime, credential, or production files changed; P0-01 evidence unchanged; No scope deviations
 - **Stop conditions:** Требуется изменить product/technical contract либо добавить runtime/configuration.
 
 ### S0 — Foundation
