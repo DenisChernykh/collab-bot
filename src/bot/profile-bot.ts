@@ -18,7 +18,41 @@ import { ProfileService } from "../application/profiles/profile-service.js";
 import type { ProfileInput } from "../domain/profiles/profile.js";
 import { parsePlatformType, parseProfileType, parseTopic, type PlatformType, type ProfileType, type Topic } from "../domain/value-objects/enums.js";
 
-const PROFILE_STATIC_CALLBACKS = new Set(["profile:create", "profile:resume", "profile:view", "profile:edit", "profile:unavailable"]);
+const PROFILE_STATIC_CALLBACKS = new Set(["menu:home", "profile:create", "profile:resume", "profile:view", "profile:edit", "profile:unavailable"]);
+const PROFILE_TYPE_LABELS: Record<ProfileType, string> = {
+	blogger: "Блогер",
+	telegram_channel: "Telegram-канал",
+	venue_or_brand: "Заведение или бренд",
+};
+const PROFILE_TYPE_INPUTS = new Map<string, ProfileType>([
+	["blogger", "blogger"], ["блогер", "blogger"],
+	["telegram_channel", "telegram_channel"], ["telegram-канал", "telegram_channel"], ["телеграм-канал", "telegram_channel"],
+	["venue_or_brand", "venue_or_brand"], ["заведение или бренд", "venue_or_brand"],
+]);
+const TOPIC_LABELS: Record<Topic, string> = {
+	lifestyle: "Lifestyle",
+	food: "Еда и рестораны",
+	beauty: "Красота",
+	travel: "Путешествия",
+	city: "Город",
+	events: "События",
+	family: "Семья",
+	sport: "Спорт",
+	business: "Бизнес",
+	other: "Другое",
+};
+const TOPIC_INPUTS = new Map<string, Topic>([
+	["lifestyle", "lifestyle"], ["лайфстайл", "lifestyle"],
+	["food", "food"], ["еда", "food"], ["еда и рестораны", "food"],
+	["beauty", "beauty"], ["красота", "beauty"],
+	["travel", "travel"], ["путешествия", "travel"],
+	["city", "city"], ["город", "city"],
+	["events", "events"], ["события", "events"],
+	["family", "family"], ["семья", "family"],
+	["sport", "sport"], ["спорт", "sport"],
+	["business", "business"], ["бизнес", "business"],
+	["other", "other"], ["другое", "other"],
+]);
 type ProfileMutationKind = "cancel" | "apply" | "type" | "platform";
 interface ProfileMutationCallback {
 	readonly kind: ProfileMutationKind;
@@ -95,6 +129,9 @@ export function registerProfileBot(bot: Bot, options: ProfileBotOptions): Regist
 				}
 			}
 			switch (data) {
+			case "menu:home":
+				await renderMenu(workCtx, options, userId);
+				return;
 			case "profile:create":
 				await startOrResume(workCtx, options, userId, false);
 				return;
@@ -108,7 +145,7 @@ export function registerProfileBot(bot: Bot, options: ProfileBotOptions): Regist
 				await startOrResume(workCtx, options, userId, true);
 				return;
 			case "profile:unavailable":
-				await workCtx.reply("Этот раздел появится позже.", { reply_markup: menuKeyboard() });
+				await workCtx.reply("Этот раздел пока готовится. Сейчас вы можете создать и отредактировать профиль.", { reply_markup: menuKeyboard() });
 				return;
 			default:
 				if (data.startsWith("profile:type:")) {
@@ -132,12 +169,12 @@ async function handleText(ctx: Context, options: ProfileBotOptions, userId: stri
 		return;
 	}
 	if (command === "/help") {
-		await ctx.reply(`Помощь: ${options.helpContact}`);
+		await ctx.reply(`«Вместе в Екатеринбурге» помогает блогерам, Telegram-каналам, заведениям и брендам находить партнёров для совместных проектов.\n\nСейчас вы можете создать и отредактировать свой профиль. По вопросам работы бота: ${options.helpContact}`);
 		return;
 	}
 	if (command === "/cancel") {
 		await options.sessionRepository.delete(userId);
-		await ctx.reply("Текущий черновик отменён.", { reply_markup: menuKeyboard() });
+		await ctx.reply("Заполнение профиля отменено.", { reply_markup: menuKeyboard() });
 		return;
 	}
 	if (command === "/profile") {
@@ -152,7 +189,7 @@ async function handleText(ctx: Context, options: ProfileBotOptions, userId: stri
 
 	const session = await activeSession(options, userId);
 	if (session === undefined) {
-		await ctx.reply("Откройте профиль через /profile.");
+		await ctx.reply("Не удалось распознать команду. Откройте главное меню командой /start или воспользуйтесь /help.", { reply_markup: menuKeyboard() });
 		return;
 	}
 	await advanceText(ctx, options, userId, session, text);
@@ -231,17 +268,17 @@ async function runDurable(
 async function handleChatShared(ctx: Context, options: ProfileBotOptions, userId: string, shared: { request_id: number; chat_id: number | string; title?: string; username?: string }): Promise<void> {
 	const session = await activeSession(options, userId);
 	if (session === undefined || session.state.step !== "platform" || session.state.requestId !== shared.request_id) {
-		await ctx.reply("Запрос канала устарел. Начните выбор канала снова.");
+		await ctx.reply("Эта кнопка выбора канала уже неактуальна. Вернитесь к профилю и выберите канал ещё раз.");
 		return;
 	}
 	if (shared.username === undefined) {
 		const saved = await saveState(options, userId, withoutRequestId({ ...session.state, step: "platform_url", draft: { ...session.state.draft, platform: { platformType: "telegram", url: "https://t.me/manual" } } }));
-			await ctx.reply("У канала нет публичного username. Пришлите публичную ссылку https://t.me/<username>.", { reply_markup: cancelKeyboard(saved) });
+		await ctx.reply("Telegram не передал публичное имя канала. Отправьте ссылку вида https://t.me/channel_name.", { reply_markup: cancelKeyboard(saved) });
 		return;
 	}
 	const username = normalizeTelegramUsername(shared.username);
 	if (username === undefined) {
-		await ctx.reply("Не удалось распознать публичный username. Пришлите ссылку https://t.me/<username>.");
+		await ctx.reply("Не удалось распознать публичное имя канала. Отправьте ссылку вида https://t.me/channel_name.");
 		return;
 	}
 	const platform = {
@@ -268,13 +305,13 @@ async function advanceText(ctx: Context, options: ProfileBotOptions, userId: str
 				return;
 			}
 			const saved = await saveState(options, userId, { ...state, step: "topics", draft: { ...state.draft, displayName: value } });
-			await ctx.reply("Выберите от 1 до 3 тем через запятую: lifestyle, food, beauty, travel, city, events, family, sport, business, other.", { reply_markup: cancelKeyboard(saved) });
+			await ctx.reply("Укажите от 1 до 3 тем через запятую: Lifestyle, Еда и рестораны, Красота, Путешествия, Город, События, Семья, Спорт, Бизнес, Другое.", { reply_markup: cancelKeyboard(saved) });
 			return;
 		}
 		case "topics": {
 			const topics = parseTopics(value);
 			if (topics === undefined) {
-				await ctx.reply("Нужна 1–3 уникальные темы из списка.");
+				await ctx.reply("Выберите от 1 до 3 разных тем из предложенного списка.");
 				return;
 			}
 			const saved = await saveState(options, userId, { ...state, step: "description", draft: { ...state.draft, topics } });
@@ -293,7 +330,7 @@ async function advanceText(ctx: Context, options: ProfileBotOptions, userId: str
 		case "platform":
 			if (value === "Ввести ссылку вручную" || value.toLowerCase() === "manual") {
 				const saved = await saveState(options, userId, { ...state, step: "platform_url", draft: { ...state.draft, platform: { platformType: "telegram", url: "https://t.me/manual" } } });
-				await ctx.reply("Пришлите публичную ссылку https://t.me/<username>.", { reply_markup: cancelKeyboard(saved) });
+				await ctx.reply("Отправьте публичную ссылку вида https://t.me/channel_name.", { reply_markup: cancelKeyboard(saved) });
 				return;
 			}
 			await choosePlatform(ctx, options, userId, value, options.requestIdFactory ?? (() => randomInt(1, 2_147_483_647)));
@@ -313,7 +350,7 @@ async function advanceText(ctx: Context, options: ProfileBotOptions, userId: str
 			}
 			const withAudience = value === "-" ? platform : { ...platform, audienceSize: Number(value) };
 			const saved = await saveState(options, userId, { ...state, step: "private_contact", draft: { ...state.draft, platform: withAudience } });
-			await ctx.reply("Укажите приватный контакт (3–200 символов). Он не попадёт в публичный профиль.", { reply_markup: cancelKeyboard(saved) });
+			await ctx.reply("Укажите контакт для связи (3–200 символов). Другие пользователи увидят его только после того, как вы примете их отклик.", { reply_markup: cancelKeyboard(saved) });
 			return;
 		}
 		case "private_contact":
@@ -325,7 +362,7 @@ async function advanceText(ctx: Context, options: ProfileBotOptions, userId: str
 			await renderReview(ctx, options, userId);
 			return;
 		case "review":
-			await ctx.reply("Проверьте данные и нажмите «Применить» или отмените черновик.", { reply_markup: reviewKeyboard(session) });
+			await ctx.reply("Проверьте данные и сохраните профиль либо отмените заполнение.", { reply_markup: reviewKeyboard(session) });
 			return;
 	}
 }
@@ -334,29 +371,29 @@ async function cancelSession(ctx: Context, options: ProfileBotOptions, userId: s
 	const session = await sessionAtRevision(ctx, options, userId, expected);
 	if (session === undefined) return;
 	await options.sessionRepository.delete(userId);
-	await ctx.reply("Текущий черновик отменён.", { reply_markup: menuKeyboard() });
+	await ctx.reply("Заполнение профиля отменено.", { reply_markup: menuKeyboard() });
 }
 
 async function chooseType(ctx: Context, options: ProfileBotOptions, userId: string, raw: string, expected?: SessionToken): Promise<void> {
 		let type: ProfileType;
 		const session = expected === undefined ? await activeSession(options, userId) : await sessionAtRevision(ctx, options, userId, expected);
 		if (session === undefined) return;
-		try { type = parseProfileType(raw); } catch { await ctx.reply("Выберите один из предложенных типов профиля.", { reply_markup: typeKeyboard(session) }); return; }
+		try { type = PROFILE_TYPE_INPUTS.get(raw.trim().toLowerCase()) ?? parseProfileType(raw); } catch { await ctx.reply("Выберите один из предложенных вариантов.", { reply_markup: typeKeyboard(session) }); return; }
 		const draft = session?.state.draft ?? {};
 		const saved = await saveState(options, userId, withoutRequestId({ version: PROFILE_SESSION_VERSION, generation: session.state.generation, step: "display_name", draft: { ...draft, type } }));
-		await ctx.reply("Введите отображаемое название (2–100 символов).", { reply_markup: cancelKeyboard(saved) });
+		await ctx.reply("Как назвать ваш профиль? Это может быть ваше имя, название канала, заведения или бренда (2–100 символов).", { reply_markup: cancelKeyboard(saved) });
 }
 
 async function choosePlatform(ctx: Context, options: ProfileBotOptions, userId: string, raw: string, requestIdFactory: () => number, expected?: SessionToken): Promise<void> {
 		let platformType: PlatformType;
 		const session = expected === undefined ? await activeSession(options, userId) : await sessionAtRevision(ctx, options, userId, expected);
-		if (session === undefined) { await ctx.reply("Сессия заполнения не найдена. Откройте /profile."); return; }
+		if (session === undefined) { await ctx.reply("Не удалось найти сохранённое заполнение. Откройте «👤 Мой профиль» и начните заново."); return; }
 		try { platformType = parsePlatformType(raw); } catch { await ctx.reply("Выберите предложенную площадку.", { reply_markup: platformKeyboard(session) }); return; }
 		if (platformType === "telegram") {
 			const requestId = uniqueRequestId(requestIdFactory(), session.state.requestId);
 			await saveState(options, userId, { ...session.state, step: "platform", requestId });
 			const keyboard = new Keyboard().requestChat("Выбрать Telegram-канал", requestId, { chat_is_channel: true, request_title: true, request_username: true }).row().text("Ввести ссылку вручную").resized();
-			await ctx.reply("Выберите публичный Telegram-канал или используйте ручной fallback.", { reply_markup: keyboard });
+			await ctx.reply("Выберите публичный Telegram-канал. Если нужного канала нет в списке, введите ссылку вручную.", { reply_markup: keyboard });
 			return;
 		}
 		const saved = await saveState(options, userId, withoutRequestId({ ...session.state, step: "platform_url", draft: { ...withoutPlatform(session.state.draft), platform: { platformType, url: "https://example.com/manual" } } }));
@@ -369,7 +406,7 @@ async function acceptPlatformUrl(ctx: Context, options: ProfileBotOptions, userI
 		let saved;
 		if (platformType === "telegram") {
 			const username = telegramUsernameFromUrl(value);
-			if (username === undefined) { await ctx.reply("Telegram-площадка должна быть публичной ссылкой https://t.me/<username>."); return; }
+			if (username === undefined) { await ctx.reply("Для Telegram-канала нужна публичная ссылка вида https://t.me/channel_name."); return; }
 			saved = await saveState(options, userId, withoutRequestId({ ...state, step: "audience", draft: { ...state.draft, platform: { platformType: "telegram", url: `https://t.me/${username}`, username } } }));
 		} else {
 			saved = await saveState(options, userId, withoutRequestId({ ...state, step: "audience", draft: { ...state.draft, platform: { platformType, url: value } } }));
@@ -395,25 +432,25 @@ async function apply(ctx: Context, options: ProfileBotOptions, userId: string, e
 		throw error;
 	}
 	await options.sessionRepository.delete(userId);
-	await ctx.reply("Профиль сохранён.", { reply_markup: menuKeyboard() });
+	await ctx.reply("Готово — профиль сохранён.", { reply_markup: menuKeyboard() });
 }
 
 async function showProfile(ctx: Context, options: ProfileBotOptions, userId: string): Promise<void> {
 	const profile = await options.profileService.getOwn(userId);
 	if (profile === undefined) {
-		await ctx.reply("Профиль ещё не создан.", { reply_markup: new InlineKeyboard().text("Создать профиль", "profile:create") });
+		await ctx.reply("У вас пока нет профиля. Создайте его, чтобы представиться будущим партнёрам.", { reply_markup: new InlineKeyboard().text("➕ Создать профиль", "profile:create") });
 		return;
 	}
-	const topics = profile.topics.join(", ");
+	const topics = profile.topics.map(topicLabel).join(", ");
 	const platform = profile.platforms[0];
-	await ctx.reply(`Ваш профиль:\n${profile.displayName}\nТип: ${profile.type}\nТемы: ${topics}\nПлощадка: ${platform?.url ?? "—"}\nКонтакт: ${profile.privateContact}`, { reply_markup: new InlineKeyboard().text("Изменить", "profile:edit").text("Меню", "profile:view") });
+	await ctx.reply(`Ваш профиль\n\nНазвание: ${profile.displayName}\nКто вы: ${profileTypeLabel(profile.type)}\nТемы: ${topics}\nПлощадка: ${platform?.url ?? "не указана"}\nКонтакт для связи: ${profile.privateContact}`, { reply_markup: new InlineKeyboard().text("✏️ Изменить профиль", "profile:edit").row().text("← В главное меню", "menu:home") });
 }
 
 async function startOrResume(ctx: Context, options: ProfileBotOptions, userId: string, edit: boolean): Promise<void> {
 	const current = await options.sessionRepository.findActive(userId, now(options.clock));
 	if (current !== undefined) { await renderStep(ctx, options, userId, current); return; }
 	if (!edit && await options.profileService.getOwn(userId) !== undefined) {
-		await ctx.reply("Профиль уже создан. Вы можете его изменить.", { reply_markup: new InlineKeyboard().text("Изменить", "profile:edit") });
+		await ctx.reply("Профиль уже создан. При необходимости обновите его.", { reply_markup: new InlineKeyboard().text("✏️ Изменить профиль", "profile:edit") });
 		return;
 	}
 	const profile = edit ? await options.profileService.getOwn(userId) : undefined;
@@ -427,7 +464,7 @@ async function startOrResume(ctx: Context, options: ProfileBotOptions, userId: s
 		privateContact: profile.privateContact,
 	};
 	const saved = await saveState(options, userId, { version: PROFILE_SESSION_VERSION, generation: createSessionGeneration(), step: "type", draft });
-	await ctx.reply(edit ? "Изменение профиля. Выберите тип:" : "Создание профиля. Выберите тип:", { reply_markup: typeKeyboard(saved) });
+	await ctx.reply(edit ? "Начнём обновление профиля. Выберите, кто вы:" : "Давайте создадим профиль. Выберите, кто вы:", { reply_markup: typeKeyboard(saved) });
 }
 
 async function resume(ctx: Context, options: ProfileBotOptions, userId: string): Promise<void> {
@@ -439,21 +476,21 @@ async function resume(ctx: Context, options: ProfileBotOptions, userId: string):
 async function renderMenu(ctx: Context, options: ProfileBotOptions, userId: string): Promise<void> {
 	const session = await activeSession(options, userId);
 	const keyboard = menuKeyboard();
-	if (session !== undefined) keyboard.row().text("Продолжить заполнение", "profile:resume");
-	await ctx.reply("Главное меню. Создание профиля не запускается автоматически.", { reply_markup: keyboard });
+	if (session !== undefined) keyboard.row().text("▶️ Продолжить профиль", "profile:resume");
+	await ctx.reply("Добро пожаловать во «Вместе в Екатеринбурге» — сервис для поиска партнёров и совместных проектов.\n\nВыберите, что хотите сделать:", { reply_markup: keyboard });
 }
 
 	async function renderStep(ctx: Context, options: ProfileBotOptions, userId: string, session: ProfileSessionRecord): Promise<void> {
 	const state = session.state;
 	switch (state.step) {
-		case "type": await ctx.reply("Выберите тип профиля:", { reply_markup: typeKeyboard(session) }); return;
-		case "display_name": await ctx.reply("Введите отображаемое название (2–100 символов).", { reply_markup: cancelKeyboard(session) }); return;
-		case "topics": await ctx.reply("Выберите от 1 до 3 тем через запятую.", { reply_markup: cancelKeyboard(session) }); return;
+		case "type": await ctx.reply("Выберите, кто вы:", { reply_markup: typeKeyboard(session) }); return;
+		case "display_name": await ctx.reply("Как назвать ваш профиль? Это может быть ваше имя, название канала, заведения или бренда (2–100 символов).", { reply_markup: cancelKeyboard(session) }); return;
+		case "topics": await ctx.reply("Укажите от 1 до 3 тем через запятую: Lifestyle, Еда и рестораны, Красота, Путешествия, Город, События, Семья, Спорт, Бизнес, Другое.", { reply_markup: cancelKeyboard(session) }); return;
 		case "description": await ctx.reply("Опишите профиль (10–500 символов).", { reply_markup: cancelKeyboard(session) }); return;
 		case "platform": await ctx.reply("Выберите основную площадку.", { reply_markup: platformKeyboard(session) }); return;
 		case "platform_url": await ctx.reply("Пришлите публичную ссылку площадки https://...", { reply_markup: cancelKeyboard(session) }); return;
 		case "audience": await ctx.reply("Укажите размер аудитории числом или отправьте `-`.", { reply_markup: cancelKeyboard(session) }); return;
-		case "private_contact": await ctx.reply("Укажите приватный контакт (3–200 символов).", { reply_markup: cancelKeyboard(session) }); return;
+		case "private_contact": await ctx.reply("Укажите контакт для связи (3–200 символов). Другие пользователи увидят его только после принятого отклика.", { reply_markup: cancelKeyboard(session) }); return;
 		case "review": await renderReview(ctx, options, userId); return;
 	}
 }
@@ -462,7 +499,7 @@ async function renderReview(ctx: Context, options: ProfileBotOptions, userId: st
 	const session = await activeSession(options, userId);
 	if (session === undefined) return;
 	const draft = session.state.draft;
-	await ctx.reply(`Проверьте профиль:\n${draft.displayName ?? "—"}\n${draft.description ?? "—"}\nТемы: ${draft.topics?.join(", ") ?? "—"}\nПлощадка: ${draft.platform?.url ?? "—"}\nКонтакт: ${draft.privateContact ?? "—"}`, { reply_markup: reviewKeyboard(session) });
+	await ctx.reply(`Проверьте профиль\n\nНазвание: ${draft.displayName ?? "—"}\nКто вы: ${draft.type === undefined ? "—" : profileTypeLabel(draft.type)}\nОписание: ${draft.description ?? "—"}\nТемы: ${draft.topics?.map(topicLabel).join(", ") ?? "—"}\nПлощадка: ${draft.platform?.url ?? "—"}\nКонтакт для связи: ${draft.privateContact ?? "—"}`, { reply_markup: reviewKeyboard(session) });
 }
 
 async function ensureActor(ctx: Context, options: ProfileBotOptions): Promise<boolean> {
@@ -481,7 +518,7 @@ async function activeSession(options: ProfileBotOptions, userId: string) {
 async function sessionAtRevision(ctx: Context, options: ProfileBotOptions, userId: string, expected: SessionToken) {
 	const session = await activeSession(options, userId);
 	if (session === undefined || session.revision !== expected.revision || session.state.generation !== expected.generation) {
-		await ctx.reply("Сессия устарела. Откройте /profile и продолжите текущий шаг.");
+		await ctx.reply("Эта кнопка уже неактуальна. Откройте «👤 Мой профиль» и продолжите с текущего шага.");
 		return undefined;
 	}
 	return session;
@@ -509,10 +546,13 @@ function parseTopics(value: string): Topic[] | undefined {
 	const values = value.split(",").map((topic) => topic.trim()).filter(Boolean);
 	if (values.length < 1 || values.length > 3) return undefined;
 	try {
-		const topics = values.map((topic) => parseTopic(topic));
+		const topics = values.map((topic) => TOPIC_INPUTS.get(topic.toLowerCase()) ?? parseTopic(topic.toLowerCase()));
 		return new Set(topics).size === topics.length ? topics : undefined;
 	} catch { return undefined; }
 }
+
+function profileTypeLabel(type: ProfileType): string { return PROFILE_TYPE_LABELS[type]; }
+function topicLabel(topic: Topic): string { return TOPIC_LABELS[topic]; }
 
 function isAbsoluteHttps(value: string): boolean { try { const url = new URL(value); return url.protocol === "https:" && url.username === "" && url.password === ""; } catch { return false; } }
 function telegramUsernameFromUrl(value: string): string | undefined { if (!isAbsoluteHttps(value)) return undefined; try { const url = new URL(value); if (url.hostname.toLowerCase() !== "t.me") return undefined; return normalizeTelegramUsername(url.pathname.slice(1).replace(/\/$/, "")); } catch { return undefined; } }
@@ -555,14 +595,14 @@ function withoutPlatform(draft: ProfileDraft): ProfileDraft {
 	return without;
 }
 
-function menuKeyboard(): InlineKeyboard { return new InlineKeyboard().text("Создать профиль", "profile:create").row().text("Мой профиль", "profile:view").row().text("Найти сотрудничества", "profile:unavailable").row().text("Мои сотрудничества", "profile:unavailable").row().text("Мои заявки", "profile:unavailable"); }
+function menuKeyboard(): InlineKeyboard { return new InlineKeyboard().text("➕ Создать коллаборацию", "profile:unavailable").row().text("🔎 Найти коллаборацию", "profile:unavailable").row().text("📋 Мои коллаборации", "profile:unavailable").row().text("💬 Мои отклики", "profile:unavailable").row().text("👤 Мой профиль", "profile:view"); }
 function createSessionGeneration(): string { return randomBytes(8).toString("hex"); }
 function revisionCallback(action: string, identity: SessionIdentity): string {
 	const normalized = "state" in identity ? { generation: identity.state.generation, revision: identity.revision } : identity;
 	return `${action}:g${normalized.generation}:r${normalized.revision}`;
 }
-function resumeKeyboard(identity: SessionIdentity): InlineKeyboard { return new InlineKeyboard().text("Продолжить", "profile:resume").text("Отменить", revisionCallback("profile:cancel", identity)); }
-function reviewKeyboard(identity: SessionIdentity): InlineKeyboard { return new InlineKeyboard().text("Применить", revisionCallback("profile:apply", identity)).text("Отменить", revisionCallback("profile:cancel", identity)); }
-function cancelKeyboard(identity: SessionIdentity): InlineKeyboard { return new InlineKeyboard().text("Отменить", revisionCallback("profile:cancel", identity)); }
-function typeKeyboard(identity: SessionIdentity): InlineKeyboard { return new InlineKeyboard().text("Блогер", revisionCallback("profile:type:blogger", identity)).row().text("Telegram-канал", revisionCallback("profile:type:telegram_channel", identity)).row().text("Бренд или площадка", revisionCallback("profile:type:venue_or_brand", identity)); }
+function resumeKeyboard(identity: SessionIdentity): InlineKeyboard { return new InlineKeyboard().text("▶️ Продолжить профиль", "profile:resume").row().text("Отменить заполнение", revisionCallback("profile:cancel", identity)); }
+function reviewKeyboard(identity: SessionIdentity): InlineKeyboard { return new InlineKeyboard().text("Сохранить профиль", revisionCallback("profile:apply", identity)).row().text("Отменить заполнение", revisionCallback("profile:cancel", identity)); }
+function cancelKeyboard(identity: SessionIdentity): InlineKeyboard { return new InlineKeyboard().text("Отменить заполнение", revisionCallback("profile:cancel", identity)); }
+function typeKeyboard(identity: SessionIdentity): InlineKeyboard { return new InlineKeyboard().text("Блогер", revisionCallback("profile:type:blogger", identity)).row().text("Telegram-канал", revisionCallback("profile:type:telegram_channel", identity)).row().text("Заведение или бренд", revisionCallback("profile:type:venue_or_brand", identity)); }
 function platformKeyboard(identity: SessionIdentity): InlineKeyboard { return new InlineKeyboard().text("Telegram-канал", revisionCallback("profile:platform:telegram", identity)).row().text("Сайт", revisionCallback("profile:platform:website", identity)); }

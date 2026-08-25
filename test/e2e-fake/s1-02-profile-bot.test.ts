@@ -58,18 +58,19 @@ describe("S1-02 fake Telegram profile journey", () => {
 			await bot.init();
 
 			await bot.handleUpdate({ update_id: 1, message: privateMessage(1, "/start") });
-			await bot.handleUpdate({ update_id: 2, message: privateMessage(2, "/profile") });
+			const profileCallback = callbackData(fake, "profile:view");
+			await bot.handleUpdate({ update_id: 2, callback_query: callback(2, profileCallback) });
 			const createCallback = fake.lastMessage()?.reply_markup?.inline_keyboard?.flat().find((button) => (button as { callback_data?: string }).callback_data === "profile:create");
 			expect(createCallback).toBeDefined();
 			await bot.handleUpdate({ update_id: 3, callback_query: callback(3, "profile:create") });
 			const initialTypeCallback = callbackData(fake, "profile:type:blogger");
-			await bot.handleUpdate({ update_id: 4, message: privateMessage(4, "blogger") });
+			await bot.handleUpdate({ update_id: 4, message: privateMessage(4, "Блогер") });
 			const currentCancelCallback = callbackData(fake, "profile:cancel");
 			await bot.handleUpdate({ update_id: 5, callback_query: callback(5, initialTypeCallback) });
 			await bot.handleUpdate({ update_id: 6, callback_query: callbackForUser(6, 101, currentCancelCallback) });
 			expect(await new SqliteProfileSessionRepository(boundary).findActive("100", clock.now().getTime())).toMatchObject({ revision: 2, state: { step: "display_name" } });
 			await bot.handleUpdate({ update_id: 7, message: privateMessage(7, "Alice Creator") });
-			await bot.handleUpdate({ update_id: 8, message: privateMessage(8, "city,food") });
+			await bot.handleUpdate({ update_id: 8, message: privateMessage(8, "Город, Еда и рестораны") });
 			await bot.handleUpdate({ update_id: 9, message: privateMessage(9, "Ищу партнёров для полезных городских проектов.") });
 			await bot.handleUpdate({ update_id: 10, callback_query: callback(10, callbackData(fake, "profile:platform:telegram")) });
 			const picker = fake.lastMessage()?.reply_markup?.keyboard?.flat().find((button) => "request_chat" in button);
@@ -111,7 +112,7 @@ describe("S1-02 fake Telegram profile journey", () => {
 
 			expect(await profileServiceForAssertions.getOwn("100")).toMatchObject({ displayName: "Alice Creator", privateContact: "@alice_contact", platforms: [{ url: "https://t.me/alice_channel" }] });
 			expect(await boundary.query<{ count: number }>("SELECT count(*) AS count FROM profiles WHERE status = 'active'")).toEqual([{ count: 1 }]);
-			expect(fake.calls.some((call) => call.method === "sendMessage" && String(call.payload.text).includes("Профиль сохранён"))).toBe(true);
+			expect(fake.calls.some((call) => call.method === "sendMessage" && String(call.payload.text).includes("Готово — профиль сохранён"))).toBe(true);
 
 			await boundary.close();
 			boundary = new DatabaseBoundary(databasePath);
@@ -132,18 +133,21 @@ describe("S1-02 fake Telegram profile journey", () => {
 			await restartedBot.init();
 			await restartedBot.handleUpdate({ update_id: 19, message: privateMessage(19, "/profile") });
 			expect(String(fake.lastMessage()?.text)).toContain("Alice Creator");
-			const savedProfileViewCallback = fake.lastMessage()?.reply_markup?.inline_keyboard?.flat().find((button) => (button as { callback_data?: string }).callback_data === "profile:view");
-			expect(savedProfileViewCallback).toBeDefined();
-			await restartedBot.handleUpdate({ update_id: 20, callback_query: callback(20, "profile:view") });
+			expect(String(fake.lastMessage()?.text)).toContain("Кто вы: Блогер");
+			expect(String(fake.lastMessage()?.text)).toContain("Темы: Город, Еда и рестораны");
 			expect(String(fake.lastMessage()?.text)).toContain("https://t.me/alice_channel");
+			const mainMenuCallback = fake.lastMessage()?.reply_markup?.inline_keyboard?.flat().find((button) => (button as { callback_data?: string }).callback_data === "menu:home");
+			expect(mainMenuCallback).toBeDefined();
+			await restartedBot.handleUpdate({ update_id: 20, callback_query: callback(20, "menu:home") });
+			expect(String(fake.lastMessage()?.text)).toContain("Вместе в Екатеринбурге");
 
 			await restartedBot.handleUpdate({ update_id: 21, callback_query: callback(21, "profile:edit") });
 			await restartedBot.handleUpdate({ update_id: 22, message: privateMessage(22, "/cancel") });
 			expect(await new SqliteProfileSessionRepository(boundary).findActive("100", clock.now().getTime())).toBeUndefined();
 			await restartedBot.handleUpdate({ update_id: 23, callback_query: callback(23, "profile:edit") });
-			await restartedBot.handleUpdate({ update_id: 24, message: privateMessage(24, "blogger") });
+			await restartedBot.handleUpdate({ update_id: 24, message: privateMessage(24, "Блогер") });
 			await restartedBot.handleUpdate({ update_id: 25, message: privateMessage(25, "Alice Studio") });
-			await restartedBot.handleUpdate({ update_id: 26, message: privateMessage(26, "city") });
+			await restartedBot.handleUpdate({ update_id: 26, message: privateMessage(26, "Город") });
 			await restartedBot.handleUpdate({ update_id: 27, message: privateMessage(27, "Ищу партнёров для обновлённого городского проекта.") });
 			await restartedBot.handleUpdate({ update_id: 28, callback_query: callback(28, callbackData(fake, "profile:platform:website")) });
 			await restartedBot.handleUpdate({ update_id: 29, message: privateMessage(29, "https://example.com/alice") });
