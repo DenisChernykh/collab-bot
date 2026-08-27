@@ -8,7 +8,11 @@ import type { CollaborationBrowseService } from "../application/collaborations/c
 import type { AdminModerationService } from "../application/moderation/admin-moderation-service.js";
 import type { Clock } from "../application/ports/clock.js";
 import type { TelegramUserWriter } from "../application/ports/telegram-user-writer.js";
-import type { ApplicationsFeatureApi } from "../modules/applications/index.js";
+import {
+	applicationStartCallback,
+	createApplicationsTelegramFeature,
+	type ApplicationsFeatureApi,
+} from "../modules/applications/index.js";
 import {
 	createCollaborationTelegramFeature,
 	type CollaborationDraftService,
@@ -32,8 +36,6 @@ import {
 } from "../modules/profiles/index.js";
 import { routeTelegramText } from "../presentation/telegram/telegram-routing.js";
 import { registerDurableTelegramIngress } from "./durable-telegram-ingress.js";
-import { createApplicationsTelegramFeature } from "./marketplace/marketplace-composer.js";
-import { applicationStartCallback } from "./marketplace/marketplace-callback-codec.js";
 import { createModerationTelegramFeature, type ModerationTelegramFeature } from "./moderation/moderation-composer.js";
 
 const AUDIENCE_SNAPSHOT_UNAVAILABLE = "Аудиторию Telegram определить не удалось; профиль сохранён, число можно указать позже в «Мой профиль».";

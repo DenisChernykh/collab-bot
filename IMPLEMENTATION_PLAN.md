@@ -114,7 +114,8 @@ P0-01 → P0-02
 | R2-07A | `92b37305909e1834b04f930fb54cc2c76d450907` | collaboration SQLite adapters and composition ownership |
 | R2-07B | `b9ec2b3d82e0e1766aec040d2c373840ee158127` | collaboration Telegram presentation ownership |
 | R2-08 | `730f8790a11082974dc2ee6d0e28990d487c1ba1` | marketplace CQRS read-model ownership |
-| R2-09A | `SELF` | marketplace Telegram presentation and split routing seam |
+| R2-09A | `fd38d23335f8cb190b12cff9db226ac9a8a6cef6` | marketplace Telegram presentation and split routing seam |
+| R2-09B | `SELF` | applications Telegram presentation ownership |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -873,7 +874,7 @@ P0-01 → P0-02
 
 #### R2-09B — Complete applications Telegram presentation
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Перенести applications-only facade под реального owner и завершить split consumer cutover.
 - **Dependencies:** `R2-09A`.
 - **Read first:** temporary applications composer/codec, applications public API, injected profile/target ports, root router and all S3 fake journeys.
@@ -882,11 +883,12 @@ P0-01 → P0-02
 - **Invariants:** every update reaches one owner; author deep-link, feed application start, quick-profile return and opaque `cb_*` remain unchanged and single-shot.
 - **Verification:** applications-focused R1-05C/S3 tests and all fake E2E; architecture; `pnpm check`; `pnpm db:verify`.
 - **Exit criteria:** applications and marketplace have distinct module-owned presentation surfaces and no active legacy marketplace implementation; один commit `R2-09B: own applications Telegram presentation`.
+- **Completion evidence:** Commit SHA: `SELF`; moved the applications-only composer and callback codec from the temporary `src/bot/marketplace` seam into `modules/applications/presentation/telegram`, exported the feature/codec through the applications public API and switched the root plus focused test to that surface. Both legacy marketplace files are deleted. Applications owns own-list, author management, application start, decision/completion tokens and opaque `cb_*`; marketplace owns only browse/deep-link rendering. Profile-session keyboard/continuation and marketplace target lookup remain injected structural ports, so applications imports neither profiles nor marketplace. Test-first RED proved the applications public exports were absent (2 failed/2 passed); after the move the focused composer tests are 4/4 GREEN. Architecture initially caught a type-only applications→marketplace cycle; replacing it with the already-identical local target-port result removed the dependency, and the final executable graph has no violations/cycles. Seven source/test paths plus this plan changed; callback bytes, copy, root order, quick-profile return, author deep-link and single-shot opaque effects remain unchanged. Architecture PASS (154 modules, 450 dependencies); `pnpm check` PASS (69 unit, 87 integration, 47 runtime, lint/typecheck/build); all fake E2E PASS (33); `pnpm db:verify` PASS. No credential, real Telegram, remote or production mutation.
 - **Stop conditions:** exact routing/effect parity cannot be preserved without a direct module cycle.
 
 #### R2-10A — Move moderation core and composition
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Собрать moderation application contract, service, SQLite adapter and factory под одним owner.
 - **Dependencies:** `R2-09B`.
 - **Read first:** moderation service/port/repository, runtime composition and hide audit/outbox integration tests.

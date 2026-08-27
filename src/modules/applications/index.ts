@@ -6,3 +6,13 @@ export {
 	type ApplicationsProjectionMaintenance,
 	type CreateApplicationsFeatureOptions,
 } from "./composition/create-applications-feature.js";
+export {
+	createApplicationsTelegramFeature,
+	type ApplicationContinuation,
+	type ApplicationsProfileFlow,
+	type ApplicationsTargetResolution,
+	type ApplicationsTargetFlow,
+	type ApplicationsTelegramFeature,
+	type ApplicationsTelegramFeatureOptions,
+} from "./presentation/telegram/applications-composer.js";
+export * from "./presentation/telegram/application-callback-codec.js";

@@ -4,10 +4,9 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { CanonicalInput } from "../../src/application/commands/canonical-input.js";
 import type { SafeResult } from "../../src/application/commands/safe-result.js";
-import { createApplicationsTelegramFeature } from "../../src/bot/marketplace/marketplace-composer.js";
-import { parseApplicationsCallback } from "../../src/bot/marketplace/marketplace-callback-codec.js";
 import { createModerationTelegramFeature } from "../../src/bot/moderation/moderation-composer.js";
 import { FakeTelegramApi } from "../../src/infrastructure/testing/fake-telegram-api.js";
+import { createApplicationsTelegramFeature, parseApplicationsCallback } from "../../src/modules/applications/index.js";
 import { createMarketplaceTelegramFeature, parseMarketplaceCallback } from "../../src/modules/marketplace/index.js";
 
 const NOW = 1_700_000_000_000;

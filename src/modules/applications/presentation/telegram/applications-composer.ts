@@ -1,16 +1,16 @@
 import { Composer, InlineKeyboard, type Context } from "grammy";
 
-import type { CallbackActionService } from "../../application/commands/callback-action.js";
-import type { SafeResult } from "../../application/commands/safe-result.js";
-import type { Clock } from "../../application/ports/clock.js";
-import type { ProfileType, Topic } from "../../domain/value-objects/enums.js";
-import type { ApplicationsFeatureApi, ApplicationFailureCode, AuthorManagementView } from "../../modules/applications/index.js";
-import { collaborationStatusLabel } from "../../modules/collaborations/index.js";
-import type { ApplicationTargetResolution } from "../../modules/marketplace/index.js";
+import type { CallbackActionService } from "../../../../application/commands/callback-action.js";
+import type { SafeResult } from "../../../../application/commands/safe-result.js";
+import type { Clock } from "../../../../application/ports/clock.js";
+import type { ProfileType, Topic } from "../../../../domain/value-objects/enums.js";
+import { collaborationStatusLabel } from "../../../collaborations/index.js";
+import type { ApplicationFailureCode, AuthorManagementView } from "../../application/application-contracts.js";
+import type { ApplicationsFeatureApi } from "../../application/application-feature.js";
 import {
 	parseApplicationsCallback,
 	type ApplicationStart,
-} from "./marketplace-callback-codec.js";
+} from "./application-callback-codec.js";
 
 const CALLBACK_ACTION_TTL_MS = 24 * 60 * 60 * 1_000;
 
@@ -26,8 +26,12 @@ export interface ApplicationsProfileFlow {
 	startQuickApplicationProfile(ctx: Context, userId: string, continuation: ApplicationContinuation): Promise<void>;
 }
 
+export type ApplicationsTargetResolution =
+	| { readonly kind: "card"; readonly collaborationId: string }
+	| { readonly kind: "handled" };
+
 export interface ApplicationsTargetFlow {
-	resolveApplicationTarget(ctx: Context, userId: string, publicToken: string): Promise<ApplicationTargetResolution>;
+	resolveApplicationTarget(ctx: Context, userId: string, publicToken: string): Promise<ApplicationsTargetResolution>;
 	renderApplicationTarget(ctx: Context, userId: string, publicToken: string): Promise<void>;
 }
 
