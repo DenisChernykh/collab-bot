@@ -42,7 +42,7 @@
 | S4 — Shareable launch | `completed` | 1 | Admin hide, полный real journey и готовая к распространению ссылка |
 | FUT — Telegram audience snapshot | `completed` | 1 | Best-effort снимок аудитории Telegram после сохранения профиля |
 | R1 — Post-launch maintainability | `completed` | 14 | Те же пользовательские контракты с feature-owned кодом и проверяемыми границами |
-| R2 — Complete feature-first layout | `in_progress` | 17 | Весь бизнес-код принадлежит явным модулям; legacy feature paths отсутствуют |
+| R2 — Complete feature-first layout | `in_progress` | 18 | Весь бизнес-код принадлежит явным модулям; legacy feature paths отсутствуют |
 
 ```text
 P0-01 → P0-02
@@ -56,7 +56,7 @@ P0-01 → P0-02
   → R1-05A → R1-05B → R1-05C
   → R1-06A → R1-06B → R1-06C → R1-07 → R1-08 → R1-09
   → R2-00 → R2-01 → R2-02 → R2-03 → R2-04
-  → R2-05A → R2-05B → R2-06 → R2-07 → R2-08 → R2-09
+  → R2-05A → R2-05B → R2-06 → R2-07A → R2-07B → R2-08 → R2-09
   → R2-10 → R2-11 → R2-12 → R2-13 → R2-14 → R2-15
 ```
 
@@ -107,7 +107,10 @@ P0-01 → P0-02
 | R2-02 | `f4a224c37ee5fed8f834a469d111c289b529a6cd` | profiles domain and application ownership |
 | R2-03 | `7a1f3e787a7ff97464a71f82ba80ba285e71e256` | profiles adapters and composition ownership |
 | R2-04 | `62801b068ccfa48121f9236d1c0b24aedfc931b2` | profile Telegram presentation ownership |
-| R2-05A | `SELF` | collaboration domain and port ownership |
+| R2-05A | `aab692ae3259937b8d52217c06fb4cfaec74cbb8` | collaboration domain and port ownership |
+| R2-05B | `3872a906753d733edf3ed46a279c26f25b45eb27` | collaboration application service ownership |
+| R2-06 | `3868e52236668b8683bbc8a0306ad8be0b60178f` | consumer-neutral atomic wizard admission |
+| R2-07A | `SELF` | collaboration SQLite adapters and composition ownership |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -808,24 +811,38 @@ P0-01 → P0-02
 - **Completion evidence:** Commit SHA: `SELF`; added one shared `WizardAdmission` application contract and one SQLite implementation, then injected it into both profile and collaboration session repositories (default construction preserves current consumers). Each repository still starts its existing `BEGIN IMMEDIATE` transaction before admission; the guard uses the same DatabaseBoundary context and selects the same opposite active-session condition before save. No feature adapter now contains SQL for the other feature's session table. Test-first RED was the missing shared adapter; the new migrated-SQLite adversarial test proves both conflict directions and serialized concurrent saves yield exactly one success/one conflict. Five source/test files plus this plan changed; tables, migrations, session shapes/TTL, error text and wizard policy are unchanged. Focused admission/profile/collaboration session tests PASS (7); architecture PASS (139 modules, 412 dependencies); `pnpm check` PASS (69 unit, 85 integration, 47 runtime, lint/typecheck/build); all fake E2E PASS (30); `pnpm db:verify`, migrations/PRD diff and `git diff --check` PASS. No credential, real Telegram, remote or production mutation.
 - **Stop conditions:** atomicity cannot be preserved without schema/data change.
 
-#### R2-07 — Move collaborations adapters and Telegram presentation
+#### R2-07A — Move collaborations adapters and composition
+
+- **Status:** `completed`
+- **Objective:** Дать collaborations собственные SQLite adapters и factory до переноса Telegram-слоя.
+- **Dependencies:** `R2-06`.
+- **Read first:** three collaboration SQLite repositories, runtime composition and S2 integration tests.
+- **Scope:** move collaboration aggregate/session/publication adapters, add `createCollaborationsFeature`, public exports and temporary exact repository compatibility exports.
+- **Do not touch:** composer/presentation, browse projection, application decisions or SQL.
+- **Invariants:** one repository/session identity per factory; publication/draft transactions and wizard admission unchanged.
+- **Verification:** S2 draft/publication integration; composition test; runtime; architecture; `pnpm check`; `pnpm db:verify`.
+- **Exit criteria:** collaboration persistence is feature-owned and factory-constructible; один commit `R2-07A: own collaboration adapters and composition`.
+- **Completion evidence:** Commit SHA: `SELF`; moved the collaboration aggregate, wizard-session and publication SQLite implementations under `modules/collaborations/infrastructure`, added one public `createCollaborationsFeature` composition boundary and retained three exact legacy re-export bridges for the scheduled runtime/test cutover. The factory constructs one aggregate repository, one session repository shared by draft/publication services, one publication repository and exposes sessions through its application port rather than leaking the concrete adapter type. Test-first RED was the missing module root/factory; the migrated-SQLite composition test now proves profile-backed draft creation plus factory-owned session/publication surfaces. Nine source/test paths plus this plan changed; adapter bodies differ only in import ownership, while SQL, schema/migrations, transaction runner, outbox/capability inputs and session validation are unchanged. Focused composition/draft/publication/admission tests PASS (9); architecture PASS (144 modules, 429 dependencies); `pnpm check` PASS (69 unit, 86 integration, 47 runtime, lint/typecheck/build); all fake E2E PASS (30); `pnpm db:verify` PASS. No credential, real Telegram, remote or production mutation.
+- **Stop conditions:** factory duplicates a boundary/transaction runner or SQL behavior must change.
+
+#### R2-07B — Move collaborations Telegram presentation
 
 - **Status:** `in_progress`
-- **Objective:** Завершить collaboration vertical slice и factory.
-- **Dependencies:** `R2-06`.
-- **Read first:** collaboration repositories/composer/presentation, runtime and S2 tests.
-- **Scope:** feature SQLite adapters, composition factory, collaboration composer/presentation, public exports; production consumers switch.
-- **Do not touch:** browse projection, application decisions, SQL or callbacks.
-- **Invariants:** publication/draft transactions, render and wizard flow unchanged.
-- **Verification:** S2 integration/fake E2E; runtime; architecture; `pnpm check`; `pnpm db:verify`.
-- **Exit criteria:** collaboration business code absent from shared legacy paths; один commit `R2-07: complete collaborations feature module`.
-- **Stop conditions:** unit exceeds boundary with non-mechanical behavior changes; split before continuing.
+- **Objective:** Завершить collaboration vertical slice переносом composer/rendering и consumer cutover.
+- **Dependencies:** `R2-07A`.
+- **Read first:** collaboration composer/presentation, root router, marketplace/moderation consumers and S2 fake tests.
+- **Scope:** move collaboration composer/presentation, export through feature public API and switch all production/test consumers; remove old `src/bot/collaboration` implementation paths.
+- **Do not touch:** browse/application behavior, callbacks, copy or routing order.
+- **Invariants:** callback bytes, render output, wizard flow and managed-collaboration continuation unchanged.
+- **Verification:** collaboration composer/S2 fake E2E; runtime; architecture; `pnpm check`; `pnpm db:verify`.
+- **Exit criteria:** no active collaboration adapter or presentation implementation remains in shared legacy paths; exact compatibility exports remain scheduled for `R2-13`; один commit `R2-07B: move collaboration Telegram presentation`.
+- **Stop conditions:** move requires duplicate replies/effects or changes cross-feature continuation.
 
 #### R2-08 — Create the marketplace read module
 
 - **Status:** `pending`
 - **Objective:** Дать feed/deep-link/browse projection отдельного владельца вместо размытого marketplace composer.
-- **Dependencies:** `R2-07`.
+- **Dependencies:** `R2-07B`.
 - **Read first:** browse service/port/repository, feed/deep-link tests and TD CQRS rules.
 - **Scope:** `modules/marketplace` application/infrastructure/composition for read-only cross-feature projection and browse-session writes; explicit documented CQRS exception.
 - **Do not touch:** application submission/decisions or browse SQL/pagination.
