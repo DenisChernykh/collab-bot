@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { CanonicalInput } from "../../src/application/commands/canonical-input.js";
 import type { SafeResult } from "../../src/application/commands/safe-result.js";
-import { createModerationTelegramFeature } from "../../src/bot/moderation/moderation-composer.js";
+import { createModerationTelegramFeature } from "../../src/modules/moderation/index.js";
 import { FakeTelegramApi } from "../../src/infrastructure/testing/fake-telegram-api.js";
 import { createApplicationsTelegramFeature, parseApplicationsCallback } from "../../src/modules/applications/index.js";
 import { createMarketplaceTelegramFeature, parseMarketplaceCallback } from "../../src/modules/marketplace/index.js";

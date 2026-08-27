@@ -4,3 +4,8 @@ export {
 	type CreateModerationFeatureOptions,
 	type ModerationFeature,
 } from "./composition/create-moderation-feature.js";
+export {
+	createModerationTelegramFeature,
+	type ModerationTelegramFeature,
+	type ModerationTelegramFeatureOptions,
+} from "./presentation/telegram/moderation-composer.js";

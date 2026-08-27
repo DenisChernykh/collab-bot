@@ -116,6 +116,7 @@ P0-01 → P0-02
 | R2-08 | `730f8790a11082974dc2ee6d0e28990d487c1ba1` | marketplace CQRS read-model ownership |
 | R2-09A | `fd38d23335f8cb190b12cff9db226ac9a8a6cef6` | marketplace Telegram presentation and split routing seam |
 | R2-09B | `d5f61074bba13c29e7b967a5c638d7e6278a80e1` | applications Telegram presentation ownership |
+| R2-10A | `18c313942400369924169f48c66d9d6462bdfb9c` | moderation core, persistence and composition ownership |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -902,7 +903,7 @@ P0-01 → P0-02
 
 #### R2-10B — Move moderation Telegram presentation
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Завершить moderation vertical slice переносом composer и consumer cutover.
 - **Dependencies:** `R2-10A`.
 - **Read first:** moderation composer, collaboration status public surface, root actor routing and focused fake tests.
@@ -911,11 +912,12 @@ P0-01 → P0-02
 - **Invariants:** non-admin `/admin` remains indistinguishable from unknown command; admin actor tagging and one durable effect remain unchanged.
 - **Verification:** moderation-focused R1-05C/S4 fake tests; architecture; `pnpm check`; `pnpm db:verify`.
 - **Exit criteria:** no active moderation implementation remains under shared application/infrastructure or `src/bot`; один commit `R2-10B: move moderation Telegram presentation`.
+- **Completion evidence:** Commit SHA: `SELF`; moved the moderation Telegram composer unchanged under `modules/moderation/presentation/telegram`, exported its actor-resolution/routing contract through the moderation public API, and switched the root router plus focused fake consumer to that entrypoint. The old composer path is now an exact one-line compatibility export scheduled for removal in `R2-11C`; shared application/infrastructure moderation paths likewise contain no implementation. Five source/test paths plus this plan changed; admin syntax/copy, canonical input classification, command id, collaboration status rendering, root routing priority and hide effects remain unchanged. Focused moderation/browse/S4/routing tests PASS (25); architecture PASS (161 modules, 465 dependencies); `pnpm check` PASS (69 unit, 88 integration, 47 runtime, lint/typecheck/build); all fake E2E PASS (33); `pnpm db:verify` PASS. No credential, real Telegram, remote or production mutation.
 - **Stop conditions:** move changes actor classification or duplicates hide execution.
 
 #### R2-11A — Move durable Telegram ingress
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Передать neutral presentation layer единственную durable ingress seam.
 - **Dependencies:** `R2-10B`.
 - **Read first:** durable ingress, current root router and R1-04 characterization tests.
