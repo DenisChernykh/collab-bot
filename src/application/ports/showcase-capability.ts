@@ -1,4 +1,1 @@
-export interface ShowcaseCapability {
-	readonly canPublish: boolean;
-	readonly reason: string | null;
-}
+export * from "../../modules/collaborations/application/ports/showcase-capability.js";

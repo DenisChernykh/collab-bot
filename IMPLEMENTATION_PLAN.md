@@ -42,7 +42,7 @@
 | S4 — Shareable launch | `completed` | 1 | Admin hide, полный real journey и готовая к распространению ссылка |
 | FUT — Telegram audience snapshot | `completed` | 1 | Best-effort снимок аудитории Telegram после сохранения профиля |
 | R1 — Post-launch maintainability | `completed` | 14 | Те же пользовательские контракты с feature-owned кодом и проверяемыми границами |
-| R2 — Complete feature-first layout | `in_progress` | 16 | Весь бизнес-код принадлежит явным модулям; legacy feature paths отсутствуют |
+| R2 — Complete feature-first layout | `in_progress` | 17 | Весь бизнес-код принадлежит явным модулям; legacy feature paths отсутствуют |
 
 ```text
 P0-01 → P0-02
@@ -56,7 +56,7 @@ P0-01 → P0-02
   → R1-05A → R1-05B → R1-05C
   → R1-06A → R1-06B → R1-06C → R1-07 → R1-08 → R1-09
   → R2-00 → R2-01 → R2-02 → R2-03 → R2-04
-  → R2-05 → R2-06 → R2-07 → R2-08 → R2-09
+  → R2-05A → R2-05B → R2-06 → R2-07 → R2-08 → R2-09
   → R2-10 → R2-11 → R2-12 → R2-13 → R2-14 → R2-15
 ```
 
@@ -102,7 +102,12 @@ P0-01 → P0-02
 | R1-07 | `c641f9440b0a386022c07d53813ed890842e9f4f` | consolidated production-like test support |
 | R1-08 | `947c304f94fd485c8b158e0af51813dd77adf4b2` | raw SQL as the only persistence model |
 | R1-09 | `411383eb96edcca3f8cef2a1b13409eac2c1d4b8` | verified maintainability candidate and schema-validator decision |
-| R2-00 | `SELF` | decision-complete feature-first completion stage |
+| R2-00 | `d00c821063893137c9745ed74605aa8dafdb626f` | decision-complete feature-first completion stage |
+| R2-01 | `35a8456a042f8729e3dfe8e1e1bc2cfa711f63f1` | executable public-module and Telegram routing contracts |
+| R2-02 | `f4a224c37ee5fed8f834a469d111c289b529a6cd` | profiles domain and application ownership |
+| R2-03 | `7a1f3e787a7ff97464a71f82ba80ba285e71e256` | profiles adapters and composition ownership |
+| R2-04 | `62801b068ccfa48121f9236d1c0b24aedfc931b2` | profile Telegram presentation ownership |
+| R2-05A | `SELF` | collaboration domain and port ownership |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -761,24 +766,38 @@ P0-01 → P0-02
 - **Completion evidence:** Commit SHA: `SELF`; moved profile composer/presentation under `modules/profiles/presentation/telegram`, exported them through the profiles public API, switched the root Telegram router plus collaboration/marketplace profile-session consumers to public profile surfaces, and migrated the focused composer test to the module entrypoint. The two old `src/bot/profile/*` files are exact temporary re-export bridges only; no active implementation remains there. Ten source/test paths plus this plan changed; callback strings, continuation JSON, copy, route order and profile/application behavior are unchanged. Focused profile composer/full-profile fake tests PASS (8); architecture PASS (128 modules, 390 dependencies); `pnpm check` PASS (69 unit, 84 integration, 47 runtime, lint/typecheck/build); all fake E2E PASS (30); `pnpm db:verify`, migrations/PRD diff and `git diff --check` PASS. No credential, real Telegram, remote or production mutation.
 - **Stop conditions:** move требует дублировать replies/effects или меняет continuation payload.
 
-#### R2-05 — Move collaborations domain and application ownership
+#### R2-05A — Move collaborations domain and port ownership
+
+- **Status:** `completed`
+- **Objective:** Собрать collaboration domain и consumer-owned ports под модулем без широкого mixed move.
+- **Dependencies:** `R2-04`.
+- **Read first:** collaboration domain and repository/session/publication/showcase ports plus consumers.
+- **Scope:** collaboration domain and four owned ports; temporary exact compatibility exports.
+- **Do not touch:** services, repositories, grammY presentation, SQL or lifecycle transitions.
+- **Invariants:** validation, session constants/types and port shapes unchanged.
+- **Verification:** collaboration domain/session/publication tests; architecture; `pnpm check`; `pnpm db:verify`.
+- **Exit criteria:** collaboration domain/ports have one owner; один commit `R2-05A: move collaboration domain and ports`.
+- **Completion evidence:** Commit SHA: `SELF`; split was recorded because domain/ports plus services would exceed the bounded unit. Moved collaboration domain and repository/session/publication/showcase consumer ports under `modules/collaborations`; five old locations are exact temporary re-export bridges. Ten source paths plus this plan changed; values, session constants/types, port shapes, services, repositories, SQL, presentation and migrations are unchanged. Focused collaboration domain PASS (4), draft/publication integration PASS (7); architecture PASS (133 modules, 395 dependencies); `pnpm check` PASS (69 unit, 84 integration, 47 runtime, lint/typecheck/build); all fake E2E PASS (30); `pnpm db:verify`, migrations/PRD diff and `git diff --check` PASS. No credential, real Telegram, remote or production mutation.
+- **Stop conditions:** consumer-visible type/value drift or module barrel cycle.
+
+#### R2-05B — Move collaborations application services
 
 - **Status:** `in_progress`
-- **Objective:** Собрать collaboration domain, draft/publication services, render contract and feature ports под модулем.
-- **Dependencies:** `R2-04`.
-- **Read first:** collaboration domain/services/ports, publication and applications decision consumers.
-- **Scope:** collaboration domain/application/ports, pure application public entrypoint and temporary compatibility exports.
+- **Objective:** Перенести draft/publication services и pure renderer за application public entrypoint.
+- **Dependencies:** `R2-05A`.
+- **Read first:** collaboration services/renderer, applications decision consumer and focused tests.
+- **Scope:** three application files, `modules/collaborations/application/index.ts`, temporary exact compatibility exports; switch applications to the public application surface.
 - **Do not touch:** repositories, grammY presentation, SQL or lifecycle transitions.
-- **Invariants:** renderer output, validation, versions, errors and publication semantics unchanged.
+- **Invariants:** render output, errors, transaction/outbox/publication semantics unchanged.
 - **Verification:** collaboration unit/publication integration; application decision tests; architecture; `pnpm check`; `pnpm db:verify`.
-- **Exit criteria:** collaboration core has one owner; один commit `R2-05: move collaborations core into feature module`.
+- **Exit criteria:** collaboration application core has one owner; один commit `R2-05B: move collaboration application services`.
 - **Stop conditions:** applications must deep-import collaboration internals or a runtime barrel cycle appears.
 
 #### R2-06 — Extract shared wizard admission
 
 - **Status:** `pending`
 - **Objective:** Явно владеть атомарным правилом «один active wizard» вместо cross-table SQL двух feature adapters.
-- **Dependencies:** `R2-05`.
+- **Dependencies:** `R2-05B`.
 - **Read first:** both session repositories, collaboration draft conflict path and migration constraints.
 - **Scope:** consumer-neutral wizard-admission contract with one SQLite implementation and two real session-repository consumers; preserve transaction/error mapping.
 - **Do not touch:** tables/migrations/session shapes/TTL or wizard product policy.
