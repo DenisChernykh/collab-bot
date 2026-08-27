@@ -86,6 +86,7 @@ P0-01 → P0-02
 | FUT-01 | `SELF` | one-time Telegram audience snapshot with internal provenance |
 | R1-00 | `SELF` | decision-complete post-launch maintainability stage |
 | R1-01 | `SELF` | executable import graph and cycle enforcement |
+| R1-02 | `SELF` | consumer-oriented applications use cases and ports |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -460,7 +461,7 @@ P0-01 → P0-02
 
 #### R1-02 — Split the applications application boundary
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Выделить use cases и consumer-oriented ports для submit, decisions, recruitment, contacts и read queries.
 - **Requirements:** TD §4–§5, §9.2–§9.6; `LFR-05`–`LFR-08`, `LAC-03`–`LAC-06`.
 - **Dependencies:** `R1-01`.
@@ -472,12 +473,12 @@ P0-01 → P0-02
 - **Tests first:** focused consumer-port/use-case test, затем существующие S3-03/S3-04 tests.
 - **Verification:** focused unit/integration; architecture; `pnpm check`; `pnpm test:e2e:fake`; `pnpm db:verify`; diff/secret scans.
 - **Exit criteria:** каждый applications workflow зависит только от нужного порта; один commit `R1-02: split applications use-case boundaries`.
-- **Completion evidence:** pending.
+- **Completion evidence:** Commit SHA: `SELF`; replaced the 996-line implementation at the legacy `application-service.ts` path with a compatibility barrel and split contracts, policy, submission, decisions/recruitment, read queries and the temporary feature facade under `src/modules/applications/application`; added one consumer-port characterization test. The implementation changed eight source/test files and this plan; repositories/SQL, runtime, bot routing, migrations/schema, copy and callback encoding stayed untouched. Focused R1-02/S3-03/S3-04 unit and integration tests PASS (5 files, 33 tests); architecture PASS (99 modules, 289 dependencies); `pnpm check` PASS (66 unit, 80 integration, 30 runtime tests and build); `pnpm test:e2e:fake` PASS (21); `pnpm db:verify` PASS; `git diff --check` PASS. Independent read-only review compared the split with `HEAD`, confirmed old import-path/API compatibility plus unchanged transactions, delivery ordering/idempotency, capacity/stale guards, projection revision, contact privacy and read-model sanitization, and returned PASS with no findings. No credential, Telegram, remote or production mutation.
 - **Stop conditions:** требуется изменить product/outbox contract, добавить generic abstraction без второго consumer или выйти за unit boundary.
 
 #### R1-03 — Give applications feature-owned SQLite composition
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Отделить application persistence/read models от browse adapter и подключить feature через одну composition factory.
 - **Requirements:** TD §4.2–§4.3, §7, §9.2–§9.6.
 - **Dependencies:** `R1-02`.
