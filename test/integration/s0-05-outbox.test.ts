@@ -18,7 +18,6 @@ import {
 	ProductEventService,
 } from "../../src/application/outbox/product-event-service.js";
 import { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
-import { outboxDeliveries, productEvents } from "../../src/infrastructure/database/drizzle-schema.js";
 import { SqliteOutboxDeliveryRepository } from "../../src/infrastructure/database/outbox-delivery-repository.js";
 import { SqliteProductEventRepository } from "../../src/infrastructure/database/product-event-repository.js";
 import { MigrationRunner, MigrationSource } from "../../src/infrastructure/database/migrations.js";
@@ -97,10 +96,14 @@ describe("S0-05 canonical schema and migrations", () => {
 				"telegram_users",
 			]);
 			expect(await boundary.query<{ foreign_keys: number }>("PRAGMA foreign_keys")).toEqual([{ foreign_keys: 1 }]);
-			expect(outboxDeliveries.idempotencyKey.name).toBe("idempotency_key");
-			expect(outboxDeliveries.requestDeadlineAt.name).toBe("request_deadline_at");
-			expect(productEvents.eventType.name).toBe("event_type");
-			expect(productEvents.safeAttributesJson.name).toBe("safe_attributes_json");
+			expect((await boundary.query<{ name: string }>("PRAGMA table_info(outbox_deliveries)")).map((column) => column.name)).toEqual(expect.arrayContaining([
+				"idempotency_key",
+				"request_deadline_at",
+			]));
+			expect((await boundary.query<{ name: string }>("PRAGMA table_info(product_events)")).map((column) => column.name)).toEqual(expect.arrayContaining([
+				"event_type",
+				"safe_attributes_json",
+			]));
 			expect(await boundary.query<{ name: string }>("SELECT name FROM sqlite_master WHERE name IN ('operator_actions', 'profiles', 'collaborations')")).toEqual([]);
 		});
 	});

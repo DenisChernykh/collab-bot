@@ -5,12 +5,6 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import {
-	commandReceipts,
-	processedUpdates,
-	telegramActions,
-	telegramUsers,
-} from "../../src/infrastructure/database/drizzle-schema.js";
 import { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
 import { MigrationRunner, MigrationSource } from "../../src/infrastructure/database/migrations.js";
 import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
@@ -64,11 +58,32 @@ describe("S0-04 canonical schema", () => {
 				"telegram_users",
 			]);
 
-			expect(telegramUsers.telegramUserId.name).toBe("telegram_user_id");
-			expect(telegramUsers.blockedAt.name).toBe("blocked_at");
-			expect(telegramActions.tokenHash.name).toBe("token_hash");
-			expect(commandReceipts.inputHash.name).toBe("input_hash");
-			expect(processedUpdates.commandId.name).toBe("command_id");
+			expect((await boundary.query<{ name: string }>("PRAGMA table_info(telegram_actions)")).map((column) => column.name)).toEqual([
+				"token_hash",
+				"actor_telegram_user_id",
+				"action_type",
+				"entity_id",
+				"expected_version",
+				"mode",
+				"expires_at",
+				"consumed_at",
+				"result_json",
+			]);
+			expect((await boundary.query<{ name: string }>("PRAGMA table_info(command_receipts)")).map((column) => column.name)).toEqual([
+				"command_id",
+				"source",
+				"telegram_update_id",
+				"input_hash",
+				"status",
+				"result_json",
+				"created_at",
+				"completed_at",
+			]);
+			expect((await boundary.query<{ name: string }>("PRAGMA table_info(processed_updates)")).map((column) => column.name)).toEqual([
+				"update_id",
+				"command_id",
+				"processed_at",
+			]);
 			expect(await boundary.query<{ foreign_keys: number }>("PRAGMA foreign_keys")).toEqual([{ foreign_keys: 1 }]);
 		});
 	});

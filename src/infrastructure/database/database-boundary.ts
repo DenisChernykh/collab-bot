@@ -1,22 +1,10 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { DatabaseSync } from "node:sqlite";
 
-import {
-	drizzle,
-	type AsyncRemoteCallback,
-	type SqliteRemoteDatabase,
-} from "drizzle-orm/sqlite-proxy";
-
 type SqlValue = null | number | bigint | string | NodeJS.ArrayBufferView;
-type ProxyMethod = "run" | "all" | "values" | "get";
-interface ProxyResponse {
-	readonly rows: unknown;
-}
-type ProxyCallback = (sql: string, parameters: readonly SqlValue[], method: ProxyMethod) => Promise<ProxyResponse>;
 
 export interface DatabaseContext {
 	readonly client: DatabaseSync;
-	readonly drizzle: SqliteRemoteDatabase;
 }
 
 interface ActiveContext extends DatabaseContext {
@@ -115,31 +103,9 @@ export class DatabaseBoundary {
 		return {
 			boundary: this,
 			client: this.client,
-			drizzle: this.createDrizzleClient(),
 			transactionDepth: 0,
 			rollbackOnly: false,
 		};
-	}
-
-	private createDrizzleClient(): SqliteRemoteDatabase {
-		const callback: ProxyCallback = async (sql, parameters, method) => {
-			const statement = this.client.prepare(sql);
-			switch (method) {
-				case "run":
-					return { rows: [statement.run(...parameters)] };
-				case "all":
-					return { rows: statement.all(...parameters) };
-				case "values":
-					statement.setReturnArrays(true);
-					return { rows: statement.all(...parameters) };
-				case "get": {
-					const row = statement.get(...parameters);
-					return { rows: row };
-				}
-			}
-		};
-		// drizzle-orm 0.45.x types every response as rows[], but get() consumes one row.
-		return drizzle(callback as unknown as AsyncRemoteCallback, { logger: false });
 	}
 
 	private async runTransaction<T>(

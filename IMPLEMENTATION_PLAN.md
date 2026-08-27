@@ -96,6 +96,7 @@ P0-01 → P0-02
 | R1-06B | `SELF` | separated bot composition and runtime lifecycle |
 | R1-06C | `SELF` | thin process, config and filesystem bootstrap boundaries |
 | R1-07 | `SELF` | consolidated production-like test support |
+| R1-08 | `SELF` | raw SQL as the only persistence model |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -640,7 +641,7 @@ P0-01 → P0-02
 
 #### R1-08 — Make raw SQL the only persistence model
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Убрать теневой Drizzle mapping и закрепить SQL migrations + typed rows/mappers как единственную persistence-модель.
 - **Requirements:** обновлённый TD §2.2, §7; неизменные `LFR-10`–`LFR-11`, `LAC-08`–`LAC-11`.
 - **Dependencies:** `R1-07`.
@@ -652,12 +653,12 @@ P0-01 → P0-02
 - **Tests first:** schema/introspection assertions, эквивалентные удаляемому mapping probe.
 - **Verification:** no-Drizzle source/dependency scan; focused DB/schema/outbox tests; fresh/upgrade migrations; architecture; `pnpm check`; `pnpm db:verify`; diff/secret scans.
 - **Exit criteria:** один persistence stack и синхронизированный TD; один commit `R1-08: make raw SQL persistence canonical`.
-- **Completion evidence:** pending.
+- **Completion evidence:** Commit SHA: `SELF`; removed the unused Drizzle proxy from `DatabaseContext`, deleted the shadow schema mapping and removed `drizzle-orm`/`drizzle-kit` plus their inactive unique transitive graph through host-capable pnpm. Production repositories already used parameterized raw SQL exclusively, so no repository query, transaction rule or migration changed. Drizzle-only tests now exercise the real `DatabaseSync` client and inspect the actually migrated SQLite schema through `PRAGMA`/`sqlite_master`; exact existing schema/behavior tests remain. Technical Design now declares immutable SQL migrations as the single schema/history owner and repository-local typed rows/mappers as query contracts. Dependency-cruiser rules were narrowed to the remaining framework/SQLite boundaries, and four exact ignored stale `dist/infrastructure/database/drizzle-schema.*` artifacts were removed before a clean rebuild. Nine source/test/docs/dependency files plus this plan changed; all 13 migrations, PRD, repositories, data and transaction semantics stayed untouched. Test-first RED proved the obsolete boundary adapter was still present (1 failed, 18 passed); focused DB/schema/ingress/outbox tests PASS (4 files, 26 tests); fresh/upgrade migration regressions PASS (9 files, 56 tests); all fake E2E PASS (7 files, 30 tests); architecture PASS (114 modules, 363 dependencies); `pnpm check` PASS (66 unit, 83 integration, 47 runtime tests and build); `pnpm db:verify` PASS; host-capable `pnpm why` returns no Drizzle graph; zero-match scan across source/tests/TD/package/lock/dist PASS; migrations/PRD diff and `git diff --check` are empty/PASS. Self-review and two independent read-only reviews confirmed the lockfile reduction is Drizzle-specific and DatabaseSync pragmas, FIFO, `BEGIN IMMEDIATE`, nested rollback-only and close behavior are unchanged. No credential, real Telegram, remote or production mutation.
 - **Stop conditions:** найден production Drizzle consumer, проверка схемы ослабляется или требуется изменить applied migration/data.
 
 #### R1-09 — Close R1 and decide runtime-schema validation
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Доказать сохранение поведения, независимо проверить candidate и решить, нужна ли следующая schema-validator карточка.
 - **Requirements:** все stage invariants; PRD §19.1/§20.1; TD self-review checklist.
 - **Dependencies:** `R1-08`.

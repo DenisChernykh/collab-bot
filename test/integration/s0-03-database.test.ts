@@ -2,7 +2,6 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -55,40 +54,44 @@ describe("fresh migration", () => {
 			const source = await MigrationSource.fromDirectory(migrationsPath);
 			const boundary = new DatabaseBoundary(databasePath);
 			try {
-				await boundary.withClient(async ({ drizzle }) => {
-					await drizzle.run(sql.raw("CREATE TABLE drizzle_probe (id INTEGER PRIMARY KEY)"));
-					await drizzle.run(sql.raw("CREATE TABLE drizzle_records (id INTEGER PRIMARY KEY, label TEXT NOT NULL)"));
-					const runResult = await drizzle.run(sql`INSERT INTO drizzle_records (id, label) VALUES (${1}, ${"alpha"})`);
-					expect(runResult).toEqual({ rows: [{ changes: 1, lastInsertRowid: 1 }] });
-					expect(await drizzle.all(sql`SELECT id, label FROM drizzle_records ORDER BY id`)).toEqual([
+				await boundary.withClient(async (context) => {
+					context.client.exec("CREATE TABLE raw_sql_probe (id INTEGER PRIMARY KEY)");
+					context.client.exec("CREATE TABLE raw_sql_records (id INTEGER PRIMARY KEY, label TEXT NOT NULL)");
+					const runResult = context.client
+						.prepare("INSERT INTO raw_sql_records (id, label) VALUES (?, ?)")
+						.run(1, "alpha");
+					expect(runResult).toEqual({ changes: 1, lastInsertRowid: 1 });
+					expect(context.client.prepare("SELECT id, label FROM raw_sql_records ORDER BY id").all()).toEqual([
 						{ id: 1, label: "alpha" },
 					]);
-					expect(await drizzle.get(sql`SELECT id, label FROM drizzle_records WHERE id = ${1}`)).toEqual({
+					expect(context.client.prepare("SELECT id, label FROM raw_sql_records WHERE id = ?").get(1)).toEqual({
 						id: 1,
 						label: "alpha",
 					});
-					expect(await drizzle.get(sql`SELECT id, label FROM drizzle_records WHERE id = ${999}`)).toBeUndefined();
-					expect(await drizzle.values(sql`SELECT id, label FROM drizzle_records ORDER BY id`)).toEqual([[1, "alpha"]]);
+					expect(context.client.prepare("SELECT id, label FROM raw_sql_records WHERE id = ?").get(999)).toBeUndefined();
+					const values = context.client.prepare("SELECT id, label FROM raw_sql_records ORDER BY id");
+					values.setReturnArrays(true);
+					expect(values.all()).toEqual([[1, "alpha"]]);
 				});
-				expect(await boundary.query<{ name: string }>("SELECT name FROM sqlite_master WHERE name = 'drizzle_probe'")).toEqual([
-					{ name: "drizzle_probe" },
+				expect(await boundary.query<{ name: string }>("SELECT name FROM sqlite_master WHERE name = 'raw_sql_probe'")).toEqual([
+					{ name: "raw_sql_probe" },
 				]);
-				await expect(boundary.withTransaction(async ({ drizzle }) => {
-					await drizzle.run(sql`INSERT INTO drizzle_records (id, label) VALUES (${2}, ${"rolled-back"})`);
-					throw new Error("drizzle transaction rollback");
-				})).rejects.toThrow("drizzle transaction rollback");
-				expect(await boundary.query<{ count: number }>("SELECT count(*) AS count FROM drizzle_records")).toEqual([{ count: 1 }]);
+				await expect(boundary.withTransaction(async ({ client }) => {
+					client.prepare("INSERT INTO raw_sql_records (id, label) VALUES (?, ?)").run(2, "rolled-back");
+					throw new Error("SQLite transaction rollback");
+				})).rejects.toThrow("SQLite transaction rollback");
+				expect(await boundary.query<{ count: number }>("SELECT count(*) AS count FROM raw_sql_records")).toEqual([{ count: 1 }]);
 				const order: number[] = [];
 				await Promise.all([
-					boundary.withClient(async ({ drizzle }) => {
+					boundary.withClient(async ({ client }) => {
 						order.push(1);
-						await drizzle.run(sql`INSERT INTO drizzle_records (id, label) VALUES (${3}, ${"fifo-a"})`);
+						client.prepare("INSERT INTO raw_sql_records (id, label) VALUES (?, ?)").run(3, "fifo-a");
 						await new Promise((resolve) => setTimeout(resolve, 5));
 						order.push(2);
 					}),
-					boundary.withClient(async ({ drizzle }) => {
+					boundary.withClient(async ({ client }) => {
 						order.push(3);
-						await drizzle.run(sql`INSERT INTO drizzle_records (id, label) VALUES (${4}, ${"fifo-b"})`);
+						client.prepare("INSERT INTO raw_sql_records (id, label) VALUES (?, ?)").run(4, "fifo-b");
 					}),
 				]);
 				expect(order).toEqual([1, 2, 3]);

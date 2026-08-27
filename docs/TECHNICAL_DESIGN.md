@@ -62,15 +62,15 @@ Heartbeat/status storage, scheduled cleanup/retention, exact Unix-socket admissi
 | pnpm | `>=11.15.1 <12`; packageManager `pnpm@11.15.1` |
 | TypeScript | ESM, strict; ветка `5.9.x` |
 | Telegram | `grammy 1.45.x`, long polling |
-| ORM/schema | `drizzle-orm 0.45.x` и `drizzle-kit 0.31.x` |
+| Persistence/schema | параметризованный raw SQL; SQL migrations + typed rows/mappers |
 | SQLite | встроенный `node:sqlite` / `DatabaseSync` |
 | Dates | `date-fns 4.x` и `date-fns-tz 3.x` |
 | Tests | `vitest 4.x` |
 | Lint | ESLint 9 + typescript-eslint 8 |
 
-Версии взяты из текущего [gift-bot/package.json](/Users/denischernykh/projects/gift-bot/package.json) и при bootstrap закрепляются lockfile. Перед dependency-changing командами исполнитель обязан проверить `node --version`, `pnpm --version` и будущий `package.json`.
+Версии runtime/tooling закрепляются текущими `package.json` и lockfile. Перед dependency-changing командами исполнитель обязан проверить `node --version`, `pnpm --version` и `package.json`.
 
-Drizzle документирует нативную поддержку `node:sqlite`: [Drizzle — Node SQLite](https://orm.drizzle.team/docs/sqlite/connect-node-sqlite). Контракт `DatabaseSync` и `enableDefensive` проверен по ветке [Node.js 24.18 SQLite](https://nodejs.org/download/release/v24.18.0/docs/api/sqlite.html).
+Контракт `DatabaseSync` и `enableDefensive` проверен по ветке [Node.js 24.18 SQLite](https://nodejs.org/download/release/v24.18.0/docs/api/sqlite.html).
 
 ### 2.3. Рассмотренные альтернативы
 
@@ -195,7 +195,7 @@ bootstrap/runtime
 
 Правила:
 
-- `domain` не импортирует grammY, Drizzle, SQLite, process/env или Telegram types;
+- `domain` не импортирует grammY, SQLite, process/env или Telegram types;
 - `application` импортирует domain и объявляет порты;
 - adapters/infrastructure реализуют порты;
 - bootstrap создаёт зависимости и владеет lifecycle;
@@ -306,7 +306,7 @@ Enums и справочники берутся только из PRD:
 - `ApplicationStatus`;
 - `CompletionResult` со значениями `happened` и `did_not_happen`.
 
-Справочники объявляются один раз в domain и используются validation/render/schema mapping.
+Справочники объявляются в domain и используются для validation/render. Persistence contract принадлежит SQL migrations, а typed rows/mappers явно переводят данные на границе repositories.
 
 ## 6. Идентификаторы и время
 
@@ -346,6 +346,8 @@ PRAGMA busy_timeout = 5000;
 
 Один `DatabaseBoundary` сериализует операции и транзакции внутри process. Вложенные repositories используют текущий transaction context, а не открывают новую транзакцию.
 
+`DatabaseBoundary` напрямую владеет `DatabaseSync`. Infrastructure repositories выполняют параметризованный raw SQL через `execute`/`query` или текущий transaction `client`; отдельного ORM client и параллельного schema mapping нет.
+
 ### 7.2. Transaction rules
 
 - Изменение бизнес-состояния, product event и delivery intent записываются в одной транзакции.
@@ -357,7 +359,8 @@ PRAGMA busy_timeout = 5000;
 
 ### 7.3. Migrations
 
-- Drizzle schema является typed mapping, SQL migrations — применяемая история.
+- SQL migrations являются единственной применяемой историей schema, constraints, indexes и triggers и канонической persistence-моделью.
+- Typed row interfaces и явные repository mappers находятся рядом с SQL consumers; отдельная декларативная ORM schema не поддерживается.
 - Существующие migrations не редактируются после принятия.
 - Startup применяет pending migrations до polling.
 - Update-flow отдельно выполняет `pnpm db:migrate` и останавливается при ошибке.

@@ -27,7 +27,7 @@ module.exports = {
 			severity: "error",
 			from: { path: "(^|/)src/(domain|modules/[^/]+/domain)(/|$)" },
 			to: {
-				path: "(^|/)(node_modules/)?(drizzle-orm|grammy)(/|$)|^node:sqlite$",
+				path: "(^|/)(node_modules/)?grammy(/|$)|^node:sqlite$",
 			},
 		},
 		{
@@ -43,7 +43,7 @@ module.exports = {
 			severity: "error",
 			from: { path: "(^|/)src/(application|modules/[^/]+/application)(/|$)" },
 			to: {
-				path: "(^|/)(node_modules/)?(drizzle-orm|grammy)(/|$)|^node:sqlite$",
+				path: "(^|/)(node_modules/)?grammy(/|$)|^node:sqlite$",
 			},
 		},
 		{
