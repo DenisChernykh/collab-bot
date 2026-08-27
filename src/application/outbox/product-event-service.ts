@@ -5,23 +5,21 @@ import {
 	ProductEventStoreIdConflictError,
 } from "../ports/product-event-store.js";
 import type { TransactionRunner } from "../ports/transaction-runner.js";
+import {
+	PRODUCT_EVENT_TYPES,
+	type ProductEventAppendRequest,
+	type ProductEventRecord,
+	type ProductEventType,
+	type SafeAttributes,
+} from "./product-event-contracts.js";
 
-export const PRODUCT_EVENT_TYPES = [
-	"bot_started",
-	"profile_started",
-	"profile_completed",
-	"collaboration_draft_started",
-	"collaboration_published",
-	"collaboration_viewed",
-	"application_submitted",
-	"application_accepted",
-	"collaboration_matched",
-	"completion_reported",
-	"collaboration_bilateral_confirmed",
-	"collaboration_hidden",
-	"user_blocked",
-] as const;
-export type ProductEventType = (typeof PRODUCT_EVENT_TYPES)[number];
+export { PRODUCT_EVENT_TYPES } from "./product-event-contracts.js";
+export type {
+	ProductEventAppendRequest,
+	ProductEventRecord,
+	ProductEventType,
+	SafeAttributes,
+} from "./product-event-contracts.js";
 
 type AttributeRule = "boolean" | "number" | readonly string[];
 export const PRODUCT_EVENT_ATTRIBUTE_POLICY: Readonly<Record<ProductEventType, Readonly<Record<string, AttributeRule>>>> = {
@@ -42,11 +40,6 @@ export const PRODUCT_EVENT_ATTRIBUTE_POLICY: Readonly<Record<ProductEventType, R
 
 const validatedAttributes = new WeakSet<object>();
 const attributesEventTypes = new WeakMap<object, ProductEventType>();
-
-declare const safeAttributesBrand: unique symbol;
-export type SafeAttributes = Readonly<Record<string, boolean | number | string>> & {
-	readonly [safeAttributesBrand]: true;
-};
 
 export function createSafeAttributes(eventType: ProductEventType, value: unknown): SafeAttributes {
 	if (!PRODUCT_EVENT_TYPES.includes(eventType) || typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -116,30 +109,6 @@ export function parseSafeAttributes(serialized: string, eventType: ProductEventT
 		throw new ProductEventValidationError();
 	}
 	return createSafeAttributes(eventType, value);
-}
-
-export interface ProductEventRecord {
-	readonly eventId: string;
-	readonly eventType: ProductEventType;
-	readonly idempotencyKey: string;
-	readonly actorTelegramUserId: string | null;
-	readonly profileId: string | null;
-	readonly collaborationId: string | null;
-	readonly applicationId: string | null;
-	readonly safeAttributes: SafeAttributes;
-	readonly occurredAt: number;
-}
-
-export interface ProductEventAppendRequest {
-	readonly eventId: string;
-	readonly eventType: ProductEventType;
-	readonly idempotencyKey: string;
-	readonly actorTelegramUserId?: string;
-	readonly profileId?: string;
-	readonly collaborationId?: string;
-	readonly applicationId?: string;
-	readonly safeAttributes: SafeAttributes;
-	readonly occurredAt?: number;
 }
 
 export class ProductEventValidationError extends Error {

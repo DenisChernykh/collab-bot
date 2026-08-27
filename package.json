@@ -10,6 +10,7 @@
 	"packageManager": "pnpm@11.15.1",
 	"scripts": {
 		"lint": "eslint .",
+		"architecture": "dependency-cruise --config .dependency-cruiser.cjs --output-type err src",
 		"typecheck": "tsc --noEmit",
 		"test:unit": "vitest run --project unit",
 		"test:integration": "vitest run --project integration",
@@ -19,7 +20,7 @@
 		"start": "node dist/cli/bot.js",
 		"db:migrate": "pnpm build && node dist/cli/db-migrate.js",
 		"db:verify": "pnpm build && node dist/cli/db-verify.js",
-		"check": "pnpm lint && pnpm typecheck && pnpm test:unit && pnpm test:integration && pnpm test:runtime && pnpm build"
+		"check": "pnpm lint && pnpm architecture && pnpm typecheck && pnpm test:unit && pnpm test:integration && pnpm test:runtime && pnpm build"
 	},
 	"dependencies": {
 		"date-fns": "4.4.0",
@@ -30,6 +31,7 @@
 	"devDependencies": {
 		"@eslint/js": "9.39.5",
 		"@types/node": "24.13.3",
+		"dependency-cruiser": "18.1.0",
 		"drizzle-kit": "0.31.10",
 		"eslint": "9.39.5",
 		"typescript": "5.9.3",

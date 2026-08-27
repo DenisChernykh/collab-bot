@@ -85,6 +85,7 @@ P0-01 → P0-02
 | S4-01 | `SELF` | allowlisted hide, complete fake/real journey and manual launch handoff |
 | FUT-01 | `SELF` | one-time Telegram audience snapshot with internal provenance |
 | R1-00 | `SELF` | decision-complete post-launch maintainability stage |
+| R1-01 | `SELF` | executable import graph and cycle enforcement |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -442,24 +443,24 @@ P0-01 → P0-02
 
 #### R1-01 — Replace regex import checks with an import-graph gate
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Проверять реальные import edges, cycles и направления слоёв вместо чтения source регулярным выражением.
 - **Requirements:** TD §4, §20.1, §22.1.
 - **Dependencies:** `R1-00`.
 - **Read first:** текущие package/TS/ESLint configs; `test/unit/s0-04-import-boundary.test.ts`; starter `.dependency-cruiser.cjs` только как reference.
 - **Preconditions:** exact predecessor `R1-00`; Node/pnpm contract подтверждён перед dependency change.
-- **Scope:** `dependency-cruiser` dev dependency; минимальная project-owned config; `pnpm architecture`; policy fixtures для current layer-first и будущего `src/modules/<feature>/<layer>` layout; aggregate gate.
+- **Scope:** `dependency-cruiser` dev dependency; минимальная project-owned config; `pnpm architecture`; policy fixtures для current layer-first и будущего `src/modules/<feature>/<layer>` layout; aggregate gate; минимальное устранение type-only cycle, впервые обнаруженного новым gate.
 - **Do not touch:** runtime, product services, SQL/migrations, Telegram behavior.
 - **Invariants:** запреты соответствуют текущему TD; domain не импортирует application/infrastructure/presentation/runtime; application не импортирует infrastructure/presentation/runtime; нет circular/unresolvable imports; будущие module-local слои не теряют enforcement.
 - **Tests first:** fixture, которая проходит корректный graph и падает на domain→infrastructure и application→runtime.
 - **Verification:** focused policy test; `pnpm architecture`; `pnpm check`; `pnpm db:verify`; diff/secret scans.
 - **Exit criteria:** regex-test заменён executable import-graph policy; один commit `R1-01: enforce architectural import graph`.
-- **Completion evidence:** pending.
+- **Completion evidence:** Commit SHA: `SELF`; added `dependency-cruiser@18.1.0`, `.dependency-cruiser.cjs`, `pnpm architecture`, three executable policy fixtures and `product-event-contracts.ts`; removed the previous source-regex implementation. Initial real graph found `product-event-service → product-event-store → product-event-service`; shared event types/constants moved to the neutral application contract without runtime behavior changes or an allowlist. Focused policy/contracts tests PASS (7); architecture PASS (93 modules, 262 dependencies); `pnpm check` PASS (63 unit, 80 integration, 30 runtime tests and build); `pnpm db:verify` PASS; diff/secret scans PASS. Context7 was quota-blocked; configuration was checked against official dependency-cruiser rule/CLI documentation and the installed `18.1.0` reference config. No SQL, migration, Telegram, credential, remote or production mutation.
 - **Stop conditions:** несовместимая toolchain dependency, undocumented live edge требует решения, или gate зелёный только с broad allowlist.
 
 #### R1-02 — Split the applications application boundary
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Выделить use cases и consumer-oriented ports для submit, decisions, recruitment, contacts и read queries.
 - **Requirements:** TD §4–§5, §9.2–§9.6; `LFR-05`–`LFR-08`, `LAC-03`–`LAC-06`.
 - **Dependencies:** `R1-01`.

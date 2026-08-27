@@ -1,26 +1,39 @@
-import { readdir, readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
-import { join } from "node:path";
+import { spawnSync, type SpawnSyncReturns } from "node:child_process";
+import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-async function sourceFiles(directory: string): Promise<string[]> {
-	const entries = await readdir(directory, { recursive: true });
-	return entries
-		.filter((entry) => entry.endsWith(".ts"))
-		.map((entry) => join(directory, entry));
+function cruiseFixture(name: string): SpawnSyncReturns<string> {
+	return spawnSync(
+		process.execPath,
+		[
+			"node_modules/dependency-cruiser/bin/dependency-cruise.mjs",
+			"--config",
+			".dependency-cruiser.cjs",
+			"--output-type",
+			"err",
+			resolve(`test/fixtures/dependency-cruiser/${name}`),
+		],
+		{ cwd: process.cwd(), encoding: "utf8" },
+	);
 }
 
-describe("application import boundary", () => {
-	it("keeps application and domain independent from infrastructure/runtime implementations", async () => {
-		const roots = [
-			fileURLToPath(new URL("../../src/application/", import.meta.url)),
-			fileURLToPath(new URL("../../src/domain/", import.meta.url)),
-		];
-		const files = (await Promise.all(roots.map((root) => sourceFiles(root)))).flat();
-		const forbidden = /infrastructure|node:sqlite|drizzle-orm/;
-		for (const file of files) {
-			expect(await readFile(file, "utf8"), file).not.toMatch(forbidden);
-		}
+describe("dependency-cruiser architecture policy", () => {
+	it("accepts application-to-domain dependencies", () => {
+		const result = cruiseFixture("valid-layer-flow");
+		expect(`${result.stdout}${result.stderr}`).toContain("no dependency violations found");
+		expect(result.status).toBe(0);
+	});
+
+	it("rejects domain imports from infrastructure", () => {
+		const result = cruiseFixture("domain-imports-infrastructure");
+		expect(`${result.stdout}${result.stderr}`).toContain("domain-must-not-import-outer-layers");
+		expect(result.status).toBeGreaterThan(0);
+	});
+
+	it("rejects application imports from runtime", () => {
+		const result = cruiseFixture("application-imports-runtime");
+		expect(`${result.stdout}${result.stderr}`).toContain("application-must-not-import-outer-layers");
+		expect(result.status).toBeGreaterThan(0);
 	});
 });
