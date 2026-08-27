@@ -51,7 +51,10 @@ export class SqliteCollaborationPublicationRepository implements CollaborationPu
 			const publicationUpdate = await this.boundary.execute("UPDATE channel_publications SET status = ?, message_id = ?, last_error_kind = ?, updated_at = ? WHERE collaboration_id = ? AND status IN ('prepared', 'sending')", [status, messageId, errorKind, updatedAt, collaborationId]) as { changes?: number };
 			if (publicationUpdate.changes !== 1) return false;
 			const collaborationStatus = status === "published" ? "published" : "publication_failed";
-			await this.boundary.execute("UPDATE collaborations SET status = ?, projection_revision = projection_revision + 1, version = version + 1, updated_at = ? WHERE id = ? AND status = 'publishing'", [collaborationStatus, updatedAt, collaborationId]);
+			const collaborationUpdate = status === "published"
+				? await this.boundary.execute("UPDATE collaborations SET status = ?, published_at = COALESCE(published_at, ?), projection_revision = projection_revision + 1, version = version + 1, updated_at = ? WHERE id = ? AND status = 'publishing'", [collaborationStatus, updatedAt, updatedAt, collaborationId]) as { changes?: number }
+				: await this.boundary.execute("UPDATE collaborations SET status = ?, projection_revision = projection_revision + 1, version = version + 1, updated_at = ? WHERE id = ? AND status = 'publishing'", [collaborationStatus, updatedAt, collaborationId]) as { changes?: number };
+			if (collaborationUpdate.changes !== 1) throw new Error("collaboration publication state is inconsistent");
 			return true;
 		});
 	}
@@ -60,7 +63,8 @@ export class SqliteCollaborationPublicationRepository implements CollaborationPu
 		return this.boundary.withTransaction(async () => {
 			const publicationUpdate = await this.boundary.execute("UPDATE channel_publications SET status = 'published', message_id = ?, updated_at = ? WHERE collaboration_id = ? AND status IN ('prepared', 'sending')", [messageId, updatedAt, collaborationId]) as { changes?: number };
 			if (publicationUpdate.changes !== 1) return false;
-			await this.boundary.execute("UPDATE collaborations SET status = 'expired', projection_revision = projection_revision + 1, version = version + 1, updated_at = ? WHERE id = ? AND status = 'publishing'", [updatedAt, collaborationId]);
+			const collaborationUpdate = await this.boundary.execute("UPDATE collaborations SET status = 'expired', published_at = COALESCE(published_at, ?), projection_revision = projection_revision + 1, version = version + 1, updated_at = ? WHERE id = ? AND status = 'publishing'", [updatedAt, updatedAt, collaborationId]) as { changes?: number };
+			if (collaborationUpdate.changes !== 1) throw new Error("collaboration publication state is inconsistent");
 			return true;
 		});
 	}

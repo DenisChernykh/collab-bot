@@ -54,7 +54,7 @@ describe("S2-02 showcase publication", () => {
 		const clock = new FakeClock(new Date("2023-11-14T10:00:00.000Z"));
 		try {
 			const source = await MigrationSource.fromDirectory(migrationsPath);
-			expect((await new MigrationRunner(source, clock).migrate(boundary)).applied).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+			expect((await new MigrationRunner(source, clock).migrate(boundary)).applied).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
 			await seedProfile(boundary, clock);
 			const transactions = new DatabaseBoundaryTransactionRunner(boundary);
 			const collaborations = new SqliteCollaborationRepository(boundary);
@@ -81,10 +81,12 @@ describe("S2-02 showcase publication", () => {
 			const transport = new FakeTelegramTransport();
 			transport.enqueueSuccess(901);
 			const runner = new DeliveryRunner(outbox, transport, new ImmediateDeadline(), new FixedClaim(), clock);
+			const outcomeAt = clock.now().getTime();
 			expect(await runner.runOnce()).toMatchObject({ outcome: "sent", deliveryId: published.deliveryId });
 			clock.advanceBy(30 * 24 * 60 * 60 * 1000);
 			await service.projectDelivery(published.deliveryId!, outbox);
 			expect(await collaborations.findById(current.draft.id)).toMatchObject({ status: "published", publicToken: expect.any(String) });
+			expect(await boundary.query("SELECT published_at FROM collaborations WHERE id = ?", [current.draft.id])).toEqual([{ published_at: outcomeAt }]);
 			expect(await service.listOwn("100")).toEqual([expect.objectContaining({ collaborationId: current.draft.id, status: "published" })]);
 			const row = await publications.findByCollaborationId(current.draft.id);
 			expect(row).toMatchObject({ status: "published", messageId: 901 });
@@ -106,6 +108,7 @@ describe("S2-02 showcase publication", () => {
 			await runner.runOnce();
 			await fixture.service.projectDelivery(fixture.deliveryId, fixture.outbox);
 			expect(await fixture.collaborations.findById(fixture.collaborationId)).toMatchObject({ status: "expired" });
+			expect(await boundary.query("SELECT published_at FROM collaborations WHERE id = ?", [fixture.collaborationId])).toEqual([{ published_at: clock.now().getTime() }]);
 			const edit = await fixture.outbox.findByIdempotencyKey(`collaboration:${fixture.collaborationId}:channel_edit:expired:v1`);
 			expect(edit).toMatchObject({ kind: "channel_edit", messageId: 902, payload: { method: "edit", replyMarkup: { inline_keyboard: [] } } });
 			expect((edit?.payload.method === "edit" ? edit.payload.text : "")).toContain("Приём откликов завершён");
@@ -126,6 +129,7 @@ describe("S2-02 showcase publication", () => {
 			expect(await fixture.service.cancelExpiredPrepared()).toBe(1);
 			expect(await fixture.outbox.findById(fixture.deliveryId)).toMatchObject({ status: "permanent_failed", attemptCount: 1, lastErrorKind: "provider_timeout" });
 			expect(await fixture.collaborations.findById(fixture.collaborationId)).toMatchObject({ status: "expired" });
+			expect(await boundary.query("SELECT published_at FROM collaborations WHERE id = ?", [fixture.collaborationId])).toEqual([{ published_at: null }]);
 			const transport = new FakeTelegramTransport();
 			const runner = new DeliveryRunner(fixture.outbox, transport, new ImmediateDeadline(), new FixedClaim(), clock);
 			expect(await runner.runOnce()).toEqual({ outcome: "idle" });
@@ -135,7 +139,7 @@ describe("S2-02 showcase publication", () => {
 });
 
 async function migrateAll(boundary: DatabaseBoundary, clock: FakeClock): Promise<void> {
-	expect((await new MigrationRunner(await MigrationSource.fromDirectory(migrationsPath), clock).migrate(boundary)).applied).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+	expect((await new MigrationRunner(await MigrationSource.fromDirectory(migrationsPath), clock).migrate(boundary)).applied).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
 }
 
 async function preparePublication(boundary: DatabaseBoundary, clock: FakeClock): Promise<{ service: CollaborationPublicationService; outbox: SqliteOutboxDeliveryRepository; collaborations: SqliteCollaborationRepository; collaborationId: string; deliveryId: string }> {

@@ -149,15 +149,18 @@ export const collaborations = sqliteTable(
 		status: text("status", { enum: ["draft", "publishing", "published", "publication_failed", "matched", "completed", "cancelled", "expired", "hidden"] as const }).notNull(),
 		version: integer("version").notNull(),
 		projectionRevision: integer("projection_revision").notNull(),
+		publishedAt: integer("published_at"),
 		createdAt: integer("created_at").notNull(),
 		updatedAt: integer("updated_at").notNull(),
 	},
 	(table) => [
 		uniqueIndex("collaborations_one_draft_per_profile").on(table.authorProfileId).where(sql`${table.status} = 'draft'`),
 		index("collaborations_author_created").on(table.authorProfileId, table.createdAt, table.id),
+		index("collaborations_feed_order").on(table.status, table.publishedAt, table.id),
 		check("collaborations_city_code", sql`${table.cityCode} IS NULL OR ${table.cityCode} = 'ekaterinburg'`),
 		check("collaborations_version_nonnegative", sql`${table.version} >= 1`),
 		check("collaborations_projection_revision_nonnegative", sql`${table.projectionRevision} >= 0`),
+		check("collaborations_published_at_nonnegative", sql`${table.publishedAt} IS NULL OR (typeof(${table.publishedAt}) = 'integer' AND ${table.publishedAt} >= 0)`),
 		check("collaborations_timestamp_coherence", sql`${table.updatedAt} >= ${table.createdAt}`),
 	],
 );
@@ -195,6 +198,32 @@ export const collaborationSessions = sqliteTable(
 		check("collaboration_sessions_flow_type", sql`${table.flowType} = 'collaboration'`),
 		check("collaboration_sessions_state_json_valid", sql`json_valid(${table.stateJson}) = 1 AND json_type(${table.stateJson}) = 'object'`),
 		check("collaboration_sessions_revision_nonnegative", sql`${table.revision} >= 0`),
+	],
+);
+
+export const browseSessions = sqliteTable(
+	"browse_sessions",
+	{
+		telegramUserId: text("telegram_user_id")
+			.primaryKey()
+			.references(() => telegramUsers.telegramUserId, { onDelete: "cascade" }),
+		generation: text("generation").notNull(),
+		targetProfileTypeFilter: text("target_profile_type_filter", { enum: ["blogger", "telegram_channel", "venue_or_brand"] as const }),
+		formatFilter: text("format_filter", { enum: ["advertising_integration", "barter", "joint_giveaway", "joint_content", "mutual_pr", "event", "other"] as const }),
+		topicFilter: text("topic_filter", { enum: ["lifestyle", "food", "beauty", "travel", "city", "events", "family", "sport", "business", "other"] as const }),
+		cursorPublishedAt: integer("cursor_published_at"),
+		cursorCollaborationId: text("cursor_collaboration_id"),
+		revision: integer("revision").notNull(),
+		expiresAt: integer("expires_at").notNull(),
+		updatedAt: integer("updated_at").notNull(),
+	},
+	(table) => [
+		index("browse_sessions_expiry").on(table.expiresAt),
+		check("browse_sessions_generation", sql`typeof(${table.generation}) = 'text' AND length(${table.generation}) = 16 AND ${table.generation} NOT GLOB '*[^0-9a-f]*'`),
+		check("browse_sessions_cursor_published_at_nonnegative", sql`${table.cursorPublishedAt} IS NULL OR (typeof(${table.cursorPublishedAt}) = 'integer' AND ${table.cursorPublishedAt} >= 0)`),
+		check("browse_sessions_cursor_pair", sql`(${table.cursorPublishedAt} IS NULL AND ${table.cursorCollaborationId} IS NULL) OR (${table.cursorPublishedAt} IS NOT NULL AND ${table.cursorCollaborationId} IS NOT NULL)`),
+		check("browse_sessions_revision_nonnegative", sql`typeof(${table.revision}) = 'integer' AND ${table.revision} >= 0`),
+		check("browse_sessions_expiry_coherence", sql`typeof(${table.expiresAt}) = 'integer' AND typeof(${table.updatedAt}) = 'integer' AND ${table.expiresAt} >= ${table.updatedAt}`),
 	],
 );
 

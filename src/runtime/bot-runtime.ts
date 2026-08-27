@@ -26,6 +26,8 @@ import { SystemClock } from "../infrastructure/time/system-clock.js";
 import { SqliteOutboxDeliveryRepository } from "../infrastructure/database/outbox-delivery-repository.js";
 import { SqliteCollaborationPublicationRepository } from "../infrastructure/database/collaboration-publication-repository.js";
 import { CollaborationPublicationService } from "../application/collaborations/collaboration-publication-service.js";
+import { CollaborationBrowseService } from "../application/collaborations/collaboration-browse-service.js";
+import { SqliteCollaborationBrowseRepository } from "../infrastructure/database/collaboration-browse-repository.js";
 import { DeliveryRunner } from "../application/outbox/delivery-runner.js";
 import { SystemProviderDeadline } from "../infrastructure/time/provider-deadline.js";
 import { RandomClaimTokenGenerator } from "../infrastructure/crypto/claim-token.js";
@@ -92,6 +94,11 @@ export async function createBotRuntime(options: BotRuntimeOptions): Promise<BotR
 			options.config.showcaseChannelId,
 			options.config.expectedBotUsername,
 		);
+		const collaborationBrowseService = new CollaborationBrowseService(
+			new SqliteCollaborationBrowseRepository(boundary),
+			transactionRunner,
+			clock,
+		);
 		const durableCommandExecutor = new DurableCommandExecutor(transactionRunner, new SqliteDurableCommandStore(boundary), { hash: hashCanonicalInput }, clock);
 		let inFlight = 0;
 		let drainResolve: (() => void) | undefined;
@@ -117,6 +124,7 @@ export async function createBotRuntime(options: BotRuntimeOptions): Promise<BotR
 				helpContact: options.config.helpContact,
 				collaborationDraftService,
 				collaborationPublicationService,
+				collaborationBrowseService,
 		});
 		const logger = new SafeLogger((entry) => options.logSink?.(JSON.stringify(entry)), clock, "bot");
 		bot.catch((error: BotError) => {
