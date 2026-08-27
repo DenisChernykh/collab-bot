@@ -46,7 +46,7 @@ P0-01 → P0-02
   → S0-01 → S0-02 → S0-03 → S0-04 → S0-05 → S0-06 → S0-07
   → S1-01 → S1-02
   → S2-01 → S2-02
-  → S3-01 → S3-02 → S3-03 → S3-04 → S3-C1
+  → S3-01 → S3-02 → S3-03 → S3-04 → S3-C1 → S3-C2
   → S4-01
 ```
 
@@ -74,7 +74,8 @@ P0-01 → P0-02
 | S3-02 | `c804e7d8c85b1de87ba6fb4bf41682bf107922d5` | feed and public deep links |
 | S3-03 | `b514e69383d479855c96380cfca34b676335acfc` | resumable quick-profile applications |
 | S3-04 | `65890ffcdbb4c00813e1542d1e6bc37c94ed583f` | serialized decisions and pairwise contacts |
-| S3-C1 | `SELF` | real-checkpoint collaboration card rendering correction |
+| S3-C1 | `bf9407f63398576bd8fa7dd13bcd2f209304e15e` | real-checkpoint collaboration card rendering correction |
+| S3-C2 | `SELF` | explicit personal Telegram platform opt-in |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -346,6 +347,23 @@ P0-01 → P0-02
   - Acceptance evidence: all collaboration format, target-profile and topic enums render through the canonical Russian labels; HTML-sensitive user input remains escaped; durable sends/edits explicitly use Telegram HTML mode; no automatic card delivery, feed behavior or database state was added.
 - **Stop conditions:** Fix requires a feed-policy change, schema migration, direct Telegram mutation outside the outbox or unescaped user content.
 
+#### S3-C2 — Explicit personal Telegram platform opt-in
+
+- **Status:** `completed`
+- **Objective:** Let a user deliberately use the current public Telegram username as the required public platform without automatically exposing service identity.
+- **Dependencies:** `S3-C1`; user-approved product amendment during the separately authorized S3 real checkpoint.
+- **Scope:** PRD/Technical Design privacy clarification, profile wizard opt-in, ordinary/quick-flow fake regressions and this evidence entry.
+- **Do not touch:** Automatic username publication, decimal Telegram ID visibility, post-match contact calculation, profile schema, feed/application policy or S4 scope.
+- **Invariants:** The username comes only from the current actor update and never from callback data; the button is absent without a valid username; a forged/stale/foreign action cannot create a platform; `telegram_user_id` remains private; accepted contact still recomputes current identity independently.
+- **Verification:** focused fake RED/GREEN, `pnpm check`, separate `pnpm test:e2e:fake`, `pnpm db:verify`, diff/secret scan and restart of the already authorized real S3 runtime.
+- **Evidence:**
+  - Commit SHA: `SELF` — local commit subject: `S3-C2: opt in personal Telegram profile`.
+  - Changed files: `docs/PRD.md`, `docs/TECHNICAL_DESIGN.md`, `src/bot/profile-bot.ts`, `test/e2e-fake/s1-02-profile-bot.test.ts`, `test/e2e-fake/s3-02-browse-bot.test.ts`, and this plan.
+  - Tests first: focused RED proved the personal username button and missing-username fail-closed response were absent; focused GREEN covers ordinary selection, quick-flow persistence and quick-flow no-username forgery in `2` files and `15` tests.
+  - Aggregate checks: Node `v24.18.0`, pnpm `11.15.1`; `pnpm check` PASS — unit `42`, integration `69`, runtime `30`, build; separate `pnpm test:e2e:fake` PASS — `18`; `pnpm db:verify` PASS.
+  - Acceptance evidence: the platform prompt explicitly states pre-accept visibility; a valid current username renders `Использовать @username`; the revision-bound callback contains only `self`, persists canonical `https://t.me/<username>` after the click and advances both ordinary and quick flows through their existing paths. Without username the button is absent, a forged action preserves the platform step and creates no profile.
+- **Stop conditions:** Implementation requires implicit consent, username in callback data, public Telegram ID, schema migration or weakening pairwise contact authorization.
+
 ### S4 — Shareable launch
 
 #### S4-01 — Simple admin hide, real smoke and shareable handoff
@@ -353,7 +371,7 @@ P0-01 → P0-02
 - **Status:** `pending`
 - **Objective:** Add the minimum moderation escape hatch, prove the complete flow and hand the author a bot link that can be shared manually.
 - **Requirements:** `LFR-09`; `LAC-07`, `LAC-10`–`LAC-12`.
-- **Dependencies:** `S3-C1`.
+- **Dependencies:** `S3-C2`.
 - **Scope:** Allowlisted lookup/hide, hide delivery intent, full fake journey, exact bot/channel preflight, separately authorized real journey and concise manual start/stop/restart/database-copy handoff.
 - **Do not touch:** restore, block/unblock, cascades, analytics, completion, scheduler, status/heartbeat, backup/LaunchAgent.
 - **Invariants:** Non-admin cannot hide; hidden card is absent from feed and rejects applications; contact already revealed is not revoked; Telegram delete failure does not make the card visible in authoritative feed.

@@ -36,7 +36,7 @@
 - миграции, foreign keys и базовая проверка целостности;
 - повтор Telegram update/callback не дублирует бизнес-решение;
 - Telegram network call не выполняется внутри SQLite transaction;
-- после accepted только паре вычисляется Telegram direct action; до этого Telegram identity не раскрывается;
+- после accepted только паре вычисляется Telegram direct action; до этого служебная Telegram identity автоматически не раскрывается, но пользователь может явно сохранить свой public username как публичную площадку;
 - ошибки видны в безопасных JSON logs, а процесс можно вручную перезапустить;
 - перед изменением реальных данных допускается ручная копия SQLite-файла при остановленном процессе.
 
@@ -291,7 +291,7 @@ interface CommandContext {
 - `ListAdminIncidents`;
 - `CalculatePilotFunnel`.
 
-Query DTO не возвращает Telegram identity до подтверждённого `accepted`. Pairwise contact view после accepted вычисляет action для второй стороны: `https://t.me/<current_username>` в приоритете, иначе inline `tg://user?id=<telegram_user_id>`. Если identity отсутствует или повреждена, adapter fail closed; request-contact handshake, relay и история переписки не входят в S3.
+Query DTO не возвращает служебную Telegram identity до подтверждённого `accepted`. Явно выбранная пользователем `https://t.me/<username>` является обычной публичной platform snapshot и не даёт доступа к decimal ID или pairwise contact view. После accepted этот view независимо вычисляет action для второй стороны: `https://t.me/<current_username>` в приоритете, иначе inline `tg://user?id=<telegram_user_id>`. Если identity отсутствует или повреждена, adapter fail closed; request-contact handshake, relay и история переписки не входят в S3.
 
 ### 5.4. Domain value types
 
@@ -422,7 +422,7 @@ WHERE status = 'active';
 
 Хотя бы одна platform обеспечивается use case/integration test.
 
-Public URL валидируется как абсолютный `https` URL длиной не более 2048 UTF-16 code units без credentials. Для ручного Telegram fallback допускается только канонический `https://t.me/<public_username>` с одним username path segment; invite-ссылки, `joinchat`, `+` links и private links отклоняются. Для остальных platform types MVP не проверяет соответствие hostname выбранной метке, чтобы не вводить хрупкий внешний справочник.
+Public URL валидируется как абсолютный `https` URL длиной не более 2048 UTF-16 code units без credentials. При наличии валидного текущего `ctx.from.username` wizard показывает revision-bound `Использовать @username`; только нажатие этой кнопки копирует канонический `https://t.me/<username>` и normalized username в platform snapshot. Username не включается в callback data, кнопка отсутствует без username, а подделанное действие fail closed. Для ручного Telegram fallback допускается тот же канонический URL с одним username path segment; invite-ссылки, `joinchat`, `+` links и private links отклоняются. Для остальных platform types MVP не проверяет соответствие hostname выбранной метке, чтобы не вводить хрупкий внешний справочник.
 
 ### 8.4. `profile_topics`
 
@@ -1057,7 +1057,7 @@ Business entities, operator audit и product events автоматически �
 
 ### 15.3. User data
 
-- Profile не собирает и не хранит phone/email/alternate contact. Telegram identity живёт в `telegram_users` и используется для direct action только после accepted authorization.
+- Profile не собирает и не хранит phone/email/alternate contact. Служебная Telegram identity живёт в `telegram_users` и используется для direct action только после accepted authorization; явный pre-match opt-in копирует только публичный username URL в `profile_platforms` и не раскрывает decimal ID.
 - Приоритет action: текущий `username` → `https://t.me/<username>`; fallback — `tg://user?id=<telegram_user_id>` с явным сообщением о приватности и возможной недоступности.
 - Если direct identity отсутствует или повреждена, S3 fail closed без частичного раскрытия; request-contact handshake, relay, chat history и moderation не реализуются.
 - Phone `request_contact` не вызывается автоматически; alternate contacts стороны обменивают самостоятельно в Telegram.
@@ -1399,8 +1399,8 @@ S3 checkpoint выполняет steps 1–6 и restart-проверку: это
 | PRD | Use case / owner | Data and invariant | Telegram entrypoint | Failure policy | Tests | Slice |
 |---|---|---|---|---|---|---|
 | FR-P01 | Create/UpdateProfile | `profiles`; partial UNIQUE active/user; nullable enrichment | `Мой профиль`, deferred create, quick application profile | duplicate/race returns current profile | unit, SQLite, adapter, E2E | S1/S3 |
-| FR-P02 | profile visibility query | `profile_platforms`; Telegram identity remains in `telegram_users` | profile card, accepted result | redact identity by default; unauthorized is neutral | unit, SQLite, E2E | S1 |
-| FR-P03 | channel selection adapter | platform chat ID/URL; request ID bound to session | profile wizard `request_chat` | inaccessible/missing username uses manual URL | adapter, real smoke | S1 |
+| FR-P02 | profile visibility query | `profile_platforms`; service identity remains in `telegram_users`; explicit username opt-in becomes a platform snapshot | profile card, accepted result | redact identity by default; unauthorized is neutral | unit, SQLite, E2E | S1 |
+| FR-P03 | personal username/channel selection adapter | current public username or channel chat ID/URL; callback/request ID bound to session | profile wizard opt-in / `request_chat` | missing personal username hides/fails closed; inaccessible channel username uses manual URL | adapter, real smoke | S1 |
 | FR-C01 | draft commands | nullable `collaborations`, topics, session; cancel cascade | `/new`, Back, `/cancel`, resume | invalid input preserves step; restart resumes | SQLite, adapter, restart | S2 |
 | FR-C02 | Publish/ReconcilePublication | publication/attempt/outbox ledger; known message before public | preview Publish, admin incident | known fail safe retry; ambiguous requires reconciliation | SQLite, adapter, runtime, smoke | S2 |
 | FR-C03 | EditPublishedCollaboration | first_application freeze; durable pending snapshot | `Мои коллаборации` → edit | known fail keeps active; ambiguous locks | unit, SQLite, adapter | S2/S3 |
@@ -1478,7 +1478,7 @@ Exit: fresh DB bootstrap, lint/test/build, duplicate command test и aggregate g
 
 - `/start` и главное меню;
 - telegram-user snapshot;
-- один profile и public platform; Telegram identity отдельно в `telegram_users`;
+- один profile и public platform; служебная Telegram identity отдельно в `telegram_users`, с явным opt-in копированием public username URL в площадку;
 - create/edit/view wizard;
 - минимальный grammY long-polling entrypoint, config/migration wiring, `getMe` identity check и basic signal shutdown;
 - restart и duplicate-update tests на fake Telegram adapter;
@@ -1585,7 +1585,7 @@ Redis, BullMQ и отдельный worker добавляются только �
 First-launch checklist:
 
 - [ ] Пройден `LAC-10` на fake Telegram.
-- [ ] Telegram direct action вычисляется только для принятой пары; до accepted identity не раскрывается.
+- [ ] Telegram direct action вычисляется только для принятой пары; до accepted служебная identity не раскрывается автоматически, а публичная username-ссылка возможна только через явный opt-in.
 - [ ] Duplicate update/callback не дублирует business state или delivery intent.
 - [ ] Bot API не вызывается внутри SQLite transaction.
 - [ ] Token, contact, raw input и opaque public/callback tokens отсутствуют в logs/fixtures/Git.

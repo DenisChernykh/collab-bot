@@ -278,6 +278,50 @@ describe("S1-02 fake Telegram profile journey", () => {
 			await rm(directory, { recursive: true, force: true });
 		}
 	});
+
+	it("offers the current Telegram username as an explicit public platform opt-in", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "collaboration-s1-02-personal-telegram-"));
+		const databasePath = join(directory, "app.sqlite");
+		const clock = new FakeClock(1_700_000_000_000);
+		const fake = new FakeTelegramApi({
+			token: "fake-token",
+			botInfo: { id: 777, is_bot: true, first_name: "Collab", username: "collab_bot" } as unknown as UserFromGetMe,
+		});
+		const boundary = new DatabaseBoundary(databasePath);
+		try {
+			const source = await MigrationSource.fromDirectory(migrationsPath);
+			await new MigrationRunner(source, clock).migrate(boundary);
+			const bot = new Bot("fake-token", { client: { fetch: fake.fetch } });
+			registerProfileBot(bot, {
+				profileService: new ProfileService(new SqliteProfileRepository(boundary), new DatabaseBoundaryTransactionRunner(boundary), clock),
+				sessionRepository: new SqliteProfileSessionRepository(boundary),
+				telegramUserRepository: new SqliteTelegramUserRepository(boundary),
+				durableCommandExecutor: new DurableCommandExecutor(new DatabaseBoundaryTransactionRunner(boundary), new SqliteDurableCommandStore(boundary), { hash: hashCanonicalInput }, clock),
+				clock,
+				helpContact: "@helpdesk",
+			});
+			await bot.init();
+			await bot.handleUpdate({ update_id: 1, message: privateMessage(1, "/profile") });
+			await bot.handleUpdate({ update_id: 2, callback_query: callback(2, "profile:create") });
+			await bot.handleUpdate({ update_id: 3, message: privateMessage(3, "Блогер") });
+			await bot.handleUpdate({ update_id: 4, message: privateMessage(4, "Alice Creator") });
+			await bot.handleUpdate({ update_id: 5, message: privateMessage(5, "-") });
+			await bot.handleUpdate({ update_id: 6, message: privateMessage(6, "-") });
+
+			const personalCallback = callbackData(fake, "profile:platform:self");
+			expect(personalCallback).not.toContain("alice");
+			expect(fake.lastMessage()?.reply_markup?.inline_keyboard?.flat()).toContainEqual(expect.objectContaining({ text: "Использовать @alice" }));
+			expect(String(fake.lastMessage()?.text)).toContain("будет видна другим пользователям до принятия отклика");
+			await bot.handleUpdate({ update_id: 7, callback_query: callback(7, personalCallback) });
+
+			expect(await new SqliteProfileSessionRepository(boundary).findActive("100", clock.now().getTime())).toMatchObject({
+				state: { step: "audience", draft: { platform: { platformType: "telegram", url: "https://t.me/alice", username: "alice" } } },
+			});
+		} finally {
+			await boundary.close();
+			await rm(directory, { recursive: true, force: true });
+		}
+	});
 });
 
 function privateMessage(messageId: number, text?: string): NonNullable<Update["message"]> {

@@ -179,6 +179,53 @@ describe("S3-02 fake Telegram browse journey", () => {
 		}
 	});
 
+	it("does not offer or accept the personal Telegram platform opt-in without a public username", async () => {
+		const fixture = await createSeededFixture("collaboration-s3-03-no-personal-username-");
+		const { directory, fake, runtime } = fixture;
+		try {
+			await runtime.bot.handleUpdate({ update_id: 1, message: privateMessageForUser(1, 415, `/start c_${FIRST_TOKEN}`) });
+			await runtime.bot.handleUpdate({ update_id: 2, callback_query: callbackForUser(2, 415, callbackData(fake, `application:start:d:${FIRST_TOKEN}`)) });
+			await runtime.bot.handleUpdate({ update_id: 3, callback_query: callbackForUser(3, 415, callbackData(fake, "profile:type:blogger")) });
+			await runtime.bot.handleUpdate({ update_id: 4, message: privateMessageForUser(4, 415, "No Username Applicant") });
+
+			expect(callbackValues(fake).some((value) => value.startsWith("profile:platform:self"))).toBe(false);
+			const [session] = await runtime.boundary.query<{ state_json: string; revision: number }>("SELECT state_json, revision FROM profile_sessions WHERE telegram_user_id = '415'");
+			expect(session).toBeDefined();
+			if (session === undefined) throw new Error("profile session was not created");
+			const state = JSON.parse(session.state_json) as { generation: string };
+			const forged = `profile:platform:self:g${state.generation}:r${session.revision}`;
+			await runtime.bot.handleUpdate({ update_id: 5, callback_query: callbackForUser(5, 415, forged) });
+
+			expect(String(fake.lastMessage()?.text)).toContain("публичного @username");
+			expect(await profileSessionState(runtime.boundary, "415")).toMatchObject({ step: "platform" });
+			expect(await runtime.boundary.query("SELECT id FROM profiles WHERE telegram_user_id = '415'")).toEqual([]);
+		} finally {
+			await runtime.shutdown();
+			await rm(directory, { recursive: true, force: true });
+		}
+	});
+
+	it("persists an explicitly selected personal Telegram platform in the quick application flow", async () => {
+		const fixture = await createSeededFixture("collaboration-s3-03-personal-username-");
+		const { directory, fake, runtime } = fixture;
+		try {
+			await runtime.bot.handleUpdate({ update_id: 1, message: privateMessageForUser(1, 416, `/start c_${FIRST_TOKEN}`, "quick_creator") });
+			await runtime.bot.handleUpdate({ update_id: 2, callback_query: callbackForUser(2, 416, callbackData(fake, `application:start:d:${FIRST_TOKEN}`), "quick_creator") });
+			await runtime.bot.handleUpdate({ update_id: 3, callback_query: callbackForUser(3, 416, callbackData(fake, "profile:type:blogger"), "quick_creator") });
+			await runtime.bot.handleUpdate({ update_id: 4, message: privateMessageForUser(4, 416, "Quick Telegram Applicant", "quick_creator") });
+			expect(fake.lastMessage()?.reply_markup?.inline_keyboard?.flat()).toContainEqual(expect.objectContaining({ text: "Использовать @quick_creator" }));
+			await runtime.bot.handleUpdate({ update_id: 5, callback_query: callbackForUser(5, 416, callbackData(fake, "profile:platform:self"), "quick_creator") });
+
+			expect(await profileSessionState(runtime.boundary, "416")).toMatchObject({ step: "application_message" });
+			expect(await runtime.boundary.query("SELECT pp.url, pp.username FROM profile_platforms pp JOIN profiles p ON p.id = pp.profile_id WHERE p.telegram_user_id = '416' AND p.status = 'active'")).toEqual([{
+				url: "https://t.me/quick_creator", username: "quick_creator",
+			}]);
+		} finally {
+			await runtime.shutdown();
+			await rm(directory, { recursive: true, force: true });
+		}
+	});
+
 	it("keeps a saved quick profile when Back or Cancel leaves application_message", async () => {
 		const fixture = await createSeededFixture("collaboration-s3-03-quick-saved-");
 		const { directory, fake, runtime } = fixture;

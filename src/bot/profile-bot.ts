@@ -44,8 +44,8 @@ import { DomainValidationError, parseCollaborationFormat, parsePlatformType, par
 
 const PROFILE_STATIC_CALLBACKS = new Set(["menu:home", "profile:create", "profile:resume", "profile:view", "profile:edit", "profile:unavailable", "collaboration:start", "collaboration:resume", "collaboration:own", "application:own", "browse:start"]);
 const CALLBACK_ACTION_TTL_MS = 24 * 60 * 60 * 1_000;
-const PROFILE_LINK_PROMPT = "Добавьте ссылку, по которой другие участники смогут познакомиться с вами.";
-const PROFILE_LINK_CHOICE_HINT = "Нажмите «Выбрать Telegram-канал» или «Указать другую ссылку». Для сайта или соцсети выберите «Указать другую ссылку» и отправьте ссылку.";
+const PROFILE_LINK_PROMPT = "Добавьте публичную площадку. Она будет видна другим пользователям до принятия отклика.";
+const PROFILE_LINK_CHOICE_HINT = "Выберите личный Telegram-профиль или Telegram-канал. Для другой публичной площадки нажмите «Указать другую ссылку».";
 const PROFILE_TYPE_LABELS: Record<ProfileType, string> = {
 	blogger: "Блогер",
 	telegram_channel: "Telegram-канал",
@@ -565,7 +565,7 @@ async function advanceText(ctx: Context, options: ProfileBotOptions, userId: str
 				return;
 			}
 			const saved = await saveState(options, userId, { ...state, step: "platform", draft: { ...state.draft, description: value } });
-			await ctx.reply(PROFILE_LINK_PROMPT, { reply_markup: platformKeyboard(saved) });
+			await ctx.reply(PROFILE_LINK_PROMPT, { reply_markup: platformKeyboard(saved, ctx.from?.username) });
 			return;
 		}
 		case "platform":
@@ -711,7 +711,22 @@ async function choosePlatform(ctx: Context, options: ProfileBotOptions, userId: 
 		let platformType: PlatformType;
 		const session = expected === undefined ? await activeSession(options, userId) : await sessionAtRevision(ctx, options, userId, expected);
 		if (session === undefined) { await ctx.reply("Не удалось найти сохранённое заполнение. Откройте «👤 Мой профиль» и начните заново."); return; }
-		try { platformType = parsePlatformType(raw); } catch { await ctx.reply(PROFILE_LINK_CHOICE_HINT, { reply_markup: platformKeyboard(session) }); return; }
+		if (raw === "self") {
+			const username = ctx.from?.username === undefined ? undefined : normalizeTelegramUsername(ctx.from.username);
+			if (username === undefined) {
+				await ctx.reply("Telegram не передал публичного @username. Выберите Telegram-канал или укажите другую публичную ссылку.", { reply_markup: platformKeyboard(session) });
+				return;
+			}
+			const platform = { platformType: "telegram" as const, url: `https://t.me/${username}`, username };
+			if (isApplicationState(session.state)) {
+				await finishQuickApplicationProfile(ctx, options, userId, withoutRequestId({ ...session.state, draft: { ...session.state.draft, platform } }));
+				return;
+			}
+			const saved = await saveState(options, userId, withoutRequestId({ ...session.state, step: "audience", draft: { ...session.state.draft, platform } }));
+			await renderStep(ctx, options, userId, saved);
+			return;
+		}
+		try { platformType = parsePlatformType(raw); } catch { await ctx.reply(PROFILE_LINK_CHOICE_HINT, { reply_markup: platformKeyboard(session, ctx.from?.username) }); return; }
 		if (platformType === "telegram") {
 			const requestId = uniqueRequestId(requestIdFactory(), session.state.requestId);
 			await saveState(options, userId, { ...session.state, step: "platform", requestId });
@@ -1408,7 +1423,7 @@ async function renderStep(ctx: Context, options: ProfileBotOptions, userId: stri
 		case "display_name": await ctx.reply("Как назвать ваш профиль? Это может быть ваше имя, название канала, заведения или бренда (2–100 символов).", { reply_markup: cancelKeyboard(session) }); return;
 		case "topics": await ctx.reply("Укажите до 3 тем через запятую: Lifestyle, Еда и рестораны, Красота, Путешествия, Город, События, Семья, Спорт, Бизнес, Другое. Поле можно пропустить.", { reply_markup: optionalKeyboard(session, hasTopics(state.draft)) }); return;
 		case "description": await ctx.reply("Опишите профиль (10–500 символов) или пропустите поле.", { reply_markup: optionalKeyboard(session, state.draft.description !== undefined && state.draft.description !== null) }); return;
-		case "platform": await ctx.reply(PROFILE_LINK_PROMPT, { reply_markup: platformKeyboard(session) }); return;
+		case "platform": await ctx.reply(PROFILE_LINK_PROMPT, { reply_markup: platformKeyboard(session, ctx.from?.username) }); return;
 		case "platform_url": await ctx.reply("Укажите другую публичную ссылку https://...", { reply_markup: cancelKeyboard(session) }); return;
 		case "audience": await ctx.reply("Укажите размер аудитории числом или пропустите поле.", { reply_markup: optionalKeyboard(session, state.draft.platform?.audienceSize !== undefined) }); return;
 		case "review": await renderReview(ctx, options, userId); return;
@@ -1716,8 +1731,11 @@ function typeKeyboard(identity: SessionIdentity): InlineKeyboard {
 	if ("state" in identity && isApplicationState(identity.state)) keyboard.row().text("← Назад", revisionCallback("profile:back", identity)).row().text("Отменить", revisionCallback("profile:cancel", identity));
 	return keyboard;
 }
-function platformKeyboard(identity: SessionIdentity): InlineKeyboard {
-	const keyboard = new InlineKeyboard().text("Выбрать Telegram-канал", revisionCallback("profile:platform:telegram", identity)).row().text("Указать другую ссылку", revisionCallback("profile:platform:other", identity));
+function platformKeyboard(identity: SessionIdentity, currentUsername?: string): InlineKeyboard {
+	const username = currentUsername === undefined ? undefined : normalizeTelegramUsername(currentUsername);
+	const keyboard = new InlineKeyboard();
+	if (username !== undefined) keyboard.text(`Использовать @${username}`, revisionCallback("profile:platform:self", identity)).row();
+	keyboard.text("Выбрать Telegram-канал", revisionCallback("profile:platform:telegram", identity)).row().text("Указать другую ссылку", revisionCallback("profile:platform:other", identity));
 	if ("state" in identity && isApplicationState(identity.state)) keyboard.row().text("← Назад", revisionCallback("profile:back", identity)).row().text("Отменить", revisionCallback("profile:cancel", identity));
 	return keyboard;
 }
