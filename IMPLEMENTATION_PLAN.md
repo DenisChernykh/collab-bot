@@ -89,6 +89,7 @@ P0-01 → P0-02
 | R1-02 | `SELF` | consumer-oriented applications use cases and ports |
 | R1-03 | `SELF` | feature-owned applications persistence and composition |
 | R1-04 | `SELF` | single durable Telegram ingress seam |
+| R1-05A | `SELF` | feature-owned profile Telegram composer |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -514,7 +515,7 @@ P0-01 → P0-02
 
 #### R1-05A — Extract the profile Telegram composer
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Передать profile wizard/render/session routing feature-owned presentation без изменения quick-profile continuation.
 - **Requirements:** `LFR-01`, `LAC-01`, `LAC-03`; TD §10.3, §10.5.
 - **Dependencies:** `R1-04`.
@@ -526,12 +527,12 @@ P0-01 → P0-02
 - **Tests first:** ordinary profile and quick-profile continuation characterization.
 - **Verification:** focused profile fake tests; all e2e-fake; architecture; `pnpm check`; diff scan.
 - **Exit criteria:** profile handlers принадлежат feature composer; один commit `R1-05A: extract profile Telegram composer`.
-- **Completion evidence:** pending.
+- **Completion evidence:** Commit SHA: `SELF`; extracted profile message/callback routing, wizard/session transitions, exact profile copy/keyboards/codecs and profile presentation helpers into a feature-owned Composer, while root keeps global command precedence, collaboration-first `/cancel`, durable ingress, one callback acknowledgement and opaque `cb_*`. Cross-feature create-collaboration and submit-application continuations remain explicit injected hooks; no application policy moved. Four source/test files plus this plan changed; profile persistence/use-case policy, collaboration/application/moderation behavior, runtime/config and SQL stayed untouched. Test-first RED was the missing profile composer module; focused ordinary/quick-profile/collaboration/application fake tests PASS (4 files, 23 tests); all fake E2E PASS (5 files, 24 tests); architecture PASS (105 modules, 316 dependencies); `pnpm check` PASS (66 unit, 81 integration, 30 runtime tests and build); `git diff --check` PASS. Critical self-review found and fixed accidental reachability of malformed/unversioned profile type/platform callbacks; independent read-only review then matched message/callback order, strings/payloads, restart/Back/Cancel, continuations and durable proxy/post-commit behavior and returned PASS with no findings. No credential, real Telegram, remote or production mutation.
 - **Stop conditions:** extraction меняет session precedence or public presentation contract.
 
 #### R1-05B — Extract the collaboration Telegram composer
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Передать draft/preview/publication routing feature-owned presentation.
 - **Requirements:** `LFR-02`–`LFR-03`, `LAC-02`; TD §9.1, §10.3, §11.
 - **Dependencies:** `R1-05A`.
