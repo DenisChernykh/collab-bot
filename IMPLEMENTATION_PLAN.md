@@ -1,7 +1,7 @@
 # Collaboration Bot — solo-launch implementation plan
 
 - Статус документа: `Approved execution registry`
-- Версия: `0.8`
+- Версия: `0.9`
 - Дата: `2026-08-27`
 - Цель: как можно быстрее получить работающий Telegram-цикл для ручного распространения
 - Ограничение: один stage за пользовательскую авторизацию, один локальный commit на unit, без push/PR/deploy
@@ -41,6 +41,7 @@
 | S3 — Marketplace vertical | `completed` | 4 | Два пользователя проходят отклик, решение и получают Telegram action |
 | S4 — Shareable launch | `completed` | 1 | Admin hide, полный real journey и готовая к распространению ссылка |
 | FUT — Telegram audience snapshot | `completed` | 1 | Best-effort снимок аудитории Telegram после сохранения профиля |
+| R1 — Post-launch maintainability | `in_progress` | 14 | Те же пользовательские контракты с feature-owned кодом и проверяемыми границами |
 
 ```text
 P0-01 → P0-02
@@ -50,6 +51,9 @@ P0-01 → P0-02
   → S3-01 → S3-02 → S3-03 → S3-04 → S3-C1 → S3-C2
   → S4-01
   → FUT-01
+  → R1-00 → R1-01 → R1-02 → R1-03 → R1-04
+  → R1-05A → R1-05B → R1-05C
+  → R1-06A → R1-06B → R1-06C → R1-07 → R1-08 → R1-09
 ```
 
 ## 4. Завершённый ledger
@@ -80,6 +84,7 @@ P0-01 → P0-02
 | S3-C2 | `SELF` | explicit personal Telegram platform opt-in |
 | S4-01 | `SELF` | allowlisted hide, complete fake/real journey and manual launch handoff |
 | FUT-01 | `SELF` | one-time Telegram audience snapshot with internal provenance |
+| R1-00 | `SELF` | decision-complete post-launch maintainability stage |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -407,6 +412,255 @@ P0-01 → P0-02
   - Review result: independent read-only stage-final review — PASS; no credential/privacy exposure, authoritative-data corruption, duplicate effect, broken core journey, unrunnable stage or Later-scope expansion found. No second review cycle was run.
   - Notes/deviations: no dependencies, Node/pnpm contract, restore, block/unblock, analytics, completion, scheduler, LaunchAgent or automatic backup were added. The real checkpoint used one manual foreground topology and one manual stopped-state SQLite copy; it does not establish hosted availability, 24/7, production readiness or SLA. No credential value, private database, backup, numeric identity, deep-link token or internal moderation reason is committed. No remote, push, PR, merge or deploy was performed.
 - **Stop conditions:** Requires block/restore policy, wrong bot/channel identity, missing explicit real-Telegram authorization, non-green local gate or risk to another bot.
+
+### R1 — Post-launch maintainability
+
+- **Status:** `in_progress` — отдельно авторизованный post-launch stage после завершённого `FUT-01`; продуктовый scope не расширяется.
+- **Objective:** Сохранить доказанное внешнее поведение, но сделать ownership feature-кода, import graph, Telegram presentation, runtime lifecycle, test seams и persistence-модель явными и независимо проверяемыми.
+- **Requirements:** неизменные `LFR-01`–`LFR-11`, `LAC-01`–`LAC-12`; TD §2.1, §4, §7, §10, §13, §20.
+- **Dependencies:** `FUT-01` completed на `32441e59510a79852aceb47a73ca5338fa529e4c`.
+- **Stage invariants:** неизменные команды, callback/deep-link payloads, пользовательские тексты, SQLite schema/migration history, idempotency/receipt/outbox semantics, contact privacy, один process и одна SQLite; Bot API только после commit.
+- **Stage exclusions:** NestJS, Prisma, Redis/BullMQ, scheduler, heartbeat, cleanup, backup/LaunchAgent, generic shared package, credentials, real Telegram, remote/push/PR/merge/deploy.
+- **Stage gate:** `pnpm architecture`, `pnpm check`, `pnpm test:e2e:fake`, `pnpm db:verify`, `git diff --check`, staged secret scan и один независимый critical review.
+
+#### R1-00 — Define the post-launch maintainability stage
+
+- **Status:** `completed`
+- **Objective:** Зафиксировать decision-complete unit order до runtime/source изменений.
+- **Requirements:** правила исполнения этого плана; TD §2.1, §4, §7, §10, §13, §20.
+- **Dependencies:** `FUT-01` completed.
+- **Read first:** `AGENTS.md`; PRD §19.1, §20.1; TD §2.1–§2.4, §4, §7, §10, §13, §20, §22.1; deferred-capabilities document; этот план.
+- **Preconditions:** `main` и `origin/main` на `32441e59510a79852aceb47a73ca5338fa529e4c`; clean tree; Node `v24.18.0`; pnpm `11.15.1`.
+- **Scope:** только этот план; определить R1 units, ordering, invariants, checks и stop conditions.
+- **Do not touch:** source, tests, migrations, dependencies, PRD/TD, runtime, Telegram или данные.
+- **Invariants:** один stage/один current unit; каждый implementation unit имеет отдельный commit и ограниченный diff; schema-validator остаётся решением stage gate, а не автоматически добавленной зависимостью.
+- **Tests first:** документарный audit source precedence, live statuses, exact predecessor и deferred boundary.
+- **Verification:** `pnpm check`; `pnpm db:verify`; `git diff --check`; exact changed-file check.
+- **Exit criteria:** R1 и все cards описаны; один commit `R1-00: define post-launch maintainability stage`; clean tree; `R1-01` становится current unit.
+- **Completion evidence:** Commit SHA: `SELF`; changed only `IMPLEMENTATION_PLAN.md`; preflight confirmed clean `main`/`origin/main` at `32441e59510a79852aceb47a73ca5338fa529e4c`, Node `v24.18.0`, pnpm `11.15.1`; `pnpm check` PASS (61 unit, 80 integration, 30 runtime tests and build); `pnpm db:verify` PASS; `git diff --check` and exact changed-file check PASS; no source, test, migration, dependency, credential, Telegram, remote or production mutation.
+- **Stop conditions:** PRD/TD требуют нового продуктового решения или requested order нельзя разделить без нарушения внешнего контракта.
+
+#### R1-01 — Replace regex import checks with an import-graph gate
+
+- **Status:** `in_progress`
+- **Objective:** Проверять реальные import edges, cycles и направления слоёв вместо чтения source регулярным выражением.
+- **Requirements:** TD §4, §20.1, §22.1.
+- **Dependencies:** `R1-00`.
+- **Read first:** текущие package/TS/ESLint configs; `test/unit/s0-04-import-boundary.test.ts`; starter `.dependency-cruiser.cjs` только как reference.
+- **Preconditions:** exact predecessor `R1-00`; Node/pnpm contract подтверждён перед dependency change.
+- **Scope:** `dependency-cruiser` dev dependency; минимальная project-owned config; `pnpm architecture`; policy fixtures для current layer-first и будущего `src/modules/<feature>/<layer>` layout; aggregate gate.
+- **Do not touch:** runtime, product services, SQL/migrations, Telegram behavior.
+- **Invariants:** запреты соответствуют текущему TD; domain не импортирует application/infrastructure/presentation/runtime; application не импортирует infrastructure/presentation/runtime; нет circular/unresolvable imports; будущие module-local слои не теряют enforcement.
+- **Tests first:** fixture, которая проходит корректный graph и падает на domain→infrastructure и application→runtime.
+- **Verification:** focused policy test; `pnpm architecture`; `pnpm check`; `pnpm db:verify`; diff/secret scans.
+- **Exit criteria:** regex-test заменён executable import-graph policy; один commit `R1-01: enforce architectural import graph`.
+- **Completion evidence:** pending.
+- **Stop conditions:** несовместимая toolchain dependency, undocumented live edge требует решения, или gate зелёный только с broad allowlist.
+
+#### R1-02 — Split the applications application boundary
+
+- **Status:** `pending`
+- **Objective:** Выделить use cases и consumer-oriented ports для submit, decisions, recruitment, contacts и read queries.
+- **Requirements:** TD §4–§5, §9.2–§9.6; `LFR-05`–`LFR-08`, `LAC-03`–`LAC-06`.
+- **Dependencies:** `R1-01`.
+- **Read first:** application service, focused unit/integration tests, callback and outbox contracts.
+- **Preconditions:** architecture gate покрывает `src/modules/**`.
+- **Scope:** pilot `src/modules/applications/application`; узкие ports/use cases; временный совместимый feature API для текущих callers; без SQL-переноса.
+- **Do not touch:** repositories/SQL, bot routing, runtime lifecycle, schema/migrations, copy или callback encoding.
+- **Invariants:** exact result unions, transaction/outbox atomicity, idempotency keys, capacity guards и contact privacy сохраняются.
+- **Tests first:** focused consumer-port/use-case test, затем существующие S3-03/S3-04 tests.
+- **Verification:** focused unit/integration; architecture; `pnpm check`; `pnpm test:e2e:fake`; `pnpm db:verify`; diff/secret scans.
+- **Exit criteria:** каждый applications workflow зависит только от нужного порта; один commit `R1-02: split applications use-case boundaries`.
+- **Completion evidence:** pending.
+- **Stop conditions:** требуется изменить product/outbox contract, добавить generic abstraction без второго consumer или выйти за unit boundary.
+
+#### R1-03 — Give applications feature-owned SQLite composition
+
+- **Status:** `pending`
+- **Objective:** Отделить application persistence/read models от browse adapter и подключить feature через одну composition factory.
+- **Requirements:** TD §4.2–§4.3, §7, §9.2–§9.6.
+- **Dependencies:** `R1-02`.
+- **Read first:** collaboration browse/application repository, S3-02/S3-03/S3-04 integration tests, runtime composition.
+- **Preconditions:** узкие applications ports стабильны.
+- **Scope:** feature-owned SQLite applications adapter(s), composition factory и public feature contract; browse сохраняет только собственные queries/filtering.
+- **Do not touch:** migrations/schema, query policy, Telegram presentation, runtime lifecycle.
+- **Invariants:** тот же `DatabaseBoundary`; SQL predicates/order/affected-row guards/mappers и transaction context неизменны; business state и delivery intents атомарны.
+- **Tests first:** characterize browse/application ownership and concurrent last-slot behavior before cutover.
+- **Verification:** S3-02/S3-03/S3-04 integration; architecture; `pnpm check`; fake journey; `pnpm db:verify`; diff/secret scans.
+- **Exit criteria:** browse adapter больше не реализует applications store; runtime получает feature composition; один commit `R1-03: own application persistence by feature`.
+- **Completion evidence:** pending.
+- **Stop conditions:** нужна migration, query ownership неоднозначен или перенос меняет SQL semantics.
+
+#### R1-04 — Establish a single durable grammY ingress seam
+
+- **Status:** `pending`
+- **Objective:** Сохранить один receipt/transaction envelope и дать feature composers безопасную точку подключения.
+- **Requirements:** TD §4.1, §10.1–§10.4; `LFR-10`, `LAC-08`.
+- **Dependencies:** `R1-03`.
+- **Read first:** root bot registration, durable reply collector, callback executor, fake Telegram tests.
+- **Preconditions:** applications feature API не требует concrete service type.
+- **Scope:** root ingress shell/router и focused characterization test; `cb_*` остаётся отдельным callback-action path; другие updates проходят `runDurable` ровно один раз.
+- **Do not touch:** product policy, copy/keyboards, callback/session formats, Bot API transport или runtime lifecycle.
+- **Invariants:** replies/callback ack отправляются после commit; actor binding и replay сохраняются; один update достигает ровно одного feature route.
+- **Tests first:** duplicate update, opaque callback и post-commit reply routing tests.
+- **Verification:** focused fake tests; all e2e-fake; architecture; `pnpm check`; diff/secret scans.
+- **Exit criteria:** feature middleware может работать на durable proxy context; один commit `R1-04: establish durable Telegram routing seam`.
+- **Completion evidence:** pending.
+- **Stop conditions:** middleware ordering меняет replay/ack или нужен новый context framework.
+
+#### R1-05A — Extract the profile Telegram composer
+
+- **Status:** `pending`
+- **Objective:** Передать profile wizard/render/session routing feature-owned presentation без изменения quick-profile continuation.
+- **Requirements:** `LFR-01`, `LAC-01`, `LAC-03`; TD §10.3, §10.5.
+- **Dependencies:** `R1-04`.
+- **Read first:** profile bot handlers, profile session contracts, profile fake journeys.
+- **Preconditions:** durable ingress seam proven.
+- **Scope:** profile composer и его presentation helpers; root монтирует composer.
+- **Do not touch:** profile use-case policy, persistence, copy, callbacks, config/runtime.
+- **Invariants:** command-before-session routing, Back/Cancel/restart, channel picker/fallback и explicit personal Telegram opt-in неизменны.
+- **Tests first:** ordinary profile and quick-profile continuation characterization.
+- **Verification:** focused profile fake tests; all e2e-fake; architecture; `pnpm check`; diff scan.
+- **Exit criteria:** profile handlers принадлежат feature composer; один commit `R1-05A: extract profile Telegram composer`.
+- **Completion evidence:** pending.
+- **Stop conditions:** extraction меняет session precedence or public presentation contract.
+
+#### R1-05B — Extract the collaboration Telegram composer
+
+- **Status:** `pending`
+- **Objective:** Передать draft/preview/publication routing feature-owned presentation.
+- **Requirements:** `LFR-02`–`LFR-03`, `LAC-02`; TD §9.1, §10.3, §11.
+- **Dependencies:** `R1-05A`.
+- **Read first:** collaboration handlers/renderers/session contracts and fake journeys.
+- **Preconditions:** root/profile routing stable.
+- **Scope:** collaboration composer и presentation helpers; root монтирует composer.
+- **Do not touch:** collaboration policy, repository, publication/outbox semantics, copy/callback encoding.
+- **Invariants:** draft resume/back/cancel/preview/publish and known-result delivery behavior unchanged.
+- **Tests first:** stale/replayed collaboration callbacks and restart journey.
+- **Verification:** focused collaboration fake tests; all e2e-fake; architecture; `pnpm check`; diff scan.
+- **Exit criteria:** collaboration handlers принадлежат feature composer; один commit `R1-05B: extract collaboration Telegram composer`.
+- **Completion evidence:** pending.
+- **Stop conditions:** extraction changes durable session or publication behavior.
+
+#### R1-05C — Extract marketplace and moderation Telegram composers
+
+- **Status:** `pending`
+- **Objective:** Передать feed/deep-link/applications/author-management/moderation routing feature-owned presentation.
+- **Requirements:** `LFR-04`–`LFR-09`, `LAC-03`–`LAC-10`; TD §9.2–§9.6, §9.10, §10.6.
+- **Dependencies:** `R1-05B`.
+- **Read first:** marketplace/moderation handlers, applications API, profile continuation and full fake journey.
+- **Preconditions:** profile/collaboration composers stable.
+- **Scope:** marketplace/applications and moderation composers; root keeps only global ingress/error/mounting.
+- **Do not touch:** product policy, SQL, copy, callback/deep-link encoding, runtime lifecycle.
+- **Invariants:** profile continuation handoff, own lists, decisions, pair contacts, admin hide and actor-bound callbacks unchanged.
+- **Tests first:** quick-profile resume, stale/foreign callbacks and admin hide routing.
+- **Verification:** all e2e-fake; focused application/moderation tests; architecture; `pnpm check`; `pnpm db:verify`; diff/secret scans.
+- **Exit criteria:** root registration не содержит feature decisions; один commit `R1-05C: extract marketplace Telegram composers`.
+- **Completion evidence:** pending.
+- **Stop conditions:** route ownership requires product change or one update can reach multiple features.
+
+#### R1-06A — Extract the delivery worker lifecycle
+
+- **Status:** `pending`
+- **Objective:** Изолировать ordered delivery cycle, wakeable delay и stop-new-work behavior от bot runtime.
+- **Requirements:** TD §13.1, §13.4, §20.4; `LFR-11`.
+- **Dependencies:** `R1-05C`.
+- **Read first:** delivery runner, runtime loop and runtime tests.
+- **Preconditions:** presentation no longer changes runtime dependencies.
+- **Scope:** `DeliveryWorker.run(signal)`/stop contract and focused tests; exact current cycle order.
+- **Do not touch:** second process, scheduler, active provider-call cancellation, retry policy or persistence.
+- **Invariants:** recover → terminal projection → expiration → stale projection supersede → delivery; concurrency one; shutdown awaits in-flight run.
+- **Tests first:** stop during delay, no overlapping cycles, in-flight completion.
+- **Verification:** focused runtime/delivery tests; architecture; `pnpm check`; fake journey; diff scan.
+- **Exit criteria:** runtime no longer owns timer loop; one commit `R1-06A: isolate delivery worker lifecycle`.
+- **Completion evidence:** pending.
+- **Stop conditions:** implementation requires new scheduler/state or changes delivery semantics.
+
+#### R1-06B — Separate object graph from BotRuntime lifecycle
+
+- **Status:** `pending`
+- **Objective:** Сделать composition side-effect free и сузить runtime до start/stop orchestration.
+- **Requirements:** TD §3.2, §4.1, §13.4, §20.4.
+- **Dependencies:** `R1-06A`.
+- **Read first:** bot runtime, composition dependencies, preflight and lifecycle tests.
+- **Preconditions:** delivery worker has explicit lifecycle.
+- **Scope:** `composeBotApplication`, narrow `BotRuntime`, update drain/close-resources contracts; compatible `createBotRuntime` entrypoint during test cutover.
+- **Do not touch:** process signals/env/files, config fields, product policy or runtime topology.
+- **Invariants:** migration → identity/channel preflight → recovery/delivery → polling; reverse shutdown; SQLite closes once after in-flight updates.
+- **Tests first:** configure-without-start, start failure cleanup and idempotent stop.
+- **Verification:** runtime/preflight tests; all e2e-fake; architecture; `pnpm check`; `pnpm db:verify`; diff scan.
+- **Exit criteria:** object graph and lifecycle are independent; one commit `R1-06B: separate bot composition and runtime`.
+- **Completion evidence:** pending.
+- **Stop conditions:** lifecycle order/drain cannot be proven or requires Later hardening.
+
+#### R1-06C — Make process/config/filesystem bootstrap thin
+
+- **Status:** `pending`
+- **Objective:** Оставить CLI только владельцем process signals и запуска готового runtime.
+- **Requirements:** TD §3.2, §13.4, §16, §20.4.
+- **Dependencies:** `R1-06B`.
+- **Read first:** CLI, env loader/private-path checks and runtime tests.
+- **Preconditions:** BotRuntime exposes stable start/stop contract.
+- **Scope:** process runner/signal coordinator, env-file loader, private runtime path policy и thin CLI.
+- **Do not touch:** config variables, credentials, production files, LaunchAgent or shutdown policy expansion.
+- **Invariants:** SIGINT/SIGTERM one-shot shutdown, same exit behavior, env/file permissions and bot identity checks unchanged.
+- **Tests first:** signal-before/after-start and config/path failure characterization.
+- **Verification:** focused config/runtime tests; architecture; `pnpm check`; fake journey; diff/secret scans.
+- **Exit criteria:** CLI has no object graph or filesystem policy; one commit `R1-06C: thin process bootstrap boundaries`.
+- **Completion evidence:** pending.
+- **Stop conditions:** requires real process/Telegram or changes externally visible CLI/config contract.
+
+#### R1-07 — Consolidate production-like test support
+
+- **Status:** `pending`
+- **Objective:** Убрать повторяемую setup/teardown composition из application, runtime и fake E2E tests.
+- **Requirements:** TD §20.2–§20.5; `LAC-09`–`LAC-11`.
+- **Dependencies:** `R1-06C`.
+- **Read first:** current temporary DB, runtime and fake Telegram fixtures.
+- **Preconditions:** production composition/lifecycle seams stable.
+- **Scope:** local `test/support` helpers для fresh migrated SQLite, applications composition, fake runtime и Telegram update/assertion builders; минимум три реальных consumers.
+- **Do not touch:** production test hooks, Testcontainers, hidden global setup, singleton DB or fake/real evidence boundary.
+- **Invariants:** fresh temporary DB per test, real migrations, explicit cleanup/restart semantics and distinct FakeTelegramApi/FakeTelegramTransport.
+- **Tests first:** repeated fixture run and failure-path cleanup.
+- **Verification:** migrated suites separately/together; all e2e-fake; `pnpm check`; `pnpm db:verify`; architecture; diff scan.
+- **Exit criteria:** duplicated setup заменён общими helpers с несколькими consumers; один commit `R1-07: consolidate production-like test support`.
+- **Completion evidence:** pending.
+- **Stop conditions:** helper имеет одного consumer, скрывает lifecycle или массовый cutover выходит за unit boundary.
+
+#### R1-08 — Make raw SQL the only persistence model
+
+- **Status:** `pending`
+- **Objective:** Убрать теневой Drizzle mapping и закрепить SQL migrations + typed rows/mappers как единственную persistence-модель.
+- **Requirements:** обновлённый TD §2.2, §7; неизменные `LFR-10`–`LFR-11`, `LAC-08`–`LAC-11`.
+- **Dependencies:** `R1-07`.
+- **Read first:** TD §2.2/§7, database boundary/schema, migration/schema/outbox tests, package config.
+- **Preconditions:** source scan подтверждает отсутствие production Drizzle queries; Node/pnpm contract проверен перед dependency removal.
+- **Scope:** синхронно обновить TD; удалить Drizzle client/schema/dependencies; заменить Drizzle-only tests реальной migrated SQLite introspection.
+- **Do not touch:** existing migrations, DB/data, table/index/trigger definitions, repository SQL or transaction semantics.
+- **Invariants:** immutable SQL history, checksums/integrity, `BEGIN IMMEDIATE`, pragmas, FIFO serialization и nested rollback-only сохраняются; destructive migration отсутствует.
+- **Tests first:** schema/introspection assertions, эквивалентные удаляемому mapping probe.
+- **Verification:** no-Drizzle source/dependency scan; focused DB/schema/outbox tests; fresh/upgrade migrations; architecture; `pnpm check`; `pnpm db:verify`; diff/secret scans.
+- **Exit criteria:** один persistence stack и синхронизированный TD; один commit `R1-08: make raw SQL persistence canonical`.
+- **Completion evidence:** pending.
+- **Stop conditions:** найден production Drizzle consumer, проверка схемы ослабляется или требуется изменить applied migration/data.
+
+#### R1-09 — Close R1 and decide runtime-schema validation
+
+- **Status:** `pending`
+- **Objective:** Доказать сохранение поведения, независимо проверить candidate и решить, нужна ли следующая schema-validator карточка.
+- **Requirements:** все stage invariants; PRD §19.1/§20.1; TD self-review checklist.
+- **Dependencies:** `R1-08`.
+- **Read first:** полный R1 diff/log, config/session/payload validators, all completion evidence.
+- **Preconditions:** R1-01–R1-08 completed; clean per-unit history.
+- **Scope:** full stage gate; critical review; одна consolidated blocker fix wave максимум; evidence/ledger/status update; documented schema-validator decision based on минимум двух live consumers and measurable duplication.
+- **Do not touch:** новая production dependency или дальнейший refactor без отдельной карточки; real Telegram/production/remote.
+- **Invariants:** no behavior/schema/migration drift; local/fake evidence не выдаётся за real smoke.
+- **Tests first:** нет нового runtime behavior; audit exact commands/results and architecture graph.
+- **Verification:** `pnpm architecture`; `pnpm check`; `pnpm test:e2e:fake`; `pnpm db:verify`; `git diff --check`; staged secret scan; independent review.
+- **Review:** один read-only critical review ограничен credential/privacy exposure, authoritative-data corruption, duplicate effects, broken core journey или unrunnable candidate.
+- **Exit criteria:** R1 `completed`; schema-validator либо получает отдельный future trigger/card, либо мотивированно отклонён; один commit `R1-09: close maintainability stage evidence`.
+- **Completion evidence:** pending.
+- **Stop conditions:** confirmed blocker нельзя закрыть одной wave, aggregate gate не зелёный или нужен новый product decision.
 
 ## 7. Git и evidence
 
