@@ -5,14 +5,14 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { CollaborationDraftService } from "../../src/application/collaborations/collaboration-draft-service.js";
 import { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
 import { MigrationRunner, MigrationSource } from "../../src/infrastructure/database/migrations.js";
-import { SqliteCollaborationRepository } from "../../src/infrastructure/database/collaboration-repository.js";
-import { SqliteCollaborationSessionRepository } from "../../src/infrastructure/database/collaboration-session-repository.js";
 import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/database/transaction-runner.js";
 import { SqliteTelegramUserRepository } from "../../src/infrastructure/database/telegram-user-repository.js";
 import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
+import { CollaborationDraftService } from "../../src/modules/collaborations/index.js";
+import { SqliteCollaborationRepository } from "../../src/modules/collaborations/infrastructure/sqlite-collaboration-repository.js";
+import { SqliteCollaborationSessionRepository } from "../../src/modules/collaborations/infrastructure/sqlite-collaboration-session-repository.js";
 import { ProfileService } from "../../src/modules/profiles/index.js";
 import { SqliteProfileRepository } from "../../src/modules/profiles/infrastructure/sqlite-profile-repository.js";
 import { SqliteProfileSessionRepository } from "../../src/modules/profiles/infrastructure/sqlite-profile-session-repository.js";

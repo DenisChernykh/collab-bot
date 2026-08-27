@@ -125,6 +125,7 @@ P0-01 → P0-02
 | R2-11C | `fa5859801398d3ce85c731f9ce163825da21535c` | removed legacy bot presentation paths |
 | R2-12 | `59f70493ce162ab00ae640a69eec3479cd8d9227` | runtime composition through feature public factories |
 | R2-13A | `03f74a2b90b11bb5d0115a187c099b2e3f83bb6c` | profile consumer cutover to module ownership |
+| R2-13B | `f97d771f32d0dd33382bdfa98cdafaebfbf2ce05` | removed profile compatibility paths |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -1009,7 +1010,7 @@ P0-01 → P0-02
 
 #### R2-13C — Cut collaboration consumers to the module owner
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Перевести showcase preflight и collaboration-focused tests на module-owned contracts/adapters.
 - **Dependencies:** `R2-13B`.
 - **Read first:** remaining collaboration bridge consumers, public API, module internals under focused test and preflight capability port.
@@ -1018,11 +1019,12 @@ P0-01 → P0-02
 - **Invariants:** preflight mutates the same capability object; direct adapter tests retain their original construction and coverage.
 - **Verification:** collaboration unit/integration/fake and preflight tests; architecture; `pnpm check`; all fake E2E; `pnpm db:verify`.
 - **Exit criteria:** no active consumer imports a legacy collaboration-core path; один commit `R2-13C: cut collaboration consumers to module owner`.
+- **Completion evidence:** Commit SHA: `SELF`; switched showcase preflight and five collaboration-focused unit/integration/fake tests from shared collaboration re-exports to the collaboration public API or exact feature-owned SQLite adapters. The preflight return type now comes from the public module capability contract while preserving the same mutable object shape; direct repository tests keep their original topology without widening module exports. Six source/test paths plus this plan changed; assertions, SQL, draft/publication behavior, outbox and Telegram copy stayed unchanged. Focused collaboration/domain/preflight tests PASS (6 files, 18 tests); architecture PASS (148 modules, 441 dependencies); `pnpm check` PASS (69 unit, 88 integration, 47 runtime, lint/typecheck/build); all fake E2E PASS (33); `pnpm db:verify` PASS. No credential, real Telegram, remote or production mutation.
 - **Stop conditions:** cutover changes capability identity or test topology.
 
 #### R2-13D — Delete collaboration compatibility paths
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Удалить одиннадцать collaboration compatibility files из shared layers.
 - **Dependencies:** `R2-13C`.
 - **Read first:** exact collaboration zero-consumer scan and module replacements.

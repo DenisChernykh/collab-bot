@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { validateCollaborationDraftInput } from "../../src/domain/collaborations/collaboration.js";
-import { renderCollaborationCard } from "../../src/application/collaborations/collaboration-renderer.js";
 import { DomainValidationError } from "../../src/domain/value-objects/enums.js";
+import {
+	renderCollaborationCard,
+	validateCollaborationDraftInput,
+} from "../../src/modules/collaborations/index.js";
 
 const now = new Date("2023-11-14T10:00:00.000Z").getTime();
 

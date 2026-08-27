@@ -7,8 +7,8 @@ import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
 import { ProfileService } from "../../src/modules/profiles/application/index.js";
 import { SqliteProfileRepository } from "../../src/modules/profiles/infrastructure/sqlite-profile-repository.js";
 import { SqliteProfileSessionRepository } from "../../src/modules/profiles/infrastructure/sqlite-profile-session-repository.js";
-import { SqliteCollaborationRepository } from "../../src/infrastructure/database/collaboration-repository.js";
-import { SqliteCollaborationSessionRepository } from "../../src/infrastructure/database/collaboration-session-repository.js";
+import { SqliteCollaborationRepository } from "../../src/modules/collaborations/infrastructure/sqlite-collaboration-repository.js";
+import { SqliteCollaborationSessionRepository } from "../../src/modules/collaborations/infrastructure/sqlite-collaboration-session-repository.js";
 import { withFreshMigratedDatabase } from "../support/migrated-database.js";
 
 describe("R2-06 shared wizard admission", () => {
