@@ -735,7 +735,7 @@ P0-01 → P0-02
 
 #### R2-03 — Move profiles adapters and composition
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Дать profiles собственные SQLite/audience adapters и factory.
 - **Dependencies:** `R2-02`.
 - **Read first:** profile repositories, audience reader, runtime composition and restart tests.
@@ -744,11 +744,12 @@ P0-01 → P0-02
 - **Invariants:** один shared DatabaseBoundary/transaction context; audience lookup remains post-commit best effort.
 - **Verification:** profile repository/session/audience tests; runtime; architecture; `pnpm check`; `pnpm db:verify`.
 - **Exit criteria:** runtime can consume profiles factory; one commit `R2-03: own profiles adapters and composition`.
+- **Completion evidence:** Commit SHA: `SELF`; moved profile aggregate/session SQLite adapters and grammY audience reader under `modules/profiles/infrastructure`, added `createProfilesFeature` and the root feature public entrypoint, and left three exact temporary infrastructure re-exports for scheduled consumer/test cutover. The factory owns one profile repository shared by profile API and audience writer, one session repository and one audience service while receiving the existing shared boundary/transactions/clock/deadline/bot. Test-first RED was the missing public feature factory; the new migrated-SQLite composition test now proves create/read plus exposed session/audience boundaries. Ten source/test paths plus this plan changed; repository SQL, session parser, migrations and post-commit invocation remain unchanged. Focused profile composition/repository/session PASS (14), audience PASS (18), runtime PASS (6); architecture PASS (126 modules, 391 dependencies); `pnpm check` PASS (69 unit, 84 integration, 47 runtime, lint/typecheck/build); all fake E2E PASS (30); `pnpm db:verify`, migrations/PRD diff and `git diff --check` PASS. No credential, real Telegram, remote or production mutation.
 - **Stop conditions:** factory creates a second DB boundary or changes lookup/delivery ordering.
 
 #### R2-04 — Move profiles Telegram presentation
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Разместить profile composer/rendering внутри profiles без владения соседними workflows.
 - **Dependencies:** `R2-03`.
 - **Read first:** profile composer/presentation, continuation tests and root orchestration.
