@@ -796,7 +796,7 @@ P0-01 → P0-02
 
 #### R2-06 — Extract shared wizard admission
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Явно владеть атомарным правилом «один active wizard» вместо cross-table SQL двух feature adapters.
 - **Dependencies:** `R2-05B`.
 - **Read first:** both session repositories, collaboration draft conflict path and migration constraints.
@@ -805,11 +805,12 @@ P0-01 → P0-02
 - **Invariants:** concurrent/conflicting saves fail exactly as before inside one transaction.
 - **Verification:** adversarial profile/collaboration session tests; architecture; `pnpm check`; `pnpm db:verify`.
 - **Exit criteria:** no feature repository directly queries the other feature session table; один commit `R2-06: centralize wizard admission invariant`.
+- **Completion evidence:** Commit SHA: `SELF`; added one shared `WizardAdmission` application contract and one SQLite implementation, then injected it into both profile and collaboration session repositories (default construction preserves current consumers). Each repository still starts its existing `BEGIN IMMEDIATE` transaction before admission; the guard uses the same DatabaseBoundary context and selects the same opposite active-session condition before save. No feature adapter now contains SQL for the other feature's session table. Test-first RED was the missing shared adapter; the new migrated-SQLite adversarial test proves both conflict directions and serialized concurrent saves yield exactly one success/one conflict. Five source/test files plus this plan changed; tables, migrations, session shapes/TTL, error text and wizard policy are unchanged. Focused admission/profile/collaboration session tests PASS (7); architecture PASS (139 modules, 412 dependencies); `pnpm check` PASS (69 unit, 85 integration, 47 runtime, lint/typecheck/build); all fake E2E PASS (30); `pnpm db:verify`, migrations/PRD diff and `git diff --check` PASS. No credential, real Telegram, remote or production mutation.
 - **Stop conditions:** atomicity cannot be preserved without schema/data change.
 
 #### R2-07 — Move collaborations adapters and Telegram presentation
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Завершить collaboration vertical slice и factory.
 - **Dependencies:** `R2-06`.
 - **Read first:** collaboration repositories/composer/presentation, runtime and S2 tests.

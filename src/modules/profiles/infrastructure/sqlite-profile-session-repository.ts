@@ -3,7 +3,9 @@ import type {
 	ProfileSessionRepository,
 	ProfileSessionState,
 } from "../application/ports/profile-session-repository.js";
+import type { WizardAdmission } from "../../../application/ports/wizard-admission.js";
 import type { DatabaseBoundary } from "../../../infrastructure/database/database-boundary.js";
+import { SqliteWizardAdmission } from "../../../infrastructure/database/wizard-admission.js";
 
 interface SessionRow {
 	telegram_user_id?: unknown;
@@ -14,7 +16,10 @@ interface SessionRow {
 }
 
 export class SqliteProfileSessionRepository implements ProfileSessionRepository {
-	constructor(private readonly boundary: DatabaseBoundary) {}
+	constructor(
+		private readonly boundary: DatabaseBoundary,
+		private readonly admission: WizardAdmission = new SqliteWizardAdmission(boundary),
+	) {}
 
 	async findActive(telegramUserId: string, now: number): Promise<ProfileSessionRecord | undefined> {
 		const rows = await this.boundary.query<SessionRow>(
@@ -45,8 +50,7 @@ export class SqliteProfileSessionRepository implements ProfileSessionRepository 
 			throw new Error("invalid profile session record");
 		}
 		await this.boundary.withTransaction(async () => {
-			const collaborationRows = await this.boundary.query<{ collaboration_id: unknown }>("SELECT collaboration_id FROM collaboration_sessions WHERE telegram_user_id = ? AND expires_at > ?", [record.telegramUserId, record.updatedAt]);
-			if (collaborationRows.length > 0) throw new Error("another wizard is already active");
+			await this.admission.assertAvailable("profile", record.telegramUserId, record.updatedAt);
 			await this.boundary.execute(
 				`INSERT INTO profile_sessions (telegram_user_id, flow_type, step, state_json, revision, expires_at, updated_at)
 				 VALUES (?, 'profile', ?, ?, ?, ?, ?)
