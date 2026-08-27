@@ -9,9 +9,9 @@ import {
 	BROWSE_SESSION_TTL_MS,
 	BrowseSessionStaleError,
 	CollaborationBrowseService,
-} from "../../src/application/collaborations/collaboration-browse-service.js";
+} from "../../src/modules/marketplace/index.js";
 import { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
-import { SqliteCollaborationBrowseRepository } from "../../src/infrastructure/database/collaboration-browse-repository.js";
+import { SqliteCollaborationBrowseRepository } from "../../src/modules/marketplace/infrastructure/sqlite-collaboration-browse-repository.js";
 import { MigrationRunner, MigrationSource } from "../../src/infrastructure/database/migrations.js";
 import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/database/transaction-runner.js";
 import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";

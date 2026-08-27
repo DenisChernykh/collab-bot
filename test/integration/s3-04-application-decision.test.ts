@@ -5,7 +5,6 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { ApplicationService } from "../../src/application/applications/application-service.js";
 import { DurableCommandExecutor } from "../../src/application/commands/command-executor.js";
 import type { OutboxDeliveryStore } from "../../src/application/ports/outbox-delivery-store.js";
 import { hashCanonicalInput } from "../../src/infrastructure/crypto/canonical-input-hash.js";
@@ -15,6 +14,7 @@ import { MigrationRunner, MigrationSource } from "../../src/infrastructure/datab
 import { SqliteOutboxDeliveryRepository } from "../../src/infrastructure/database/outbox-delivery-repository.js";
 import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/database/transaction-runner.js";
 import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
+import { ApplicationService } from "../../src/modules/applications/application/application-feature.js";
 import { SqliteApplicationsRepository } from "../../src/modules/applications/infrastructure/sqlite-applications-repository.js";
 import { createTestApplicationsFeature } from "../support/applications-feature.js";
 import { withFreshMigratedDatabase } from "../support/migrated-database.js";

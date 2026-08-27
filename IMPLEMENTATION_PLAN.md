@@ -127,6 +127,7 @@ P0-01 → P0-02
 | R2-13A | `03f74a2b90b11bb5d0115a187c099b2e3f83bb6c` | profile consumer cutover to module ownership |
 | R2-13B | `f97d771f32d0dd33382bdfa98cdafaebfbf2ce05` | removed profile compatibility paths |
 | R2-13C | `383ea3d26ac1aa1d0886f4c1f8580337ce2dd30e` | collaboration consumer cutover to module ownership |
+| R2-13D | `49f05d81dcb7c1a3e0c7b53d996e20de20ff3b0a` | removed collaboration compatibility paths |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -1039,7 +1040,7 @@ P0-01 → P0-02
 
 #### R2-13E — Cut remaining feature consumers to module owners
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Перевести marketplace, applications и moderation consumers со shared compatibility paths.
 - **Dependencies:** `R2-13D`.
 - **Read first:** neutral Telegram router and S3/S4 focused tests; three module entrypoints and owned adapters.
@@ -1048,11 +1049,12 @@ P0-01 → P0-02
 - **Invariants:** module roots remain consumer contracts; direct adapter imports are limited to focused module tests.
 - **Verification:** browse/application/moderation focused tests; architecture; `pnpm check`; all fake E2E; `pnpm db:verify`.
 - **Exit criteria:** no active consumer imports any remaining legacy feature path; один commit `R2-13E: cut remaining feature consumers`.
+- **Completion evidence:** Commit SHA: `SELF`; switched the neutral router and seven marketplace/applications/moderation test files from the final shared feature bridges to module public contracts or exact same-module application/infrastructure targets under focused test. Concrete `ApplicationService` and SQLite adapters remain internal test targets rather than being exposed through public roots. Eight source/test paths plus this plan changed; assertions, callbacks/deep links, SQL, route priority, application effects and moderation hide behavior stayed unchanged. Focused browse/application/moderation/routing tests PASS (8 files, 46 tests); architecture PASS (137 modules, 430 dependencies); `pnpm check` PASS (69 unit, 88 integration, 47 runtime, lint/typecheck/build); all fake E2E PASS (33); `pnpm db:verify` PASS. No credential, real Telegram, remote or production mutation.
 - **Stop conditions:** a stable module-owned replacement is missing.
 
 #### R2-13F — Remove remaining feature bridges and misplaced deadline policy
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Физически удалить marketplace, applications и moderation compatibility files, а collaboration deadline policy передать доменному owner.
 - **Dependencies:** `R2-13E`.
 - **Read first:** exact source import graph, seven remaining bridge files, `infrastructure/time/deadline.ts`, its two production consumers and primitive test.

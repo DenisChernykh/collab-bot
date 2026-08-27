@@ -5,7 +5,6 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { AdminModerationService } from "../../src/application/moderation/admin-moderation-service.js";
 import { DurableCommandExecutor } from "../../src/application/commands/command-executor.js";
 import { DeliveryRunner } from "../../src/application/outbox/delivery-runner.js";
 import { OutboxDeliveryService } from "../../src/application/outbox/outbox-service.js";
@@ -13,7 +12,6 @@ import type { ClaimTokenGenerator } from "../../src/application/ports/claim-toke
 import type { ProviderDeadline } from "../../src/application/ports/provider-deadline.js";
 import { TelegramTransportError } from "../../src/application/ports/telegram-transport.js";
 import { hashCanonicalInput } from "../../src/infrastructure/crypto/canonical-input-hash.js";
-import { SqliteAdminModerationRepository } from "../../src/infrastructure/database/admin-moderation-repository.js";
 import { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
 import { SqliteDurableCommandStore } from "../../src/infrastructure/database/durable-command-repository.js";
 import { MigrationRunner, MigrationSource } from "../../src/infrastructure/database/migrations.js";
@@ -21,6 +19,8 @@ import { SqliteOutboxDeliveryRepository } from "../../src/infrastructure/databas
 import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/database/transaction-runner.js";
 import { FakeTelegramTransport } from "../../src/infrastructure/testing/fake-telegram-transport.js";
 import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
+import { AdminModerationService } from "../../src/modules/moderation/index.js";
+import { SqliteAdminModerationRepository } from "../../src/modules/moderation/infrastructure/sqlite-admin-moderation-repository.js";
 
 const migrationsPath = fileURLToPath(new URL("../../migrations/", import.meta.url));
 const NOW = 1_700_000_000_000;

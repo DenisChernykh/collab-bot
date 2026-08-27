@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
 	normalizeApplicationMessage,
 	renderApplicationAuthorDm,
-} from "../../src/application/applications/application-service.js";
+} from "../../src/modules/applications/application/application-submission.js";
 
 const PUBLIC_TOKEN = "AAAAAAAAAAAAAAAAAAAAAA";
 

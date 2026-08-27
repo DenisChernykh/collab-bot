@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { ApplicationService } from "../../src/application/applications/application-service.js";
+import { ApplicationService } from "../../src/modules/applications/application/application-feature.js";
 import type {
 	OutboxDeliveryRecord,
 	OutboxDeliveryStore,
