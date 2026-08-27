@@ -10,7 +10,7 @@ import {
 import { CollaborationNotPublishableError, PublicationUnavailableError, type CollaborationPublicationService } from "../../application/collaborations/collaboration-publication-service.js";
 import { renderCollaborationCard } from "../../application/collaborations/collaboration-renderer.js";
 import type { CollaborationSessionRecord } from "../../application/ports/collaboration-session-repository.js";
-import type { ProfileSessionRecord } from "../../application/ports/profile-session-repository.js";
+import type { ProfileSessionRecord } from "../../modules/profiles/application/index.js";
 import type { CollaborationDraftInput, CollaborationWizardStep } from "../../domain/collaborations/collaboration.js";
 import { DomainValidationError } from "../../domain/value-objects/enums.js";
 import {

@@ -749,7 +749,7 @@ P0-01 → P0-02
 
 #### R2-04 — Move profiles Telegram presentation
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Разместить profile composer/rendering внутри profiles без владения соседними workflows.
 - **Dependencies:** `R2-03`.
 - **Read first:** profile composer/presentation, continuation tests and root orchestration.
@@ -758,11 +758,12 @@ P0-01 → P0-02
 - **Invariants:** profile module exposes wizard operations; cross-feature journey continuation остаётся в global router.
 - **Verification:** focused profile composer/fake E2E; architecture; `pnpm check`; `pnpm db:verify`.
 - **Exit criteria:** нет active profile presentation под `src/bot/profile`; один commit `R2-04: move profile Telegram presentation`.
+- **Completion evidence:** Commit SHA: `SELF`; moved profile composer/presentation under `modules/profiles/presentation/telegram`, exported them through the profiles public API, switched the root Telegram router plus collaboration/marketplace profile-session consumers to public profile surfaces, and migrated the focused composer test to the module entrypoint. The two old `src/bot/profile/*` files are exact temporary re-export bridges only; no active implementation remains there. Ten source/test paths plus this plan changed; callback strings, continuation JSON, copy, route order and profile/application behavior are unchanged. Focused profile composer/full-profile fake tests PASS (8); architecture PASS (128 modules, 390 dependencies); `pnpm check` PASS (69 unit, 84 integration, 47 runtime, lint/typecheck/build); all fake E2E PASS (30); `pnpm db:verify`, migrations/PRD diff and `git diff --check` PASS. No credential, real Telegram, remote or production mutation.
 - **Stop conditions:** move требует дублировать replies/effects или меняет continuation payload.
 
 #### R2-05 — Move collaborations domain and application ownership
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Собрать collaboration domain, draft/publication services, render contract and feature ports под модулем.
 - **Dependencies:** `R2-04`.
 - **Read first:** collaboration domain/services/ports, publication and applications decision consumers.

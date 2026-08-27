@@ -9,19 +9,24 @@ import type { CollaborationDraftService } from "../application/collaborations/co
 import type { CollaborationPublicationService } from "../application/collaborations/collaboration-publication-service.js";
 import type { AdminModerationService } from "../application/moderation/admin-moderation-service.js";
 import type { Clock } from "../application/ports/clock.js";
-import type { ProfileDraft, ProfileSessionRepository } from "../application/ports/profile-session-repository.js";
 import type { TelegramUserWriter } from "../application/ports/telegram-user-writer.js";
-import { ProfileAudienceService, type ProfileAudiencePlan } from "../application/profiles/profile-audience-service.js";
-import { ProfileService } from "../application/profiles/profile-service.js";
-import type { ProfileRecord } from "../domain/profiles/profile.js";
 import type { ApplicationsFeatureApi } from "../modules/applications/index.js";
+import {
+	createProfileTelegramFeature,
+	resumeKeyboard,
+	type ProfileAudiencePlan,
+	type ProfileAudienceService,
+	type ProfileDraft,
+	type ProfileRecord,
+	type ProfileService,
+	type ProfileSessionRepository,
+	type ProfileTelegramFeature,
+} from "../modules/profiles/index.js";
+import { routeTelegramText } from "../presentation/telegram/telegram-routing.js";
 import { createCollaborationTelegramFeature, type CollaborationTelegramFeature } from "./collaboration/collaboration-composer.js";
 import { registerDurableTelegramIngress } from "./durable-telegram-ingress.js";
 import { createMarketplaceTelegramFeature } from "./marketplace/marketplace-composer.js";
 import { createModerationTelegramFeature, type ModerationTelegramFeature } from "./moderation/moderation-composer.js";
-import { createProfileTelegramFeature, type ProfileTelegramFeature } from "./profile/profile-composer.js";
-import { resumeKeyboard } from "./profile/profile-presentation.js";
-import { routeTelegramText } from "../presentation/telegram/telegram-routing.js";
 
 const AUDIENCE_SNAPSHOT_UNAVAILABLE = "Аудиторию Telegram определить не удалось; профиль сохранён, число можно указать позже в «Мой профиль».";
 

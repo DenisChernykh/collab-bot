@@ -3,10 +3,14 @@ import type { UserFromGetMe, Update } from "grammy/types";
 import { describe, expect, it } from "vitest";
 
 import type { Clock } from "../../src/application/ports/clock.js";
-import type { ProfileSessionRecord, ProfileSessionRepository } from "../../src/application/ports/profile-session-repository.js";
-import type { ProfileService } from "../../src/application/profiles/profile-service.js";
-import { createProfileTelegramFeature } from "../../src/bot/profile/profile-composer.js";
-import type { ProfileInput, ProfileRecord } from "../../src/domain/profiles/profile.js";
+import {
+	createProfileTelegramFeature,
+	type ProfileInput,
+	type ProfileRecord,
+	type ProfileService,
+	type ProfileSessionRecord,
+	type ProfileSessionRepository,
+} from "../../src/modules/profiles/index.js";
 import { FakeTelegramApi } from "../../src/infrastructure/testing/fake-telegram-api.js";
 
 const NOW = 1_700_000_000_000;

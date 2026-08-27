@@ -12,7 +12,7 @@ import {
 import { renderCollaborationCard } from "../../application/collaborations/collaboration-renderer.js";
 import type { Clock } from "../../application/ports/clock.js";
 import type { BrowseCollaborationRecord, BrowseSessionRecord } from "../../application/ports/collaboration-browse-repository.js";
-import type { ProfileSessionRecord } from "../../application/ports/profile-session-repository.js";
+import type { ProfileSessionRecord } from "../../modules/profiles/application/index.js";
 import { DomainValidationError, type CollaborationFormat, type Topic } from "../../domain/value-objects/enums.js";
 import type { ApplicationsFeatureApi, ApplicationFailureCode, AuthorManagementView } from "../../modules/applications/index.js";
 import { COLLABORATION_FORMAT_LABELS, collaborationStatusLabel } from "../collaboration/collaboration-presentation.js";
