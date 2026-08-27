@@ -119,6 +119,7 @@ P0-01 → P0-02
 | R2-10A | `18c313942400369924169f48c66d9d6462bdfb9c` | moderation core, persistence and composition ownership |
 | R2-10B | `2c4523bb334983292be0c971806bee926319c036` | moderation Telegram presentation ownership |
 | R2-11A | `f4383a79e9784c42be4fa2d77d5357a2df47f8aa` | neutral durable Telegram ingress ownership |
+| R2-11B | `3c12fbab1e91b2e55d92c488c3a8e41a6a7bfe3f` | neutral Telegram router ownership |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -947,7 +948,7 @@ P0-01 → P0-02
 
 #### R2-11C — Remove legacy bot presentation paths
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Удалить оставшиеся exact feature-presentation bridges и физически закрыть `src/bot`.
 - **Dependencies:** `R2-11B`.
 - **Read first:** all `src/bot` files, source/test imports and module presentation entrypoints.
@@ -956,11 +957,12 @@ P0-01 → P0-02
 - **Invariants:** every removed file has zero active consumer and an existing public module replacement.
 - **Verification:** zero `src/bot` import/path scan; routing and all fake E2E; architecture; `pnpm check`; `pnpm db:verify`.
 - **Exit criteria:** `src/bot` absent and all Telegram presentation ownership is truthful; один commit `R2-11C: remove legacy bot presentation paths`.
+- **Completion evidence:** Commit SHA: `SELF`; deleted the five remaining one-line profile, collaboration and moderation compatibility exports and removed the now-empty `src/bot` tree. A zero-path scan confirms no `src/bot`, feature-bot path or source/test import remains; all active Telegram code now lives either in a feature presentation package or the neutral presentation layer. Exactly five passive source paths plus this plan changed; no implementation, runtime wiring, route or behavior changed. Focused ingress/routing tests PASS (2); architecture PASS (156 modules, 460 dependencies); `pnpm check` PASS (69 unit, 88 integration, 47 runtime, lint/typecheck/build); all fake E2E PASS (33); `pnpm db:verify` PASS. No credential, real Telegram, remote or production mutation.
 - **Stop conditions:** any consumer still requires a compatibility bridge.
 
 #### R2-12 — Compose runtime through feature factories
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Убрать ручное создание feature internals из runtime composition.
 - **Dependencies:** `R2-11C`.
 - **Read first:** bot application, all module factories/public APIs and lifecycle tests.
