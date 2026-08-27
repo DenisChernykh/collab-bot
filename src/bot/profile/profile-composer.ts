@@ -2,7 +2,7 @@ import { randomBytes, randomInt } from "node:crypto";
 
 import { Composer, InlineKeyboard, Keyboard, type Context } from "grammy";
 
-import type { ApplicationFailureCode, ApplicationService } from "../../application/applications/application-service.js";
+import type { ApplicationFailureCode, ApplicationsFeatureApi } from "../../modules/applications/index.js";
 import type { Clock } from "../../application/ports/clock.js";
 import {
 	PROFILE_SESSION_TTL_MS,
@@ -71,7 +71,7 @@ export interface ProfileTelegramFeatureOptions {
 	readonly sessionRepository: ProfileSessionRepository;
 	readonly clock: Clock;
 	readonly requestIdFactory?: () => number;
-	readonly applicationService?: ApplicationService;
+	readonly applicationService?: Pick<ApplicationsFeatureApi, "checkEligibility" | "submit">;
 	readonly menuKeyboard: () => InlineKeyboard;
 	readonly isCollaborationActive: (userId: string) => Promise<boolean>;
 	readonly continueCreateCollaboration: ContinueCreateCollaboration;

@@ -163,7 +163,7 @@ export async function createBotRuntime(options: BotRuntimeOptions): Promise<BotR
 			clock,
 			botUsername: options.config.expectedBotUsername,
 		});
-		const applicationService = applicationsFeature.applicationService;
+		const applicationService = applicationsFeature.api;
 		const durableCommandExecutor = new DurableCommandExecutor(transactionRunner, new SqliteDurableCommandStore(boundary), { hash: hashCanonicalInput }, clock);
 		const callbackActionService = new CallbackActionService({
 			transactionRunner,

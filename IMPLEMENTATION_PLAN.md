@@ -91,6 +91,7 @@ P0-01 → P0-02
 | R1-04 | `SELF` | single durable Telegram ingress seam |
 | R1-05A | `SELF` | feature-owned profile Telegram composer |
 | R1-05B | `SELF` | feature-owned collaboration Telegram composer |
+| R1-05C | `SELF` | feature-owned marketplace and moderation Telegram composers |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -550,7 +551,7 @@ P0-01 → P0-02
 
 #### R1-05C — Extract marketplace and moderation Telegram composers
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Передать feed/deep-link/applications/author-management/moderation routing feature-owned presentation.
 - **Requirements:** `LFR-04`–`LFR-09`, `LAC-03`–`LAC-10`; TD §9.2–§9.6, §9.10, §10.6.
 - **Dependencies:** `R1-05B`.
@@ -562,12 +563,12 @@ P0-01 → P0-02
 - **Tests first:** quick-profile resume, stale/foreign callbacks and admin hide routing.
 - **Verification:** all e2e-fake; focused application/moderation tests; architecture; `pnpm check`; `pnpm db:verify`; diff/secret scans.
 - **Exit criteria:** root registration не содержит feature decisions; один commit `R1-05C: extract marketplace Telegram composers`.
-- **Completion evidence:** pending.
+- **Completion evidence:** Commit SHA: `SELF`; extracted feed/deep-link/application/author-management routes and callback codecs into a marketplace Composer, and allowlisted `/admin` routing plus durable actor resolution into a moderation feature. Root registration now owns only global command precedence, feature mounting, durable ingress, post-commit reply collection and the deliberately separate opaque `cb_*` route. Presentation consumes the public `ApplicationsFeatureApi`; quick-profile continuation order, own lists, decisions, pair contacts, admin hide and exact copy/callback encodings remain unchanged. Eight source/test files plus this plan changed; product policy, repositories/SQL, delivery/runtime lifecycle and configuration stayed untouched. Test-first RED was the missing marketplace/moderation feature modules; focused fake journeys PASS (3 files, 22 tests); focused browse/application/moderation composition PASS (5 files, 35 tests); all fake E2E PASS (7 files, 30 tests); architecture PASS (110 modules, 346 dependencies); `pnpm check` PASS (66 unit, 81 integration, 30 runtime tests and build); `pnpm db:verify` PASS; `git diff --check` PASS. Critical self-review confirmed mutually exclusive callback ownership, one generic callback acknowledgement, separate opaque action acknowledgement, admin actor binding before durable execution and unchanged profile continuation order; independent read-only review returned PASS with no findings. No credential, real Telegram, remote or production mutation.
 - **Stop conditions:** route ownership requires product change or one update can reach multiple features.
 
 #### R1-06A — Extract the delivery worker lifecycle
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Изолировать ordered delivery cycle, wakeable delay и stop-new-work behavior от bot runtime.
 - **Requirements:** TD §13.1, §13.4, §20.4; `LFR-11`.
 - **Dependencies:** `R1-05C`.
