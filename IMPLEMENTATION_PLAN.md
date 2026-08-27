@@ -115,7 +115,7 @@ P0-01 → P0-02
 | R2-07B | `b9ec2b3d82e0e1766aec040d2c373840ee158127` | collaboration Telegram presentation ownership |
 | R2-08 | `730f8790a11082974dc2ee6d0e28990d487c1ba1` | marketplace CQRS read-model ownership |
 | R2-09A | `fd38d23335f8cb190b12cff9db226ac9a8a6cef6` | marketplace Telegram presentation and split routing seam |
-| R2-09B | `SELF` | applications Telegram presentation ownership |
+| R2-09B | `d5f61074bba13c29e7b967a5c638d7e6278a80e1` | applications Telegram presentation ownership |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -888,7 +888,7 @@ P0-01 → P0-02
 
 #### R2-10A — Move moderation core and composition
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Собрать moderation application contract, service, SQLite adapter and factory под одним owner.
 - **Dependencies:** `R2-09B`.
 - **Read first:** moderation service/port/repository, runtime composition and hide audit/outbox integration tests.
@@ -897,11 +897,12 @@ P0-01 → P0-02
 - **Invariants:** hide, pending-application close, projection supersede, delete intent and audit remain one authoritative transaction.
 - **Verification:** S4 moderation integration and composition tests; architecture; `pnpm check`; `pnpm db:verify`.
 - **Exit criteria:** moderation core and persistence are feature-owned and factory-constructible; один commit `R2-10A: own moderation core and composition`.
+- **Completion evidence:** Commit SHA: `SELF`; moved the moderation port, service and unchanged SQLite transaction adapter under `modules/moderation`, retained three exact compatibility exports, and added a public application surface plus `createModerationFeature({ boundary, outboxStore, transactions, clock, botUsername, adminTelegramIds })`. The factory reuses the injected database boundary, transaction runner and outbox store, and exposes only `AdminModerationService`; it does not create a second persistence or transaction context. A migrated-SQLite composition test proves factory-composed hide atomically produces the hidden collaboration, one operator audit action and one prepared `channel_delete` intent. Ten source/test paths plus this plan changed; repository SQL, hide policy, projection revision, audit schema, command/deep-link validation and Telegram presentation remained unchanged. Focused R2-10A/S4 integration PASS (9); architecture PASS (160 modules, 464 dependencies); `pnpm check` PASS (69 unit, 88 integration, 47 runtime, lint/typecheck/build); all fake E2E PASS (33); `pnpm db:verify` PASS. No credential, real Telegram, remote or production mutation.
 - **Stop conditions:** ownership move weakens atomicity or requires repository/SQL redesign.
 
 #### R2-10B — Move moderation Telegram presentation
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Завершить moderation vertical slice переносом composer и consumer cutover.
 - **Dependencies:** `R2-10A`.
 - **Read first:** moderation composer, collaboration status public surface, root actor routing and focused fake tests.
