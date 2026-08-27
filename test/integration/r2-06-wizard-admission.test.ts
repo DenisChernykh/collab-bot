@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/database/transaction-runner.js";
 import { SqliteTelegramUserRepository } from "../../src/infrastructure/database/telegram-user-repository.js";
 import { SqliteWizardAdmission } from "../../src/infrastructure/database/wizard-admission.js";
-import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
+import { FakeClock } from "../support/fake-clock.js";
 import { ProfileService } from "../../src/modules/profiles/application/index.js";
 import { SqliteProfileRepository } from "../../src/modules/profiles/infrastructure/sqlite-profile-repository.js";
 import { SqliteProfileSessionRepository } from "../../src/modules/profiles/infrastructure/sqlite-profile-session-repository.js";

@@ -131,6 +131,7 @@ P0-01 → P0-02
 | R2-13E | `f97f32d1edaa0807d2f6ca563cb92b5e3357d0dd` | remaining feature consumer cutover to module ownership |
 | R2-13F | `9215d9d2c9f4ee5f03afa21a4138db4e8168c062` | removed remaining feature bridges and owned deadline policy |
 | R2-14A | `a12e7e275db5cc4b562be044668cc59b00fbee89` | test-owned grammY API fake |
+| R2-14B | `0889b71bb810033bca3fcd6b35130255a79d9300` | test-owned Telegram transport fake |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -1099,7 +1100,7 @@ P0-01 → P0-02
 
 #### R2-14C — Establish the test-owned fake clock
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Создать test-support owner для `FakeClock` без oversized consumer diff.
 - **Dependencies:** `R2-14B`.
 - **Read first:** fake clock and the recorded first cohort: unit `s0-02`; integration `s0-04-ingress`, `s0-04-schema`, `s0-05-outbox`, `r1-07`, `r1-03`, `r2-03`, `r2-06`, `r2-07a`; runtime `s0-06`, `r1-06b`.
@@ -1108,11 +1109,12 @@ P0-01 → P0-02
 - **Invariants:** production source never imports test support; every test retains its explicit clock instance.
 - **Verification:** affected tests; all suites; architecture; `pnpm check`; `pnpm test:e2e:fake`; `pnpm db:verify`.
 - **Exit criteria:** canonical implementation is test-owned and first cohort uses it; один commit `R2-14C: establish test-owned fake clock`.
+- **Completion evidence:** Commit SHA: `SELF`; added `test/support/fake-clock.ts` as the one-way test facade over the still-canonical source implementation and switched the recorded first eleven unit/integration/runtime consumers. Production source does not import test support, and every test still constructs an explicit independent clock. Twelve source/test paths plus this plan changed; clock behavior, timestamps, assertions and remaining consumers stayed unchanged. Affected tests PASS (11 files, 60 tests); architecture PASS (128 modules, 416 dependencies); `pnpm check` PASS (69 unit, 88 integration, 47 runtime, lint/typecheck/build); all fake E2E PASS (33); `pnpm db:verify` PASS. No credential, real Telegram, remote or production mutation.
 - **Stop conditions:** source production code imports `FakeClock`.
 
 #### R2-14D — Cut the second fake-clock consumer cohort
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Перевести двенадцать записанных integration/unit consumers на test-support facade.
 - **Dependencies:** `R2-14C`.
 - **Read first:** integration `r2-08`, `r2-10a`, `s1-01`, `s1-02`, `s2-01`, `s2-02`, `s3-02`, `s3-03`, `s3-04`, `s4-01`; unit `fut-01`, `s3-04`.

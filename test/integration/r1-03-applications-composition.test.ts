@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
 import { SqliteOutboxDeliveryRepository } from "../../src/infrastructure/database/outbox-delivery-repository.js";
 import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/database/transaction-runner.js";
-import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
+import { FakeClock } from "../support/fake-clock.js";
 import { createApplicationsFeature } from "../../src/modules/applications/index.js";
 import { SqliteApplicationsRepository } from "../../src/modules/applications/infrastructure/sqlite-applications-repository.js";
 import { SqliteCollaborationBrowseRepository } from "../../src/modules/marketplace/infrastructure/sqlite-collaboration-browse-repository.js";

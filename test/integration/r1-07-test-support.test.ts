@@ -3,7 +3,7 @@ import { stat } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 import type { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
-import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
+import { FakeClock } from "../support/fake-clock.js";
 import { withFreshMigratedDatabase } from "../support/migrated-database.js";
 
 const ALL_MIGRATIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13] as const;

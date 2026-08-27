@@ -28,7 +28,7 @@ import { CallbackActionStoreCorruptError } from "../../src/application/ports/cal
 import { IngressRetentionService } from "../../src/infrastructure/database/ingress-retention.js";
 import { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
 import { MigrationRunner, MigrationSource } from "../../src/infrastructure/database/migrations.js";
-import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
+import { FakeClock } from "../support/fake-clock.js";
 import { hashCanonicalInput } from "../../src/infrastructure/crypto/canonical-input-hash.js";
 import { hashOpaqueToken } from "../../src/infrastructure/crypto/tokens.js";
 

@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 
 import { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
 import { MigrationRunner, MigrationSource } from "../../src/infrastructure/database/migrations.js";
-import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
+import { FakeClock } from "../support/fake-clock.js";
 
 const canonicalMigrationsPath = fileURLToPath(new URL("../../migrations/", import.meta.url));
 

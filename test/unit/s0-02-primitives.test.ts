@@ -19,7 +19,7 @@ import {
 	parseTopic,
 } from "../../src/domain/value-objects/enums.js";
 import { type Clock } from "../../src/application/ports/clock.js";
-import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
+import { FakeClock } from "../support/fake-clock.js";
 import {
 	deadlineAtEndOfLocalDay,
 	formatEventDate,

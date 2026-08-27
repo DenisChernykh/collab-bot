@@ -22,7 +22,7 @@ import { SqliteOutboxDeliveryRepository } from "../../src/infrastructure/databas
 import { SqliteProductEventRepository } from "../../src/infrastructure/database/product-event-repository.js";
 import { MigrationRunner, MigrationSource } from "../../src/infrastructure/database/migrations.js";
 import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/database/transaction-runner.js";
-import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
+import { FakeClock } from "../support/fake-clock.js";
 
 const canonicalMigrationsPath = fileURLToPath(new URL("../../migrations/", import.meta.url));
 const DAY_MS = 24 * 60 * 60 * 1000;
