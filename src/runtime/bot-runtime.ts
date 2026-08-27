@@ -9,6 +9,8 @@ import type { Clock } from "../application/ports/clock.js";
 import { parseConfig } from "../config/parse-config.js";
 import { registerProfileBot } from "../bot/profile-bot.js";
 import { DurableCommandExecutor } from "../application/commands/command-executor.js";
+import { CallbackActionService } from "../application/commands/callback-action.js";
+import { RequireActiveActor } from "../application/commands/require-active-actor.js";
 import { hashCanonicalInput } from "../infrastructure/crypto/canonical-input-hash.js";
 import { ProfileService } from "../application/profiles/profile-service.js";
 import { DatabaseBoundary } from "../infrastructure/database/database-boundary.js";
@@ -19,6 +21,7 @@ import { SqliteCollaborationRepository } from "../infrastructure/database/collab
 import { SqliteCollaborationSessionRepository } from "../infrastructure/database/collaboration-session-repository.js";
 import { CollaborationDraftService } from "../application/collaborations/collaboration-draft-service.js";
 import { SqliteDurableCommandStore } from "../infrastructure/database/durable-command-repository.js";
+import { SqliteCallbackActionRepository } from "../infrastructure/database/callback-action-repository.js";
 import { DatabaseBoundaryTransactionRunner } from "../infrastructure/database/transaction-runner.js";
 import { SqliteTelegramUserRepository } from "../infrastructure/database/telegram-user-repository.js";
 import { SafeLogger } from "../infrastructure/logging/safe-logger.js";
@@ -32,6 +35,7 @@ import { SqliteCollaborationBrowseRepository } from "../infrastructure/database/
 import { DeliveryRunner } from "../application/outbox/delivery-runner.js";
 import { SystemProviderDeadline } from "../infrastructure/time/provider-deadline.js";
 import { RandomClaimTokenGenerator } from "../infrastructure/crypto/claim-token.js";
+import { NodeOpaqueTokenCodec } from "../infrastructure/crypto/ingress-codecs.js";
 import { GrammyTelegramTransport } from "../infrastructure/telegram/grammy-telegram-transport.js";
 import { OUTBOX_DELIVERY_KINDS } from "../application/ports/outbox-delivery-store.js";
 import { preflightShowcase } from "./showcase-preflight.js";
@@ -114,6 +118,16 @@ export async function createBotRuntime(options: BotRuntimeOptions): Promise<BotR
 			options.config.expectedBotUsername,
 		);
 		const durableCommandExecutor = new DurableCommandExecutor(transactionRunner, new SqliteDurableCommandStore(boundary), { hash: hashCanonicalInput }, clock);
+		const callbackActionService = new CallbackActionService({
+			transactionRunner,
+			clock,
+			executor: durableCommandExecutor,
+			repository: new SqliteCallbackActionRepository(boundary),
+			actorGuard: new RequireActiveActor(userRepository),
+			allowedActionTypes: new Set(["application.accept", "application.reject", "collaboration.close"]),
+			currentVersion: (entityId) => applicationService.currentActionVersion(entityId),
+			tokenCodec: new NodeOpaqueTokenCodec(),
+		});
 		let inFlight = 0;
 		let drainResolve: (() => void) | undefined;
 		bot.use(async (_ctx, next) => {
@@ -136,6 +150,7 @@ export async function createBotRuntime(options: BotRuntimeOptions): Promise<BotR
 			collaborationPublicationService,
 			collaborationBrowseService,
 			applicationService,
+			callbackActionService,
 		});
 		const logger = new SafeLogger((entry) => options.logSink?.(JSON.stringify(entry)), clock, "bot");
 		bot.catch((error: BotError) => {
@@ -158,6 +173,7 @@ export async function createBotRuntime(options: BotRuntimeOptions): Promise<BotR
 				await collaborationPublicationService.projectTerminalOutcomes(outboxStore);
 				while (!deliveryLoopStop) {
 					if (capability.canPublish) await collaborationPublicationService.cancelExpiredPrepared();
+					await collaborationBrowseRepository.supersedeStaleProjectionDeliveries(clock.now().getTime());
 					await deliveryRunner.runOnce();
 					await new Promise<void>((resolve) => { const timer = setTimeout(resolve, 250); timer.unref?.(); });
 				}

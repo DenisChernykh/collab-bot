@@ -6,6 +6,8 @@ import type { Update } from "grammy/types";
 import type { Clock } from "../application/ports/clock.js";
 import type { CanonicalInput } from "../application/commands/canonical-input.js";
 import type { DurableCommandExecutor } from "../application/commands/command-executor.js";
+import type { CallbackActionService } from "../application/commands/callback-action.js";
+import type { SafeResult } from "../application/commands/safe-result.js";
 import type {
 	ProfileSessionRepository,
 	ProfileSessionRecord,
@@ -40,7 +42,8 @@ import type { CollaborationDraftInput, CollaborationDraftState, CollaborationWiz
 import type { ProfileInput } from "../domain/profiles/profile.js";
 import { DomainValidationError, parseCollaborationFormat, parsePlatformType, parseProfileType, parseTargetProfileType, parseTopic, type CollaborationFormat, type PlatformType, type ProfileType, type Topic } from "../domain/value-objects/enums.js";
 
-const PROFILE_STATIC_CALLBACKS = new Set(["menu:home", "profile:create", "profile:resume", "profile:view", "profile:edit", "profile:unavailable", "collaboration:start", "collaboration:resume", "collaboration:own", "browse:start"]);
+const PROFILE_STATIC_CALLBACKS = new Set(["menu:home", "profile:create", "profile:resume", "profile:view", "profile:edit", "profile:unavailable", "collaboration:start", "collaboration:resume", "collaboration:own", "application:own", "browse:start"]);
+const CALLBACK_ACTION_TTL_MS = 24 * 60 * 60 * 1_000;
 const PROFILE_LINK_PROMPT = "Добавьте ссылку, по которой другие участники смогут познакомиться с вами.";
 const PROFILE_LINK_CHOICE_HINT = "Нажмите «Выбрать Telegram-канал» или «Указать другую ссылку». Для сайта или соцсети выберите «Указать другую ссылку» и отправьте ссылку.";
 const PROFILE_TYPE_LABELS: Record<ProfileType, string> = {
@@ -132,6 +135,7 @@ export interface ProfileBotOptions {
 	readonly collaborationPublicationService?: CollaborationPublicationService;
 	readonly collaborationBrowseService?: CollaborationBrowseService;
 	readonly applicationService?: ApplicationService;
+	readonly callbackActionService?: CallbackActionService;
 }
 
 export interface RegisteredProfileBot {
@@ -158,6 +162,10 @@ export function registerProfileBot(bot: Bot, options: ProfileBotOptions): Regist
 	bot.on("callback_query:data", async (ctx) => {
 		const callbackQuery = ctx.callbackQuery;
 		const data = callbackQuery.data;
+		if (data.startsWith("cb_")) {
+			await handleOpaqueCallback(ctx, options, data);
+			return;
+		}
 		await runDurable(ctx, options, { kind: "callback_query", data }, async (workCtx) => {
 			if (callbackQuery.message?.chat.type !== "private" || workCtx.from === undefined) {
 				await workCtx.answerCallbackQuery();
@@ -234,6 +242,9 @@ export function registerProfileBot(bot: Bot, options: ProfileBotOptions): Regist
 			case "collaboration:own":
 				await renderOwnCollaborations(workCtx, options, userId);
 				return;
+			case "application:own":
+				await renderOwnApplications(workCtx, options, userId);
+				return;
 			case "browse:start":
 				await openFeed(workCtx, options, userId);
 				return;
@@ -287,6 +298,10 @@ async function handleText(ctx: Context, options: ProfileBotOptions, userId: stri
 	}
 	if (command === "/my_collaborations") {
 		await renderOwnCollaborations(ctx, options, userId);
+		return;
+	}
+	if (command === "/my_applications" || command === "/my_apps") {
+		await renderOwnApplications(ctx, options, userId);
 		return;
 	}
 	if (command === "/feed") {
@@ -384,6 +399,91 @@ async function runDurable(
 		if (reply.options === undefined) await ctx.reply(reply.text);
 		else await ctx.reply(reply.text, reply.options);
 	}
+}
+
+async function handleOpaqueCallback(ctx: Context, options: ProfileBotOptions, callbackPayload: string): Promise<void> {
+	const from = ctx.from;
+	const updateId = getUpdateId(ctx.update);
+	if (ctx.callbackQuery?.message?.chat.type !== "private" || from === undefined || updateId === undefined) {
+		await ctx.answerCallbackQuery();
+		return;
+	}
+	const callbackActions = options.callbackActionService;
+	const applications = options.applicationService;
+	if (callbackActions === undefined || applications === undefined) {
+		await ctx.answerCallbackQuery();
+		await ctx.reply("Действие сейчас недоступно или уже неактуально.", { reply_markup: menuKeyboard(options) });
+		return;
+	}
+	const userId = String(from.id);
+	const occurredAt = telegramOccurredAt(ctx.update);
+	const result = await callbackActions.invoke({
+		context: {
+			commandId: `telegram:update:${updateId}`,
+			telegramUpdateId: updateId,
+			actor: { kind: "telegram_user", telegramUserId: userId },
+			occurredAt,
+		},
+		callbackPayload,
+		effect: async (action): Promise<SafeResult> => {
+			await upsertActorSnapshot(ctx, options);
+			if (action.actionType === "application.accept" || action.actionType === "application.reject") {
+				const applicationId = parseCallbackEntity(action.entityId, "application");
+				if (applicationId === undefined) return callbackConflict();
+				const decision = await applications.decide({
+					telegramUserId: userId,
+					applicationId,
+					decision: action.actionType === "application.accept" ? "accept" : "reject",
+					occurredAt: occurredAt.getTime(),
+				});
+				return decision.ok
+					? { version: 1, outcome: "completed", messageKey: "command_completed", entityId: decision.collaborationId, referenceId: decision.applicationId }
+					: callbackConflict();
+			}
+			if (action.actionType === "collaboration.close") {
+				const collaborationId = parseCallbackEntity(action.entityId, "collaboration");
+				if (collaborationId === undefined) return callbackConflict();
+				const completion = await applications.completeRecruitment({
+					telegramUserId: userId,
+					collaborationId,
+					occurredAt: occurredAt.getTime(),
+				});
+				return completion.ok
+					? { version: 1, outcome: "completed", messageKey: "command_completed", entityId: completion.collaborationId }
+					: callbackConflict();
+			}
+			return callbackConflict();
+		},
+	});
+	await ctx.answerCallbackQuery();
+	if ((result.outcome === "completed" || result.outcome === "ok") && result.entityId !== undefined) {
+		const management = await applications.getAuthorManagement(userId, result.entityId);
+		if (management !== undefined) {
+			await renderAuthorManagement(ctx, options, userId, management);
+			return;
+		}
+		await ctx.reply("Решение сохранено.", { reply_markup: menuKeyboard(options) });
+		return;
+	}
+	if (result.outcome === "stale") {
+		await ctx.reply("Эта кнопка устарела и больше неактуальна. Откройте карточку заново.", { reply_markup: menuKeyboard(options) });
+		return;
+	}
+	if (result.outcome === "expired") {
+		await ctx.reply("Срок действия этой кнопки истёк. Откройте карточку заново.", { reply_markup: menuKeyboard(options) });
+		return;
+	}
+	await ctx.reply("Действие недоступно или уже неактуально.", { reply_markup: menuKeyboard(options) });
+}
+
+function callbackConflict(): SafeResult {
+	return { version: 1, outcome: "conflict", messageKey: "callback_unavailable" };
+}
+
+function parseCallbackEntity(value: string | null, kind: "application" | "collaboration"): string | undefined {
+	if (value === null || !value.startsWith(`${kind}:`)) return undefined;
+	const id = value.slice(kind.length + 1);
+	return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id) ? id : undefined;
 }
 
 async function handleChatShared(ctx: Context, options: ProfileBotOptions, userId: string, shared: { request_id: number; chat_id: number | string; title?: string; username?: string }): Promise<void> {
@@ -888,9 +988,111 @@ async function renderMenu(ctx: Context, options: ProfileBotOptions, userId: stri
 async function renderOwnCollaborations(ctx: Context, options: ProfileBotOptions, userId: string): Promise<void> {
 	if (options.collaborationPublicationService === undefined) { await ctx.reply("Этот раздел пока готовится.", { reply_markup: menuKeyboard(options) }); return; }
 	const summaries = await options.collaborationPublicationService.listOwn(userId);
-	if (summaries.length === 0) { await ctx.reply("У вас пока нет коллабораций.", { reply_markup: menuKeyboard(options) }); return; }
-	const lines = summaries.map((summary) => `• ${summary.title ?? "Без названия"} — ${collaborationStatusLabel(summary.status)}`);
-	await ctx.reply(`Мои коллаборации\n\n${lines.join("\n")}`, { reply_markup: menuKeyboard(options) });
+	const management = options.applicationService === undefined ? [] : await options.applicationService.listAuthorManagement(userId);
+	if (summaries.length === 0 && management.length === 0) { await ctx.reply("У вас пока нет коллабораций.", { reply_markup: menuKeyboard(options) }); return; }
+	for (const card of management) await renderAuthorManagement(ctx, options, userId, card);
+	const managedIds = new Set(management.map((card) => card.collaborationId));
+	const other = summaries.filter((summary) => !managedIds.has(summary.collaborationId));
+	if (other.length > 0) {
+		const lines = other.map((summary) => `• ${summary.title ?? "Без названия"} — ${collaborationStatusLabel(summary.status)}`);
+		await ctx.reply(`Мои коллаборации\n\n${lines.join("\n")}`, { reply_markup: menuKeyboard(options) });
+	}
+}
+
+async function renderOwnApplications(ctx: Context, options: ProfileBotOptions, userId: string): Promise<void> {
+	const service = options.applicationService;
+	if (service === undefined) {
+		await ctx.reply("Этот раздел пока готовится.", { reply_markup: menuKeyboard(options) });
+		return;
+	}
+	const applications = await service.listOwnApplications(userId);
+	if (applications.length === 0) {
+		await ctx.reply("У вас пока нет откликов.", { reply_markup: menuKeyboard(options) });
+		return;
+	}
+	for (const application of applications) {
+		const lines = [
+			application.collaborationTitle ?? "Коллаборация",
+			`Статус отклика: ${applicationStatusLabel(application.status)}`,
+		];
+		let keyboard: InlineKeyboard | undefined;
+		if (application.status === "accepted") {
+			const contact = await service.getPairContact(userId, application.applicationId);
+			if (contact.ok) keyboard = new InlineKeyboard().url("Написать в Telegram", contact.url);
+			else lines.push("Контакт сейчас недоступен.");
+		}
+		await ctx.reply(lines.join("\n"), { reply_markup: keyboard ?? menuKeyboard(options) });
+	}
+}
+
+type AuthorManagementView = NonNullable<Awaited<ReturnType<ApplicationService["getAuthorManagement"]>>>;
+
+async function renderAuthorManagement(
+	ctx: Context,
+	options: ProfileBotOptions,
+	userId: string,
+	management: AuthorManagementView,
+): Promise<void> {
+	const header = [
+		"Управление коллаборацией",
+		"",
+		`${management.title ?? "Без названия"} — ${collaborationStatusLabel(management.status)}`,
+		`Принято: ${management.acceptedCount} из ${management.slotsTotal}`,
+		management.applications.length === 0 ? "Откликов пока нет." : `Откликов: ${management.applications.length}`,
+	];
+	let headerKeyboard: InlineKeyboard | undefined;
+	if (management.status === "published" && management.acceptedCount > 0) {
+		const closeToken = await createDecisionToken(options, userId, "collaboration.close", `collaboration:${management.collaborationId}`, management.projectionRevision);
+		if (closeToken !== undefined) headerKeyboard = new InlineKeyboard().text("Завершить набор", closeToken);
+	}
+	await ctx.reply(header.join("\n"), { reply_markup: headerKeyboard ?? menuKeyboard(options) });
+	for (const application of management.applications) {
+		const applicant = application.applicant;
+		const lines = [
+			`Кандидат: ${applicant.displayName}`,
+			`Тип: ${profileTypeLabel(applicant.type)}`,
+			...(applicant.description === null ? [] : [`Описание: ${applicant.description}`]),
+			...(applicant.topics.length === 0 ? [] : [`Темы: ${applicant.topics.map(topicLabel).join(", ")}`]),
+			`Площадка: ${applicant.platform.title === null ? applicant.platform.url : `${applicant.platform.title} — ${applicant.platform.url}`}`,
+			...(applicant.platform.audienceSize === null ? [] : [`Аудитория: ${applicant.platform.audienceSize}`]),
+			"",
+			`Сообщение: ${application.message}`,
+			`Статус: ${applicationStatusLabel(application.status)}`,
+		];
+		let keyboard: InlineKeyboard | undefined;
+		if (application.status === "pending") {
+			const acceptToken = await createDecisionToken(options, userId, "application.accept", `application:${application.applicationId}`, management.projectionRevision);
+			const rejectToken = await createDecisionToken(options, userId, "application.reject", `application:${application.applicationId}`, management.projectionRevision);
+			if (acceptToken !== undefined && rejectToken !== undefined) keyboard = new InlineKeyboard().text("Принять", acceptToken).text("Отказать", rejectToken);
+		} else if (application.status === "accepted") {
+			const contact = await options.applicationService?.getPairContact(userId, application.applicationId);
+			if (contact?.ok) keyboard = new InlineKeyboard().url("Написать в Telegram", contact.url);
+			else lines.push("Контакт сейчас недоступен.");
+		}
+		await ctx.reply(lines.join("\n"), keyboard === undefined ? undefined : { reply_markup: keyboard });
+	}
+}
+
+async function createDecisionToken(
+	options: ProfileBotOptions,
+	telegramUserId: string,
+	actionType: "application.accept" | "application.reject" | "collaboration.close",
+	entityId: string,
+	expectedVersion: number,
+): Promise<string | undefined> {
+	if (options.callbackActionService === undefined) return undefined;
+	return options.callbackActionService.create({
+		actor: { kind: "telegram_user", telegramUserId },
+		actionType,
+		entityId,
+		expectedVersion,
+		mode: "one_shot",
+		expiresAt: now(options.clock) + CALLBACK_ACTION_TTL_MS,
+	});
+}
+
+function applicationStatusLabel(status: string): string {
+	return ({ pending: "ожидает решения", accepted: "принят", rejected: "отклонён", closed: "закрыт", withdrawn: "отозван" } as Record<string, string>)[status] ?? "недоступен";
 }
 
 async function openFeed(ctx: Context, options: ProfileBotOptions, userId: string): Promise<void> {
@@ -961,6 +1163,13 @@ async function renderBrowsePage(ctx: Context, options: ProfileBotOptions, page: 
 }
 
 async function renderDeepLink(ctx: Context, options: ProfileBotOptions, userId: string, startParameter: string): Promise<void> {
+	if (/^c_[A-Za-z0-9_-]{22}$/.test(startParameter) && options.applicationService !== undefined) {
+		const management = await options.applicationService.getAuthorManagementByPublicToken(userId, startParameter.slice(2));
+		if (management !== undefined) {
+			await renderAuthorManagement(ctx, options, userId, management);
+			return;
+		}
+	}
 	const service = options.collaborationBrowseService;
 	if (service === undefined) {
 		await ctx.reply("Предложение недоступно.", { reply_markup: menuKeyboard(options) });
@@ -1227,10 +1436,20 @@ async function renderReview(ctx: Context, options: ProfileBotOptions, userId: st
 async function ensureActor(ctx: Context, options: ProfileBotOptions): Promise<boolean> {
 	if (ctx.from === undefined) return false;
 	const id = String(ctx.from.id);
-	const displayName = [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(" ").trim() || "Telegram user";
-	await options.telegramUserRepository.upsert({ telegramUserId: id, ...(ctx.from.username === undefined ? {} : { username: ctx.from.username }), displayName, updatedAt: now(options.clock) });
+	await upsertActorSnapshot(ctx, options);
 	const record = await options.telegramUserRepository.findByTelegramUserId(id);
 	return record?.status === "active";
+}
+
+async function upsertActorSnapshot(ctx: Context, options: ProfileBotOptions): Promise<void> {
+	if (ctx.from === undefined) return;
+	const displayName = [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(" ").trim() || "Telegram user";
+	await options.telegramUserRepository.upsert({
+		telegramUserId: String(ctx.from.id),
+		...(ctx.from.username === undefined ? {} : { username: ctx.from.username }),
+		displayName,
+		updatedAt: now(options.clock),
+	});
 }
 
 async function activeSession(options: ProfileBotOptions, userId: string) {
@@ -1452,7 +1671,7 @@ function collaborationKeyboard(state: CollaborationDraftState, revision: number,
 function menuKeyboard(options?: ProfileBotOptions): InlineKeyboard {
 	const collaborationAction = options?.collaborationDraftService === undefined ? "profile:unavailable" : "collaboration:start";
 	const browseAction = options?.collaborationBrowseService === undefined ? "profile:unavailable" : "browse:start";
-	return new InlineKeyboard().text("➕ Создать коллаборацию", collaborationAction).row().text("🔎 Найти коллаборацию", browseAction).row().text("📋 Мои коллаборации", options?.collaborationPublicationService === undefined ? "profile:unavailable" : "collaboration:own").row().text("💬 Мои отклики", "profile:unavailable").row().text("👤 Мой профиль", "profile:view");
+	return new InlineKeyboard().text("➕ Создать коллаборацию", collaborationAction).row().text("🔎 Найти коллаборацию", browseAction).row().text("📋 Мои коллаборации", options?.collaborationPublicationService === undefined ? "profile:unavailable" : "collaboration:own").row().text("💬 Мои отклики", options?.applicationService === undefined ? "profile:unavailable" : "application:own").row().text("👤 Мой профиль", "profile:view");
 }
 function browseCallback(action: string, session: BrowseSessionRecord): string { return `${action}:${session.generation}:${session.revision.toString(36)}`; }
 function browseCardKeyboard(card: BrowseCollaborationRecord, session: BrowseSessionRecord): InlineKeyboard {

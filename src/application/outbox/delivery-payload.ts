@@ -111,7 +111,13 @@ function isSafeInlineKeyboard(value: unknown, method: "send" | "edit"): value is
 	if (keys.some((key) => typeof key !== "string" || !["text", "url"].includes(key)) || keys.length !== 2) return false;
 	const text = ownDataValue(button, "text");
 	const url = ownDataValue(button, "url");
-	return typeof text === "string" && text.length > 0 && text.length <= 128 && typeof url === "string" && /^https:\/\/t\.me\/[A-Za-z0-9_]{1,64}\?start=c_[A-Za-z0-9_-]{22}$/.test(url);
+	return typeof text === "string" && text.length > 0 && text.length <= 128 && typeof url === "string" && isAllowedTelegramUrl(url);
+}
+
+function isAllowedTelegramUrl(value: string): boolean {
+	return /^https:\/\/t\.me\/[A-Za-z0-9_]{1,64}\?start=c_[A-Za-z0-9_-]{22}$/.test(value) ||
+		/^https:\/\/t\.me\/[A-Za-z0-9_]{5,32}$/.test(value) ||
+		/^tg:\/\/user\?id=[1-9][0-9]{0,19}$/.test(value);
 }
 
 function cloneInlineKeyboard(value: DeliveryInlineKeyboard): DeliveryInlineKeyboard {

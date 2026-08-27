@@ -151,6 +151,7 @@ export const collaborations = sqliteTable(
 		projectionRevision: integer("projection_revision").notNull(),
 		publishedAt: integer("published_at"),
 		firstApplicationAt: integer("first_application_at"),
+		matchedAt: integer("matched_at"),
 		createdAt: integer("created_at").notNull(),
 		updatedAt: integer("updated_at").notNull(),
 	},
@@ -163,6 +164,14 @@ export const collaborations = sqliteTable(
 		check("collaborations_projection_revision_nonnegative", sql`${table.projectionRevision} >= 0`),
 		check("collaborations_published_at_nonnegative", sql`${table.publishedAt} IS NULL OR (typeof(${table.publishedAt}) = 'integer' AND ${table.publishedAt} >= 0)`),
 		check("collaborations_first_application_at_nonnegative", sql`${table.firstApplicationAt} IS NULL OR (typeof(${table.firstApplicationAt}) = 'integer' AND ${table.firstApplicationAt} >= 0)`),
+		check(
+			"collaborations_matched_at_nonnegative",
+			sql`${table.matchedAt} IS NULL OR (typeof(${table.matchedAt}) = 'integer' AND ${table.matchedAt} >= 0 AND (${table.publishedAt} IS NULL OR ${table.matchedAt} >= ${table.publishedAt}) AND ${table.matchedAt} <= ${table.updatedAt})`,
+		),
+		check(
+			"collaborations_matched_at_coherence",
+			sql`(${table.status} IN ('matched', 'completed') AND ${table.matchedAt} IS NOT NULL) OR (${table.status} IN ('cancelled', 'hidden')) OR (${table.status} NOT IN ('matched', 'completed', 'cancelled', 'hidden') AND ${table.matchedAt} IS NULL)`,
+		),
 		check("collaborations_timestamp_coherence", sql`${table.updatedAt} >= ${table.createdAt}`),
 	],
 );

@@ -38,7 +38,7 @@
 | S0 — Compact foundation | `completed` | 7 | Проверенный foundation без operational platform |
 | S1 — Profile vertical | `completed` | 2 | Реальный бот открывается, пользователь создаёт и видит профиль |
 | S2 — Card publication vertical | `completed` | 2 | Автор создаёт и публикует карточку через fake showcase transport |
-| S3 — Marketplace vertical | `in_progress` | 4 | Два пользователя проходят отклик, решение и получают Telegram action |
+| S3 — Marketplace vertical | `completed` | 4 | Два пользователя проходят отклик, решение и получают Telegram action |
 | S4 — Shareable launch | `pending` | 1 | Admin hide, полный real journey и готовая к распространению ссылка |
 
 ```text
@@ -70,6 +70,10 @@ P0-01 → P0-02
 | C-01 | `8ecf3ff1954bb2ef28bda97d2b4fafd3efc5cffd`, `aaa66f9bf79cfd9532829065ef786074d99d1c76` | Telegram-first contact migration and remediation |
 | S2-01 | `073ab018929ceb444a1ca00c91c69d4c7f3d3ce2` | resumable collaboration drafts |
 | S2-02 | `603f8a0c1749d5eb6457c8e9727595d3a4f6a06b` | known-result publication and own cards |
+| S3-01 | `123307c460570e1c521d7e3e72a802011a301530` | minimal applicant profiles |
+| S3-02 | `c804e7d8c85b1de87ba6fb4bf41682bf107922d5` | feed and public deep links |
+| S3-03 | `b514e69383d479855c96380cfca34b676335acfc` | resumable quick-profile applications |
+| S3-04 | `SELF` | serialized decisions and pairwise contacts |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -301,7 +305,7 @@ P0-01 → P0-02
 
 #### S3-04 — Decisions, capacity and pair contacts
 
-- **Status:** `pending`
+- **Status:** `completed`
 - **Objective:** Let the author decide pending applications, close capacity and let only each accepted pair open a current Telegram contact action.
 - **Requirements:** `LFR-06`–`LFR-08`, `LFR-10`–`LFR-11`; `LAC-04`–`LAC-06`, `LAC-08`–`LAC-09`.
 - **Dependencies:** `S3-03`.
@@ -312,7 +316,16 @@ P0-01 → P0-02
 - **Tests first:** accept/reject/replay, concurrent last slot, manual close, failed/ambiguous DM/showcase edit, authoritative lists, foreign/stale callbacks, username/user-ID/fail-closed matrix and multi-slot pair isolation.
 - **Verification:** focused unit/SQLite/fake tests, migration fresh/upgrade, core fake journey, `pnpm db:verify`, `pnpm check`, diff/secret scans and one stage-final critical review; real two-account checkpoint remains separately authorized.
 - **Exit criteria:** `LAC-04`–`LAC-06` and the core fake journey pass; one commit `S3-04: decide applications and reveal pair contacts`.
-- **Evidence:** Fill exact evidence and `Commit SHA: SELF`.
+- **Evidence:**
+  - Commit SHA: `SELF` — local commit subject: `S3-04: decide applications and reveal pair contacts`.
+  - Changed files: `migrations/0011_s3-04-application-decisions.sql`, `src/application/applications/application-service.ts`, `src/application/outbox/delivery-payload.ts`, `src/bot/profile-bot.ts`, `src/infrastructure/database/collaboration-browse-repository.ts`, `src/infrastructure/database/drizzle-schema.ts`, `src/runtime/bot-runtime.ts`, `test/unit/s3-04-application-decision.test.ts`, `test/integration/s3-04-application-decision.test.ts`, `test/e2e-fake/s3-02-browse-bot.test.ts`, `test/integration/s2-02-publication.test.ts`, `test/integration/s3-03-application.test.ts`, and this plan evidence; exactly 12 source/test/migration files, within the bounded-unit limit.
+  - Tests first: the initial focused RED produced the expected `18` failures for the absent `0011` schema, decision/capacity use case, callback routing, persisted views and pair-contact behavior while the five pre-existing browse/application fake journeys stayed green. The final focused unit/SQLite/fake gate is PASS — `3` files and `28` tests.
+  - Aggregate checks: Node `v24.18.0` and pnpm `11.15.1`; `pnpm check` PASS — unit `41`, integration `69`, runtime `30`, build; separate `pnpm test:e2e:fake` PASS — `15`; `pnpm db:verify` PASS; `git diff --check` PASS; credential-shaped secret scan PASS with only repository-owned configuration names and explicit fake/privacy fixtures.
+  - Migration/persistence evidence: fresh schema and populated `0010→0011` upgrade add `matched_at`, backfill valid legacy matched/completed rows, enforce application decision/capacity/author invariants and preserve profile/platform/topic/card/publication/application IDs, active-profile uniqueness and all foreign keys through close/reopen. Existing migrations were not rewritten.
+  - Decision/delivery evidence: serialized accept/reject/manual close prevents last-slot overflow, closes only the required pending set, records immutable decision metadata and increments authoritative projection revision on every slot/status change. Last-slot and manual close notify every accepted pair and closed pending candidate. DM/showcase intents are atomic with the business mutation; insertion failure rolls the transaction back, while failed/ambiguous provider outcomes leave persisted decisions authoritative. Older prepared or retryable projection edits are superseded before replacement and again before every runtime claim; the dispatch-then-retry race and replacement rollback have dedicated SQLite regressions.
+  - Runtime/privacy evidence: actor-bound hashed `cb_*` decisions enter before the generic external update wrapper and replay without nested `in_progress` receipts or duplicate effects. Author management and `Мои отклики` read persisted statuses. Only the exact accepted pair gets a freshly computed `https://t.me/<username>` or `tg://user?id=<positive-decimal-id>` action; missing/corrupt identity fails closed and multi-slot partners cannot see one another. Delivery payload v1 accepts only the compatible URL allowlist and cannot persist callback data.
+  - Stage gate/review: one real-runtime fake journey creates the author profile and two-slot card, delivers exactly one showcase publication, creates three quick-profile applications from the deep link, rejects one, accepts two through last-slot `matched`, delivers the matched edit, verifies pair contacts/own lists and survives restart without duplicate state. The independent critical review initially found completion-notification, stale-projection and whole-journey blockers; one consolidated fix wave closed them, including the pre-claim in-flight retry fence found during final self-review. The same reviewer returned `PASS` on the final candidate; no credential/private-contact exposure, authoritative corruption, duplicate business effect, broken core journey or unrunnable-stage blocker remains.
+  - Boundaries: no dependencies changed and no withdraw, deadline runner, completion/reminders, moderation/blocking, analytics, recommendations, phone request, contact handshake or in-bot relay was added. No real Telegram, credentials, private database, network, bot process, remote, push, PR or deploy was used. The separately authorized real two-account Telegram checkpoint remains unperformed.
 - **Stop conditions:** Capacity/privacy/fallback cannot be proven, implementation requires Later lifecycle or real Telegram for local acceptance, or unit boundary is exceeded.
 
 ### S4 — Shareable launch
