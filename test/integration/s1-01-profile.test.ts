@@ -144,6 +144,121 @@ describe("S1-01 profile state and privacy boundary", () => {
 		});
 	});
 
+	it("persists manual/API audience provenance and protects newer platform state", async () => {
+		await withDatabase(async (boundary, databasePath) => {
+			await seedUser(boundary, "100");
+			const clock = new FakeClock(1_700_000_000_000);
+			const repository = new SqliteProfileRepository(boundary);
+			const service = new ProfileService(repository, new DatabaseBoundaryTransactionRunner(boundary), clock);
+			const created = await service.create("100", {
+				...profileInput,
+				platforms: [{ platformType: "telegram", url: "https://t.me/alice_channel", username: "alice_channel", telegramChatId: "-100123", audienceSize: 77 }],
+			});
+			expect(await boundary.query("SELECT audience_size, audience_source, audience_observed_at FROM profile_platforms WHERE profile_id = ?", [created.id])).toEqual([{
+				audience_size: 77,
+				audience_source: "manual",
+				audience_observed_at: 1_700_000_000_000,
+			}]);
+
+			clock.advanceBy(1_000);
+			const empty = await service.update("100", {
+				...profileInput,
+				platforms: [{ platformType: "telegram", url: "https://t.me/alice_channel", username: "alice_channel", telegramChatId: "-100123" }],
+			});
+			const platformId = empty.platforms[0]?.id;
+			if (platformId === undefined) throw new Error("updated platform was not persisted");
+			await expect(new DatabaseBoundaryTransactionRunner(boundary).withTransaction(() => repository.storeTelegramAudienceIfMissing({
+				profileId: empty.id,
+				platformId,
+				audienceSize: 88,
+				observedAt: 1_700_000_002_000,
+			}))).resolves.toBe(true);
+			expect(await boundary.query("SELECT audience_size, audience_source, audience_observed_at FROM profile_platforms WHERE id = ?", [platformId])).toEqual([{
+				audience_size: 88,
+				audience_source: "telegram_api",
+				audience_observed_at: 1_700_000_002_000,
+			}]);
+			expect(await boundary.query("SELECT updated_at FROM profiles WHERE id = ?", [empty.id])).toEqual([{ updated_at: 1_700_000_002_000 }]);
+
+			clock.advanceBy(2_000);
+			const manuallyReplaced = await service.update("100", {
+				...profileInput,
+				platforms: [{ platformType: "telegram", url: "https://t.me/replaced_channel", username: "replaced_channel", audienceSize: 99 }],
+			});
+			await expect(new DatabaseBoundaryTransactionRunner(boundary).withTransaction(() => repository.storeTelegramAudienceIfMissing({
+				profileId: empty.id,
+				platformId,
+				audienceSize: 100,
+				observedAt: 1_700_000_005_000,
+			}))).resolves.toBe(false);
+			expect(await service.getOwn("100")).toMatchObject({ platforms: [{ id: manuallyReplaced.platforms[0]?.id, audienceSize: 99 }] });
+
+			await boundary.close();
+			const reopened = new DatabaseBoundary(databasePath);
+			try {
+				expect(await reopened.query("SELECT audience_size, audience_source, audience_observed_at FROM profile_platforms WHERE profile_id = ?", [empty.id])).toEqual([{
+					audience_size: 99,
+					audience_source: "manual",
+					audience_observed_at: 1_700_000_003_000,
+				}]);
+			} finally {
+				await reopened.close();
+			}
+		});
+	});
+
+	it("upgrades 0012 to nullable audience provenance without inventing legacy metadata", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "collaboration-fut-01-upgrade-"));
+		const migrationsPath = join(directory, "migrations");
+		const boundary = new DatabaseBoundary(join(directory, "app.sqlite"));
+		try {
+			await mkdir(migrationsPath);
+			for (const filename of [
+				"0001_s0-04-ingress-foundation.sql",
+				"0002_s0-05-outbox-events.sql",
+				"0003_s1-01-profile-state.sql",
+				"0004_s1-02-profile-sessions.sql",
+				"0005_s1-03-telegram-first-contact.sql",
+				"0006_s2-01-collaboration-drafts.sql",
+				"0007_s2-02-channel-publications.sql",
+				"0008_s3-01-minimal-profiles.sql",
+				"0009_s3-02-browse.sql",
+				"0010_s3-03-applications.sql",
+				"0011_s3-04-application-decisions.sql",
+				"0012_s4-01-admin-hide.sql",
+			]) await copyFile(join(canonicalMigrationsPath, filename), join(migrationsPath, filename));
+			const previousSource = await MigrationSource.fromDirectory(migrationsPath);
+			expect((await new MigrationRunner(previousSource).migrate(boundary)).applied).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+			await seedUser(boundary, "100");
+			await boundary.execute(
+				"INSERT INTO profiles (id, telegram_user_id, type, display_name, description, city_code, status, created_at, updated_at) VALUES (?, ?, ?, ?, NULL, 'ekaterinburg', 'active', 1, 1)",
+				["11111111-1111-4111-8111-111111111111", "100", "telegram_channel", "Legacy Channel"],
+			);
+			await boundary.execute(
+				"INSERT INTO profile_platforms (id, profile_id, platform_type, url, title, username, telegram_chat_id, audience_size) VALUES (?, ?, 'telegram', ?, NULL, ?, ?, ?)",
+				["22222222-2222-4222-8222-222222222222", "11111111-1111-4111-8111-111111111111", "https://t.me/legacy_channel", "legacy_channel", "-100123", 42],
+			);
+
+			await copyFile(join(canonicalMigrationsPath, "0013_fut-01-telegram-audience.sql"), join(migrationsPath, "0013_fut-01-telegram-audience.sql"));
+			const upgradedSource = await MigrationSource.fromDirectory(migrationsPath);
+			expect((await new MigrationRunner(upgradedSource).migrate(boundary)).applied).toEqual([13]);
+			expect(await boundary.query("SELECT audience_size, audience_source, audience_observed_at FROM profile_platforms")).toEqual([{
+				audience_size: 42,
+				audience_source: null,
+				audience_observed_at: null,
+			}]);
+			await expect(boundary.execute("UPDATE profile_platforms SET audience_source = 'manual' WHERE id = '22222222-2222-4222-8222-222222222222'"))
+				.rejects.toThrow(/check constraint/i);
+			await expect(boundary.execute("UPDATE profile_platforms SET audience_source = 'unknown', audience_observed_at = 2 WHERE id = '22222222-2222-4222-8222-222222222222'"))
+				.rejects.toThrow(/check constraint/i);
+			await expect(boundary.execute("UPDATE profile_platforms SET audience_source = 'telegram_api', audience_observed_at = -1 WHERE id = '22222222-2222-4222-8222-222222222222'"))
+				.rejects.toThrow(/check constraint/i);
+		} finally {
+			await boundary.close();
+			await rm(directory, { recursive: true, force: true });
+		}
+	});
+
 	it("replays a duplicate Telegram command without creating a second profile", async () => {
 		await withDatabase(async (boundary) => {
 			await seedUser(boundary, "100");

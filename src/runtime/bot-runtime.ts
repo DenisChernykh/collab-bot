@@ -2,7 +2,7 @@ import { access, chmod, lstat, open } from "node:fs/promises";
 import { constants } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
 
-import { Bot, type BotError } from "grammy";
+import { Bot, GrammyError, HttpError, type BotError } from "grammy";
 
 import type { AppConfig } from "../config/parse-config.js";
 import type { Clock } from "../application/ports/clock.js";
@@ -13,6 +13,12 @@ import { CallbackActionService } from "../application/commands/callback-action.j
 import { RequireActiveActor } from "../application/commands/require-active-actor.js";
 import { hashCanonicalInput } from "../infrastructure/crypto/canonical-input-hash.js";
 import { ProfileService } from "../application/profiles/profile-service.js";
+import {
+	ProfileAudienceService,
+	TelegramAudienceLookupError,
+	type TelegramAudienceReader,
+	type TelegramAudienceTarget,
+} from "../application/profiles/profile-audience-service.js";
 import { DatabaseBoundary } from "../infrastructure/database/database-boundary.js";
 import { MigrationRunner, MigrationSource } from "../infrastructure/database/migrations.js";
 import { SqliteProfileRepository } from "../infrastructure/database/profile-repository.js";
@@ -44,6 +50,27 @@ import { SqliteAdminModerationRepository } from "../infrastructure/database/admi
 import { preflightShowcase } from "./showcase-preflight.js";
 
 export const ALLOWED_UPDATES = ["message", "callback_query"] as const;
+
+export class GrammyTelegramAudienceReader implements TelegramAudienceReader {
+	constructor(private readonly bot: Pick<Bot, "api">) {}
+
+	async getChatMemberCount(target: TelegramAudienceTarget, signal: AbortSignal): Promise<number> {
+		try {
+			return await this.bot.api.getChatMemberCount(target.value, signal as never);
+		} catch (error) {
+			if (error instanceof GrammyError) {
+				if (error.error_code === 429) throw new TelegramAudienceLookupError("rate_limited");
+				if (error.error_code === 403) throw new TelegramAudienceLookupError("forbidden");
+				if (error.error_code === 400) {
+					throw new TelegramAudienceLookupError(/not found/i.test(error.description) ? "not_found" : "invalid_target");
+				}
+				throw new TelegramAudienceLookupError("unknown");
+			}
+			if (error instanceof HttpError) throw new TelegramAudienceLookupError("network");
+			throw new TelegramAudienceLookupError("unknown");
+		}
+	}
+}
 
 export function assertBotIdentity(
 	botInfo: { readonly id: number | string; readonly username?: string },
@@ -82,10 +109,18 @@ export async function createBotRuntime(options: BotRuntimeOptions): Promise<BotR
 		const userRepository = new SqliteTelegramUserRepository(boundary);
 		const transactionRunner = new DatabaseBoundaryTransactionRunner(boundary);
 		const profileSessionRepository = new SqliteProfileSessionRepository(boundary);
+		const profileRepository = new SqliteProfileRepository(boundary);
 		const profileService = new ProfileService(
-			new SqliteProfileRepository(boundary),
+			profileRepository,
 			transactionRunner,
 			clock,
+		);
+		const profileAudienceService = new ProfileAudienceService(
+			new GrammyTelegramAudienceReader(bot),
+			profileRepository,
+			transactionRunner,
+			clock,
+			new SystemProviderDeadline(),
 		);
 		const collaborationDraftService = new CollaborationDraftService(
 			new SqliteCollaborationRepository(boundary),
@@ -152,6 +187,7 @@ export async function createBotRuntime(options: BotRuntimeOptions): Promise<BotR
 		});
 		registerProfileBot(bot, {
 			profileService,
+			profileAudienceService,
 			sessionRepository: profileSessionRepository,
 			telegramUserRepository: userRepository,
 			durableCommandExecutor,

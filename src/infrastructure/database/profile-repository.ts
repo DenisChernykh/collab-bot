@@ -1,5 +1,6 @@
 import { generateUuid } from "../crypto/tokens.js";
 import type { ProfileRepository } from "../../application/ports/profile-repository.js";
+import type { ProfileAudienceWriter } from "../../application/profiles/profile-audience-service.js";
 import type {
 	ProfileInput,
 	ProfilePlatformRecord,
@@ -41,7 +42,7 @@ interface TopicRow {
 	topic?: unknown;
 }
 
-export class SqliteProfileRepository implements ProfileRepository {
+export class SqliteProfileRepository implements ProfileRepository, ProfileAudienceWriter {
 	constructor(private readonly boundary: DatabaseBoundary) {}
 
 	async findActiveByTelegramUserId(telegramUserId: string): Promise<ProfileRecord | undefined> {
@@ -70,7 +71,7 @@ export class SqliteProfileRepository implements ProfileRepository {
 			"INSERT INTO profiles (id, telegram_user_id, type, display_name, description, city_code, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?)",
 			[id, telegramUserId, input.type, input.displayName, input.description, "ekaterinburg", now, now],
 		);
-		await this.replaceChildren(id, input);
+		await this.replaceChildren(id, input, now);
 		const created = await this.findActiveByTelegramUserId(telegramUserId);
 		if (created === undefined) throw new Error("created profile could not be reloaded");
 		return created;
@@ -83,20 +84,56 @@ export class SqliteProfileRepository implements ProfileRepository {
 			"UPDATE profiles SET type = ?, display_name = ?, description = ?, city_code = ?, updated_at = ? WHERE id = ? AND status = 'active'",
 			[input.type, input.displayName, input.description, "ekaterinburg", now, existing.id],
 		);
-		await this.replaceChildren(existing.id, input);
+		await this.replaceChildren(existing.id, input, now);
 		const updated = await this.findActiveByTelegramUserId(telegramUserId);
 		if (updated === undefined) throw new Error("updated profile could not be reloaded");
 		return updated;
 	}
 
-	private async replaceChildren(profileId: string, input: ProfileInput): Promise<void> {
+	async storeTelegramAudienceIfMissing(input: {
+		readonly profileId: string;
+		readonly platformId: string;
+		readonly audienceSize: number;
+		readonly observedAt: number;
+	}): Promise<boolean> {
+		const result = await this.boundary.execute(
+			"UPDATE profile_platforms SET audience_size = ?, audience_source = 'telegram_api', audience_observed_at = ? WHERE id = ? AND profile_id = ? AND platform_type = 'telegram' AND audience_size IS NULL",
+			[input.audienceSize, input.observedAt, input.platformId, input.profileId],
+		) as { changes?: number };
+		if (result.changes === 0) return false;
+		if (result.changes !== 1) throw new Error("profile audience conditional write affected an unexpected row count");
+		const profileResult = await this.boundary.execute(
+			"UPDATE profiles SET updated_at = max(updated_at, ?) WHERE id = ?",
+			[input.observedAt, input.profileId],
+		) as { changes?: number };
+		if (profileResult.changes !== 1) throw new Error("profile audience parent could not be updated");
+		return true;
+	}
+
+	private async replaceChildren(profileId: string, input: ProfileInput, observedAt: number): Promise<void> {
 		await this.boundary.execute("DELETE FROM profile_platforms WHERE profile_id = ?", [profileId]);
 		await this.boundary.execute("DELETE FROM profile_topics WHERE profile_id = ?", [profileId]);
+		const provenanceColumnsAvailable = await this.hasAudienceProvenanceColumns();
 		for (const platform of input.platforms) {
-			await this.boundary.execute(
-				"INSERT INTO profile_platforms (id, profile_id, platform_type, url, title, username, telegram_chat_id, audience_size) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-				[generateUuid(), profileId, platform.platformType, platform.url, platform.title ?? null, platform.username ?? null, platform.telegramChatId ?? null, platform.audienceSize ?? null],
-			);
+			const baseParameters = [
+				generateUuid(), profileId, platform.platformType, platform.url, platform.title ?? null,
+				platform.username ?? null, platform.telegramChatId ?? null, platform.audienceSize ?? null,
+			] as const;
+			if (provenanceColumnsAvailable) {
+				await this.boundary.execute(
+					"INSERT INTO profile_platforms (id, profile_id, platform_type, url, title, username, telegram_chat_id, audience_size, audience_source, audience_observed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+					[
+						...baseParameters,
+						platform.audienceSize === undefined ? null : "manual",
+						platform.audienceSize === undefined ? null : observedAt,
+					],
+				);
+			} else {
+				await this.boundary.execute(
+					"INSERT INTO profile_platforms (id, profile_id, platform_type, url, title, username, telegram_chat_id, audience_size) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+					baseParameters,
+				);
+			}
 		}
 		for (const topic of input.topics) {
 			await this.boundary.execute(
@@ -104,6 +141,11 @@ export class SqliteProfileRepository implements ProfileRepository {
 				[profileId, topic],
 			);
 		}
+	}
+
+	private async hasAudienceProvenanceColumns(): Promise<boolean> {
+		const columns = await this.boundary.query<{ name?: unknown }>("PRAGMA table_info(profile_platforms)");
+		return columns.some((column) => column.name === "audience_source") && columns.some((column) => column.name === "audience_observed_at");
 	}
 
 	private async readChildren(profileId: string): Promise<{ platforms: readonly ProfilePlatformRecord[]; topics: readonly Topic[] }> {

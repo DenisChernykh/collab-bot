@@ -8,6 +8,8 @@ import type { UserFromGetMe, Update } from "grammy/types";
 import { describe, expect, it } from "vitest";
 
 import { ProfileService } from "../../src/application/profiles/profile-service.js";
+import { ProfileAudienceService } from "../../src/application/profiles/profile-audience-service.js";
+import type { TelegramAudienceTarget } from "../../src/application/profiles/profile-audience-service.js";
 import type { ProfileSessionRepository } from "../../src/application/ports/profile-session-repository.js";
 import { DurableCommandExecutor } from "../../src/application/commands/command-executor.js";
 import { hashCanonicalInput } from "../../src/infrastructure/crypto/canonical-input-hash.js";
@@ -19,6 +21,7 @@ import { MigrationRunner, MigrationSource } from "../../src/infrastructure/datab
 import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/database/transaction-runner.js";
 import { SqliteTelegramUserRepository } from "../../src/infrastructure/database/telegram-user-repository.js";
 import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
+import { SystemProviderDeadline } from "../../src/infrastructure/time/provider-deadline.js";
 import { FakeTelegramApi } from "../../src/infrastructure/testing/fake-telegram-api.js";
 import { registerProfileBot } from "../../src/bot/profile-bot.js";
 
@@ -30,6 +33,10 @@ describe("S1-02 fake Telegram profile journey", () => {
 		const databasePath = join(directory, "app.sqlite");
 		const clock = new FakeClock(1_700_000_000_000);
 		let failSessionDelete = false;
+		const audienceTargets: TelegramAudienceTarget[] = [];
+		let resolveAudience: ((value: number) => void) | undefined;
+		let lookupStartedResolve: (() => void) | undefined;
+		const lookupStarted = new Promise<void>((resolve) => { lookupStartedResolve = resolve; });
 		const fake = new FakeTelegramApi({
 			token: "fake-token",
 			botInfo: { id: 777, is_bot: true, first_name: "Collab", username: "collab_bot" } as unknown as UserFromGetMe,
@@ -81,7 +88,22 @@ describe("S1-02 fake Telegram profile journey", () => {
 			await boundary.close();
 			boundary = new DatabaseBoundary(databasePath);
 			await new MigrationRunner(source, clock).migrate(boundary);
-			const reopenedProfileService = new ProfileService(new SqliteProfileRepository(boundary), new DatabaseBoundaryTransactionRunner(boundary), clock);
+			const reopenedRepository = new SqliteProfileRepository(boundary);
+			const reopenedTransactions = new DatabaseBoundaryTransactionRunner(boundary);
+			const reopenedProfileService = new ProfileService(reopenedRepository, reopenedTransactions, clock);
+			const profileAudienceService = new ProfileAudienceService(
+				{
+					getChatMemberCount: (target) => {
+						audienceTargets.push(target);
+						lookupStartedResolve?.();
+						return new Promise<number>((resolve) => { resolveAudience = resolve; });
+					},
+				},
+				reopenedRepository,
+				reopenedTransactions,
+				clock,
+				new SystemProviderDeadline(),
+			);
 			profileServiceForAssertions = reopenedProfileService;
 			const reopenedExecutor = new DurableCommandExecutor(new DatabaseBoundaryTransactionRunner(boundary), new SqliteDurableCommandStore(boundary), { hash: hashCanonicalInput }, clock);
 			let restartedBot = new Bot("fake-token", { client: { fetch: fake.fetch } });
@@ -91,6 +113,7 @@ describe("S1-02 fake Telegram profile journey", () => {
 				telegramUserRepository: new SqliteTelegramUserRepository(boundary),
 				durableCommandExecutor: reopenedExecutor,
 				clock,
+				profileAudienceService,
 				helpContact: "@helpdesk",
 				requestIdFactory: () => 12346,
 			});
@@ -102,28 +125,61 @@ describe("S1-02 fake Telegram profile journey", () => {
 			await restartedBot.handleUpdate({ update_id: 13, callback_query: callback(13, resumedPlatformCallback) });
 			await restartedBot.handleUpdate({
 				update_id: 14,
-				message: { ...privateMessage(14), chat_shared: { request_id: 12346, chat_id: -100123, title: "Alice Channel" } },
+				message: { ...privateMessage(14), chat_shared: { request_id: 12346, chat_id: -100123, title: "Alice Channel", username: "alice_channel" } },
 			});
-			await restartedBot.handleUpdate({ update_id: 15, message: privateMessage(15, "https://t.me/alice_channel") });
-			await restartedBot.handleUpdate({ update_id: 16, message: privateMessage(16, "-") });
+			await restartedBot.handleUpdate({ update_id: 15, message: privateMessage(15, "-") });
 			const firstApplyCallback = callbackData(fake, "profile:apply");
-			await restartedBot.handleUpdate({ update_id: 17, callback_query: callback(17, firstApplyCallback) });
+			const callsBeforeApply = fake.calls.length;
+			const applyPromise = restartedBot.handleUpdate({ update_id: 17, callback_query: callback(17, firstApplyCallback) });
+			await lookupStarted;
+			expect(fake.calls.at(-1)?.method).toBe("answerCallbackQuery");
+			const observer = new DatabaseBoundary(databasePath);
+			try {
+				expect(await observer.query("SELECT status FROM command_receipts WHERE command_id = 'telegram:update:17'")).toEqual([{ status: "completed" }]);
+				expect(await observer.query("SELECT audience_size FROM profile_platforms")).toEqual([{ audience_size: null }]);
+				expect(await observer.query("SELECT telegram_user_id FROM profile_sessions WHERE telegram_user_id = '100'")).toEqual([]);
+			} finally {
+				await observer.close();
+			}
+			resolveAudience?.(321);
+			await applyPromise;
+			const applyReplies = fake.calls.slice(callsBeforeApply).filter((call) => call.method === "sendMessage");
+			expect(applyReplies).toHaveLength(1);
+			expect(String(applyReplies[0]?.payload.text)).toContain("Готово — профиль сохранён.");
+			expect(String(applyReplies[0]?.payload.text)).toContain("Аудитория Telegram: 321 — снимок на момент сохранения.");
 			clock.advanceBy(60_000);
 			await restartedBot.handleUpdate({ update_id: 17, callback_query: callback(17, firstApplyCallback) });
 
-			expect(await profileServiceForAssertions.getOwn("100")).toMatchObject({ displayName: "Alice Creator", platforms: [{ url: "https://t.me/alice_channel" }] });
+			expect(audienceTargets).toEqual([{ kind: "chat_id", value: "-100123" }]);
+			expect(await profileServiceForAssertions.getOwn("100")).toMatchObject({ displayName: "Alice Creator", platforms: [{ url: "https://t.me/alice_channel", audienceSize: 321 }] });
+			expect(await boundary.query("SELECT audience_source, audience_observed_at FROM profile_platforms")).toEqual([{ audience_source: "telegram_api", audience_observed_at: 1_700_000_000_000 }]);
 			expect(await boundary.query<{ count: number }>("SELECT count(*) AS count FROM profiles WHERE status = 'active'")).toEqual([{ count: 1 }]);
 			expect(fake.calls.some((call) => call.method === "sendMessage" && String(call.payload.text).includes("Готово — профиль сохранён"))).toBe(true);
 
 			await boundary.close();
 			boundary = new DatabaseBoundary(databasePath);
 			await new MigrationRunner(source, clock).migrate(boundary);
-			const postApplyProfileService = new ProfileService(new SqliteProfileRepository(boundary), new DatabaseBoundaryTransactionRunner(boundary), clock);
+			const postApplyRepository = new SqliteProfileRepository(boundary);
+			const postApplyTransactions = new DatabaseBoundaryTransactionRunner(boundary);
+			const postApplyProfileService = new ProfileService(postApplyRepository, postApplyTransactions, clock);
+			const nonTelegramTargets: TelegramAudienceTarget[] = [];
 			profileServiceForAssertions = postApplyProfileService;
-			const postApplyExecutor = new DurableCommandExecutor(new DatabaseBoundaryTransactionRunner(boundary), new SqliteDurableCommandStore(boundary), { hash: hashCanonicalInput }, clock);
+			const postApplyExecutor = new DurableCommandExecutor(postApplyTransactions, new SqliteDurableCommandStore(boundary), { hash: hashCanonicalInput }, clock);
 			restartedBot = new Bot("fake-token", { client: { fetch: fake.fetch } });
 			registerProfileBot(restartedBot, {
 				profileService: postApplyProfileService,
+				profileAudienceService: new ProfileAudienceService(
+					{
+						getChatMemberCount: async (target) => {
+							nonTelegramTargets.push(target);
+							return 1;
+						},
+					},
+					postApplyRepository,
+					postApplyTransactions,
+					clock,
+					new SystemProviderDeadline(),
+				),
 				sessionRepository: sessionRepositoryWithFailure(new SqliteProfileSessionRepository(boundary), () => failSessionDelete),
 				telegramUserRepository: new SqliteTelegramUserRepository(boundary),
 				durableCommandExecutor: postApplyExecutor,
@@ -137,7 +193,7 @@ describe("S1-02 fake Telegram profile journey", () => {
 			expect(String(fake.lastMessage()?.text)).toContain("Кто вы: Блогер");
 			expect(String(fake.lastMessage()?.text)).toContain("Темы: Город, Еда и рестораны");
 			expect(String(fake.lastMessage()?.text)).toContain("Описание: Ищу партнёров");
-			expect(String(fake.lastMessage()?.text)).not.toContain("Аудитория:");
+			expect(String(fake.lastMessage()?.text)).toContain("Аудитория: 321");
 			expect(String(fake.lastMessage()?.text)).toContain("https://t.me/alice_channel");
 			expect(String(fake.lastMessage()?.text)).not.toContain("Контакт для связи");
 			const mainMenuCallback = fake.lastMessage()?.reply_markup?.inline_keyboard?.flat().find((button) => (button as { callback_data?: string }).callback_data === "menu:home");
@@ -166,6 +222,7 @@ describe("S1-02 fake Telegram profile journey", () => {
 			expect(await new SqliteProfileSessionRepository(boundary).findActive("100", clock.now().getTime())).toMatchObject({ state: { step: "review" } });
 			failSessionDelete = false;
 			await restartedBot.handleUpdate({ update_id: 31, callback_query: callback(31, secondApplyCallback) });
+			expect(nonTelegramTargets).toEqual([]);
 			expect(await profileServiceForAssertions.getOwn("100")).toMatchObject({ displayName: "Alice Studio", description: null, topics: [], platforms: [{ url: "https://example.com/alice" }] });
 			expect((await profileServiceForAssertions.getOwn("100"))?.platforms[0]).not.toHaveProperty("audienceSize");
 			await restartedBot.handleUpdate({ update_id: 32, message: privateMessage(32, "/profile") });
@@ -194,12 +251,27 @@ describe("S1-02 fake Telegram profile journey", () => {
 			const source = await MigrationSource.fromDirectory(migrationsPath);
 			await new MigrationRunner(source, clock).migrate(boundary);
 			const bot = new Bot("fake-token", { client: { fetch: fake.fetch } });
-			const profileService = new ProfileService(new SqliteProfileRepository(boundary), new DatabaseBoundaryTransactionRunner(boundary), clock);
+			const repository = new SqliteProfileRepository(boundary);
+			const transactions = new DatabaseBoundaryTransactionRunner(boundary);
+			const profileService = new ProfileService(repository, transactions, clock);
+			const audienceTargets: TelegramAudienceTarget[] = [];
 			registerProfileBot(bot, {
 				profileService,
+				profileAudienceService: new ProfileAudienceService(
+					{
+						getChatMemberCount: async (target) => {
+							audienceTargets.push(target);
+							throw new Error("provider unavailable");
+						},
+					},
+					repository,
+					transactions,
+					clock,
+					new SystemProviderDeadline(),
+				),
 				sessionRepository: new SqliteProfileSessionRepository(boundary),
 				telegramUserRepository: new SqliteTelegramUserRepository(boundary),
-				durableCommandExecutor: new DurableCommandExecutor(new DatabaseBoundaryTransactionRunner(boundary), new SqliteDurableCommandStore(boundary), { hash: hashCanonicalInput }, clock),
+				durableCommandExecutor: new DurableCommandExecutor(transactions, new SqliteDurableCommandStore(boundary), { hash: hashCanonicalInput }, clock),
 				clock,
 				helpContact: "@helpdesk",
 				requestIdFactory: () => 12348,
@@ -229,6 +301,213 @@ describe("S1-02 fake Telegram profile journey", () => {
 			expect(String(fake.lastMessage()?.text)).not.toContain("Аудитория:");
 			await bot.handleUpdate({ update_id: 11, callback_query: callback(11, callbackData(fake, "profile:apply")) });
 			expect(await profileService.getOwn("100")).toMatchObject({ description: null, topics: [], platforms: [{ url: "https://t.me/direct_channel" }] });
+			expect(audienceTargets).toEqual([{ kind: "username", value: "@direct_channel" }]);
+			expect(String(fake.lastMessage()?.text)).toBe("Готово — профиль сохранён.\n\nАудиторию Telegram определить не удалось; профиль сохранён, число можно указать позже в «Мой профиль».");
+			expect(await boundary.query("SELECT status FROM command_receipts WHERE command_id = 'telegram:update:11'")).toEqual([{ status: "completed" }]);
+		} finally {
+			await boundary.close();
+			await rm(directory, { recursive: true, force: true });
+		}
+	});
+
+	it("suppresses autofill for an explicit clear and allows a later empty save to retry", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "collaboration-fut-01-clear-retry-"));
+		const databasePath = join(directory, "app.sqlite");
+		const clock = new FakeClock(1_700_000_000_000);
+		const fake = new FakeTelegramApi({
+			token: "fake-token",
+			botInfo: { id: 777, is_bot: true, first_name: "Collab", username: "collab_bot" } as unknown as UserFromGetMe,
+		});
+		const audienceTargets: TelegramAudienceTarget[] = [];
+		const boundary = new DatabaseBoundary(databasePath);
+		try {
+			const source = await MigrationSource.fromDirectory(migrationsPath);
+			await new MigrationRunner(source, clock).migrate(boundary);
+			const repository = new SqliteProfileRepository(boundary);
+			const transactions = new DatabaseBoundaryTransactionRunner(boundary);
+			const profileService = new ProfileService(repository, transactions, clock);
+			const sessions = new SqliteProfileSessionRepository(boundary);
+			const bot = new Bot("fake-token", { client: { fetch: fake.fetch } });
+			registerProfileBot(bot, {
+				profileService,
+				profileAudienceService: new ProfileAudienceService(
+					{
+						getChatMemberCount: async (target) => {
+							audienceTargets.push(target);
+							return 654;
+						},
+					},
+					repository,
+					transactions,
+					clock,
+					new SystemProviderDeadline(),
+				),
+				sessionRepository: sessions,
+				telegramUserRepository: new SqliteTelegramUserRepository(boundary),
+				durableCommandExecutor: new DurableCommandExecutor(transactions, new SqliteDurableCommandStore(boundary), { hash: hashCanonicalInput }, clock),
+				clock,
+				helpContact: "@helpdesk",
+			});
+			await bot.init();
+			await bot.handleUpdate({ update_id: 1, message: privateMessage(1, "/start") });
+			await sessions.save({
+				telegramUserId: "100",
+				state: {
+					version: 1,
+					generation: "cccccccccccccccc",
+					step: "audience",
+					draft: {
+						type: "blogger", displayName: "Alice Creator", description: null, topics: [],
+						platform: { platformType: "telegram", url: "https://t.me/alice_channel", username: "alice_channel" },
+						audienceAutofill: "allow",
+					},
+				},
+				revision: 1,
+				expiresAt: 1_700_000_100_000,
+				updatedAt: 1_700_000_000_000,
+			});
+			await bot.handleUpdate({ update_id: 2, message: privateMessage(2, "50") });
+			expect(await sessions.findActive("100", clock.now().getTime())).toMatchObject({
+				state: { step: "review", draft: { audienceAutofill: "suppress", platform: { audienceSize: 50 } } },
+			});
+			await bot.handleUpdate({ update_id: 3, callback_query: callback(3, callbackData(fake, "profile:apply")) });
+			expect(audienceTargets).toEqual([]);
+			expect(await boundary.query("SELECT audience_size, audience_source, audience_observed_at FROM profile_platforms")).toEqual([{
+				audience_size: 50, audience_source: "manual", audience_observed_at: 1_700_000_000_000,
+			}]);
+			const original = await profileService.getOwn("100");
+			if (original === undefined) throw new Error("manual profile was not persisted");
+			const populatedPlatform = original.platforms[0];
+			if (populatedPlatform === undefined) throw new Error("profile platform was not persisted");
+
+			await sessions.save({
+				telegramUserId: "100",
+				state: {
+					version: 1,
+					generation: "aaaaaaaaaaaaaaaa",
+					step: "audience",
+					draft: {
+						type: "blogger", displayName: "Alice Creator", description: null, topics: [],
+						platform: populatedPlatform,
+						audienceAutofill: "allow",
+					},
+				},
+				revision: 1,
+				expiresAt: 1_700_000_100_000,
+				updatedAt: 1_700_000_000_000,
+			});
+			await bot.handleUpdate({ update_id: 4, callback_query: callback(4, "profile:omit:gaaaaaaaaaaaaaaaa:r1") });
+			const suppressed = await sessions.findActive("100", clock.now().getTime());
+			expect(suppressed).toMatchObject({ state: { step: "review", draft: { audienceAutofill: "suppress" } } });
+			expect(suppressed?.state.draft.platform).not.toHaveProperty("audienceSize");
+			await bot.handleUpdate({ update_id: 5, callback_query: callback(5, callbackData(fake, "profile:apply")) });
+			expect(audienceTargets).toEqual([]);
+			expect((await profileService.getOwn("100"))?.platforms[0]).not.toHaveProperty("audienceSize");
+
+			const emptyPlatform = (await profileService.getOwn("100"))?.platforms[0];
+			if (emptyPlatform === undefined) throw new Error("empty platform was not persisted");
+			await sessions.save({
+				telegramUserId: "100",
+				state: {
+					version: 1,
+					generation: "bbbbbbbbbbbbbbbb",
+					step: "audience",
+					draft: {
+						type: "blogger", displayName: "Alice Creator", description: null, topics: [],
+						platform: emptyPlatform,
+					},
+				},
+				revision: 1,
+				expiresAt: 1_700_000_100_000,
+				updatedAt: 1_700_000_000_000,
+			});
+			await bot.handleUpdate({ update_id: 6, callback_query: callback(6, "profile:omit:gbbbbbbbbbbbbbbbb:r1") });
+			expect(await sessions.findActive("100", clock.now().getTime())).toMatchObject({
+				state: { step: "review", draft: { audienceAutofill: "allow" } },
+			});
+			await bot.handleUpdate({ update_id: 7, callback_query: callback(7, callbackData(fake, "profile:apply")) });
+			expect(audienceTargets).toEqual([{ kind: "username", value: "@alice_channel" }]);
+			expect(await profileService.getOwn("100")).toMatchObject({ platforms: [{ audienceSize: 654 }] });
+		} finally {
+			await boundary.close();
+			await rm(directory, { recursive: true, force: true });
+		}
+	});
+
+	it("enriches a quick profile and continues directly to the application message", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "collaboration-fut-01-quick-profile-"));
+		const databasePath = join(directory, "app.sqlite");
+		const clock = new FakeClock(1_700_000_000_000);
+		const fake = new FakeTelegramApi({
+			token: "fake-token",
+			botInfo: { id: 777, is_bot: true, first_name: "Collab", username: "collab_bot" } as unknown as UserFromGetMe,
+		});
+		const targets: TelegramAudienceTarget[] = [];
+		const boundary = new DatabaseBoundary(databasePath);
+		try {
+			await new MigrationRunner(await MigrationSource.fromDirectory(migrationsPath), clock).migrate(boundary);
+			const repository = new SqliteProfileRepository(boundary);
+			const transactions = new DatabaseBoundaryTransactionRunner(boundary);
+			const sessions = new SqliteProfileSessionRepository(boundary);
+			const bot = new Bot("fake-token", { client: { fetch: fake.fetch } });
+			registerProfileBot(bot, {
+				profileService: new ProfileService(repository, transactions, clock),
+				profileAudienceService: new ProfileAudienceService(
+					{
+						getChatMemberCount: async (target) => {
+							targets.push(target);
+							return 456;
+						},
+					},
+					repository,
+					transactions,
+					clock,
+					new SystemProviderDeadline(),
+				),
+				sessionRepository: sessions,
+				telegramUserRepository: new SqliteTelegramUserRepository(boundary),
+				durableCommandExecutor: new DurableCommandExecutor(transactions, new SqliteDurableCommandStore(boundary), { hash: hashCanonicalInput }, clock),
+				clock,
+				helpContact: "@helpdesk",
+				applicationService: { checkEligibility: async () => ({ ok: true }) } as never,
+			});
+			await bot.init();
+			await bot.handleUpdate({ update_id: 1, message: privateMessage(1, "/start") });
+			await sessions.save({
+				telegramUserId: "100",
+				state: {
+					version: 1,
+					generation: "dddddddddddddddd",
+					step: "platform",
+					draft: {
+						type: "blogger", displayName: "Quick Creator", description: null, topics: [],
+						audienceAutofill: "allow",
+					},
+					continuation: {
+						kind: "submit_application",
+						collaborationId: "11111111-1111-4111-8111-111111111111",
+						source: "deep_link",
+					},
+				},
+				revision: 1,
+				expiresAt: 1_700_000_100_000,
+				updatedAt: 1_700_000_000_000,
+			});
+			const quickCallback = "profile:platform:self:gdddddddddddddddd:r1";
+			const callsBeforeSave = fake.calls.length;
+			await bot.handleUpdate({ update_id: 2, callback_query: callback(2, quickCallback) });
+
+			expect(targets).toEqual([{ kind: "username", value: "@alice" }]);
+			expect(await sessions.findActive("100", clock.now().getTime())).toMatchObject({ state: { step: "application_message" } });
+			expect(await boundary.query("SELECT audience_size, audience_source, audience_observed_at FROM profile_platforms")).toEqual([{
+				audience_size: 456, audience_source: "telegram_api", audience_observed_at: 1_700_000_000_000,
+			}]);
+			const replies = fake.calls.slice(callsBeforeSave).filter((call) => call.method === "sendMessage").map((call) => String(call.payload.text));
+			expect(replies[0]).toBe("Профиль сохранён. Теперь добавьте сообщение автору коллаборации.\n\nАудитория Telegram: 456 — снимок на момент сохранения.");
+			expect(replies.at(-1)?.toLowerCase()).toContain("сообщен");
+
+			await bot.handleUpdate({ update_id: 2, callback_query: callback(2, quickCallback) });
+			expect(targets).toHaveLength(1);
 		} finally {
 			await boundary.close();
 			await rm(directory, { recursive: true, force: true });

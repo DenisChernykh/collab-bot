@@ -1,8 +1,8 @@
 # Collaboration Bot — Technical Design
 
 - Статус: `Approved for solo-launch implementation`
-- Версия: `0.5`
-- Дата: `2026-08-26`
+- Версия: `0.6`
+- Дата: `2026-08-27`
 - Product source of truth: `docs/PRD.md`
 
 ## 1. Назначение и границы
@@ -350,7 +350,7 @@ PRAGMA busy_timeout = 5000;
 
 - Изменение бизнес-состояния, product event и delivery intent записываются в одной транзакции.
 - Telegram API никогда не вызывается внутри открытой SQLite transaction.
-- Внешний вызов использует заранее сохранённый durable intent.
+- Обязательная внешняя mutation/delivery использует заранее сохранённый durable intent. Необязательный observational lookup `FUT-01` является post-commit best-effort действием: он не входит в delivery ledger, не восстанавливается после crash и не повторяется receipt replay.
 - Repository не выполняет implicit commit.
 - Любое ограничение, которое возможно выразить в SQL, закрепляется FK, UNIQUE, CHECK или trigger.
 - Cross-table invariants, которые нельзя выразить CHECK, проверяются use case и adversarial integration test.
@@ -419,8 +419,14 @@ WHERE status = 'active';
 | `username TEXT NULL` | normalized without `@` |
 | `telegram_chat_id TEXT NULL` | only Telegram channel |
 | `audience_size INTEGER NULL` | CHECK ≥ 0 |
+| `audience_source TEXT NULL` | `manual \| telegram_api` |
+| `audience_observed_at INTEGER NULL` | UTC integer milliseconds, CHECK ≥ 0 |
 
 Хотя бы одна platform обеспечивается use case/integration test.
+
+Migration `0013_fut-01-telegram-audience.sql` добавляет только nullable provenance. Non-null source требует non-null `audience_size` и non-negative integer timestamp; source/timestamp либо согласованно заданы, либо оба равны `NULL`. Legacy audience сохраняется без backfill: старому значению не придумываются источник и время.
+
+Public `ProfileInput`, команды, callbacks, configuration и public profile projection не меняются. Manual create/update пишет `manual` и save time. Внутренний conditional writer принимает exact `profileId/platformId`, обновляет только Telegram row с `audience_size IS NULL`, затем в той же короткой transaction монотонно обновляет `profiles.updated_at`. Замена platform или конкурентный manual input превращает результат в stale и не допускает overwrite.
 
 Public URL валидируется как абсолютный `https` URL длиной не более 2048 UTF-16 code units без credentials. При наличии валидного текущего `ctx.from.username` wizard показывает revision-bound `Использовать @username`; только нажатие этой кнопки копирует канонический `https://t.me/<username>` и normalized username в platform snapshot. Username не включается в callback data, кнопка отсутствует без username, а подделанное действие fail closed. Для ручного Telegram fallback допускается тот же канонический URL с одним username path segment; invite-ссылки, `joinchat`, `+` links и private links отклоняются. Для остальных platform types MVP не проверяет соответствие hostname выбранной метке, чтобы не вводить хрупкий внешний справочник.
 
@@ -815,6 +821,7 @@ Validation, permissions, slots и state transitions находятся в applic
 - Новый flow при существующем session предлагает `Продолжить` или `Отменить текущий`.
 - Unknown session schema version закрывается безопасно и предлагает начать заново.
 - Deferred profile session хранит typed continuation: `{ kind: "create_collaboration" }` либо `{ kind: "submit_application", collaborationId, source, suspendedBrowseState? }`. Для `submit_application` session также фиксирует quick mode: обязательны только `type`, `display_name` и одна platform; description/topics/audience steps отсутствуют. После completion исходное действие повторно проходит текущие guards; недоступная или устаревшая target collaboration даёт безопасный актуальный result, после чего восстанавливается сохранённая browse state либо главное меню.
+- `audienceAutofill: allow | suppress` хранится только внутри profile session. New/quick profile и пропуск уже пустого поля используют `allow`; смена platform сбрасывает intent в `allow`; ручной ввод и очистка заполненного draft ставят `suppress`. После save session удаляется, persistent opt-out не создаётся.
 
 ### 10.4. Callback safety
 
@@ -836,6 +843,14 @@ Validation, permissions, slots и state transitions находятся в applic
 - уникальный `request_id` связан с profile wizard session.
 
 Ответ `ChatShared` принимается только при совпавшем request ID и actor session. Telegram предупреждает, что бот может не иметь доступа к выбранному chat ID; для MVP используются переданные title/username, а отсутствие username ведёт к ручному URL fallback: [Telegram Bot API](https://core.telegram.org/bots/api).
+
+#### 10.5.1. Post-commit Telegram audience snapshot
+
+Внутренние порты — `TelegramAudienceReader.getChatMemberCount(target, signal)` и conditional profile-audience writer. Eligibility определяется platform, а не `ProfileType`: ровно одна canonical Telegram platform, отсутствующий audience и session intent `allow`. Валидный negative decimal `telegram_chat_id` передаётся строкой; иначе единственный вызов выполняется по `@username`. После неудачного ID-вызова username fallback отсутствует.
+
+Post-commit action регистрируется только при фактическом выполнении durable command effect. После commit receipt/profile/session transaction runtime сначала отвечает callback query, затем через общий 15-секундный provider deadline выполняет lookup, условно сохраняет результат, обновляет aggregate timestamp, добавляет outcome к уже сформированному saved-profile reply и после этого отправляет text replies. Receipt replay не планирует lookup повторно; crash после commit может оставить audience пустым.
+
+Bot API `400/403/429`, inaccessible/private/personal username, not-found, network failure, timeout и invalid count дают один fail-soft outcome без retry. Provider failure не откатывает профиль. Authoritative persistence/invariant failure не маскируется: безопасное подтверждение сохранения отправляется, после чего runtime error передаётся в общий error boundary.
 
 ### 10.6. Public deep links
 
@@ -1367,6 +1382,10 @@ Journey:
 9. restart preserves all state and produces no duplicate effects.
 
 S3 checkpoint выполняет steps 1–6 и restart-проверку: это core marketplace до `matched`, pairwise contact и restart. S4 выполняет обязательный first-launch journey выше, включая admin hide. Completion, block/unblock и прочие steps расширенного journey остаются Later и не требуются для локального launch candidate.
+
+#### 20.5.1. FUT-01 local/fake gate
+
+Отдельный post-launch gate покрывает eligibility и session intent, chat-ID precedence и username fallback без второго вызова, multiple-platform fail-closed, invalid counts, общий provider deadline и безопасную grammY classification. SQLite проверяет fresh schema и `0012 → 0013`, legacy rows без invented provenance, CHECK constraints, manual/API writes, reopen persistence, replaced-platform race и manual-value preservation. Обычный и quick fake journeys проверяют success/failure copy, прямой переход quick profile к application message, clear-only-one-save suppression, duplicate receipt без второго lookup и zero calls для manual/non-Telegram paths. Это local/fake evidence не подтверждает точность live Telegram count.
 
 ### 20.6. Real Telegram smoke
 

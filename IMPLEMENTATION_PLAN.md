@@ -1,7 +1,7 @@
 # Collaboration Bot — solo-launch implementation plan
 
 - Статус документа: `Approved execution registry`
-- Версия: `0.7`
+- Версия: `0.8`
 - Дата: `2026-08-27`
 - Цель: как можно быстрее получить работающий Telegram-цикл для ручного распространения
 - Ограничение: один stage за пользовательскую авторизацию, один локальный commit на unit, без push/PR/deploy
@@ -40,6 +40,7 @@
 | S2 — Card publication vertical | `completed` | 2 | Автор создаёт и публикует карточку через fake showcase transport |
 | S3 — Marketplace vertical | `completed` | 4 | Два пользователя проходят отклик, решение и получают Telegram action |
 | S4 — Shareable launch | `completed` | 1 | Admin hide, полный real journey и готовая к распространению ссылка |
+| FUT — Telegram audience snapshot | `completed` | 1 | Best-effort снимок аудитории Telegram после сохранения профиля |
 
 ```text
 P0-01 → P0-02
@@ -48,6 +49,7 @@ P0-01 → P0-02
   → S2-01 → S2-02
   → S3-01 → S3-02 → S3-03 → S3-04 → S3-C1 → S3-C2
   → S4-01
+  → FUT-01
 ```
 
 ## 4. Завершённый ledger
@@ -77,6 +79,7 @@ P0-01 → P0-02
 | S3-C1 | `bf9407f63398576bd8fa7dd13bcd2f209304e15e` | real-checkpoint collaboration card rendering correction |
 | S3-C2 | `SELF` | explicit personal Telegram platform opt-in |
 | S4-01 | `SELF` | allowlisted hide, complete fake/real journey and manual launch handoff |
+| FUT-01 | `SELF` | one-time Telegram audience snapshot with internal provenance |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -204,22 +207,32 @@ P0-01 → P0-02
   - Real checkpoint: `NOT RUN — requires separate authorization` (no credentials, network, real Telegram/showcase action, bot process, private SQLite, push, PR or deploy).
 - **Stop conditions:** Local implementation cannot pass without real Telegram or requires deferred reconciliation/status infrastructure. The hands-on checkpoint itself pauses for separate authorization.
 
-### Future capability (non-blocking)
+### FUT — Telegram audience snapshot
 
-#### FUT-01 — Telegram-only automatic audience count
+#### FUT-01 — One-time Telegram audience snapshot
 
-- **Status:** `future` — отдельная узкая карточка между S2 и S3; не является stage, не добавляется в граф зависимостей и не меняет ровно две S1 units.
-- **Objective:** После успешного сохранения профиля без явно введённого размера аудитории best-effort получить число подписчиков canonical public Telegram-канала через Bot API и сохранить происхождение значения.
-- **Requirements:** PRD §7.2–§7.3 и TD §8.3, §10; только Telegram-канал с canonical public username и доступным chat identity.
-- **Dependencies:** `S1-02` для canonical URL/native `ChatShared` identity; существующие profile platform repository и `Clock`. Не блокирует S3 и не требует showcase capability.
-- **Scope:** Application port/adaptor для `getChatMemberCount`; один вызов после commit успешного create/update профиля, только когда `audience_size` отсутствует и есть canonical Telegram username плюс `telegram_chat_id` (предпочтительно) или `@username` (fallback). Вызов выполняется вне SQLite transaction; успех записывается короткой атомарной transaction.
-- **Schema contract:** Текущая `profile_platforms` содержит только `audience_size`, поэтому provenance/timestamp ещё не совместимы с текущей схемой как хранимые поля. Эта карточка включает только additive migration со nullable `audience_source` (`manual` | `telegram_api`) и `audience_observed_at` (UTC integer milliseconds, non-negative); существующие rows остаются валидными. Manual input записывает `manual`, успешный Bot API count — `telegram_api`; явное manual значение не перезаписывается автоматикой.
-- **Failure policy:** `getChatMemberCount` errors, no access, private/inaccessible channel, missing username/chat identity и unknown/invalid channel — fail soft: профиль и session не откатываются, текущий manual value сохраняется, пользователь может ввести значение вручную. Для non-Telegram HTTPS не делается Bot API call и сохраняется explicit manual entry.
-- **Do not touch:** Instagram, VK, TikTok, YouTube и другие platform integrations; OAuth; scraping; scheduler, worker, periodic refresh, background polling, auto-retry loop, showcase permissions или изменение S1 evidence.
-- **Tests first:** failing unit tests для eligibility/target precedence и classifier; fresh/upgrade SQLite migration tests для nullable provenance/checks; fake Bot API success by chat ID and `@username`, 403/no-access/private failure, duplicate command and manual-value preservation; fake profile E2E proving automatic fill and manual fallback; no-network assertion for non-Telegram.
-- **Acceptance:** Eligible canonical Telegram platform makes at most one user-triggered post-commit lookup per profile save when audience is missing; successful non-negative count is persisted with `source=telegram_api` and timestamp; manual and non-Telegram paths remain explicit; failure is visible only as safe fallback and never creates a partial profile mutation. Local/fake evidence must not claim real Telegram accuracy.
-- **Verification/evidence:** focused unit/SQLite/fake E2E, fresh and upgrade migrations, `pnpm db:verify`, `pnpm check`, `git diff --check`, changed-file and secret scans. Real Bot API count comparison, access/no-access behavior and exact bot identity are a separately authorized real-Telegram checkpoint; no credentials/network are part of the local card.
-- **Stop conditions:** source/timestamp cannot be added without destructive migration; the API requires a policy beyond best-effort manual fallback; implementation needs periodic refresh, another platform integration, OAuth/scraping, real credentials/network for local acceptance, or a new product field/policy.
+- **Status:** `completed` — отдельно авторизованный post-launch unit после завершённого `S4-01`; first-launch `LFR-*`/`LAC-*` не менялись.
+- **Objective:** После успешного сохранения профиля без явно введённого размера аудитории best-effort получить один Telegram Bot API snapshot и сохранить внутреннее происхождение значения без заявлений о владении, охвате или качестве аудитории.
+- **Requirements:** PRD §7.2–§7.3; TD §7.2, §8.3, §10.3 и §10.5.1. Eligibility определяется platform, а не `ProfileType`.
+- **Dependencies:** `S4-01` completed как фактический predecessor; `S1-02` предоставляет canonical URL/native `ChatShared` identity, profile persistence, durable ingress, `Clock` и общий provider deadline. Showcase capability не требуется.
+- **Preconditions:** clean `main` at `ab09e70f94455ed6b1342dcc8b31958614076f16`; cached `origin/main` совпадал и divergence был `0/0`; Node `v24.18.0`; pnpm `11.15.1`; уникального `FUT-01` commit не было. Любой drift требовал stop/re-plan.
+- **Scope:** Внутренние `TelegramAudienceReader.getChatMemberCount(target, signal)` и conditional writer; ровно одна canonical Telegram platform без audience и intent `allow`. Валидный negative decimal `telegram_chat_id` передаётся строкой с приоритетом, иначе выполняется один вызов по `@username`; ошибка ID не запускает username fallback, multiple eligible platforms fail closed.
+- **Session intent:** `audienceAutofill: allow | suppress` существует только в profile session. New/quick и уже-empty skip используют `allow`; смена platform сбрасывает в `allow`; manual entry и очистка populated draft ставят `suppress`. После save session удаляется, поэтому suppression относится только к этому сохранению.
+- **Schema contract:** Additive `0013_fut-01-telegram-audience.sql` добавляет nullable `audience_source` (`manual | telegram_api`) и nullable non-negative integer UTC-ms `audience_observed_at`. Non-null provenance требует non-null audience/timestamp; legacy counts сохраняют `NULL` provenance без invented backfill. Manual writes используют save time, API writes — observation time; public profile projection остаётся прежней.
+- **Post-commit ordering:** Только fresh durable effect регистрирует максимум одно действие. После commit receipt/profile/session transaction callback ack отправляется первым; lookup идёт через общий 15-секундный deadline; exact profile/platform CAS с `audience_size IS NULL` и parent timestamp выполняются в короткой transaction; outcome добавляется к сохранённому reply до flush текста. Receipt replay не планирует lookup; crash после commit может оставить audience пустым.
+- **Failure policy:** Bot API `400/403/429`, inaccessible/private/personal username, not-found, network error, timeout, unknown provider failure и invalid count дают один safe fail-soft result без retry. Replaced platform или concurrent manual value дают stale CAS и не перезаписываются. Authoritative persistence/invariant errors не маскируются после безопасного подтверждения сохранения.
+- **Do not touch:** Public `ProfileInput`, commands, callbacks, public profile shape и configuration; Instagram/VK/TikTok/YouTube integrations; `getChat` preflight; OAuth/scraping; scheduler, worker/outbox expansion, periodic refresh, retry loop, showcase permissions или persistent opt-out.
+- **Tests first:** RED зафиксировал отсутствующие port/service/migration/orchestration. Unit покрывает eligibility, intent, ID precedence, username fallback, no second call, multiple fail-closed, invalid/zero count, 15-second deadline и grammY `400/403/429`/HTTP classification. SQLite покрывает fresh и `0012 → 0013`, legacy/checks, manual/API provenance, reopen, parent timestamp, replaced-platform и manual-value races. Fake Telegram покрывает native ID, manual username success/failure, quick continuation, explicit clear only for one save, duplicate receipt, manual/non-Telegram zero calls и committed state до завершения deferred lookup.
+- **Acceptance:** Eligible save делает не более одного post-commit lookup; success сохраняет count с `telegram_api`/timestamp и добавляет точную snapshot copy; provider failure сохраняет профиль и добавляет точную fallback copy; public renderer по-прежнему показывает только `Аудитория: N`. Local/fake evidence не заявляет live Telegram accuracy.
+- **Evidence:**
+  - Commit SHA: `SELF` — local commit subject: `FUT-01: enrich Telegram audience snapshot`.
+  - Changed files: `README.md`, `docs/PRD.md`, `docs/TECHNICAL_DESIGN.md`, `migrations/0013_fut-01-telegram-audience.sql`, `src/application/profiles/profile-audience-service.ts`, `src/bot/profile-bot.ts`, `src/infrastructure/database/drizzle-schema.ts`, `src/infrastructure/database/profile-repository.ts`, `src/runtime/bot-runtime.ts`, `test/unit/fut-01-telegram-audience.test.ts`, `test/integration/s1-01-profile.test.ts`, four migration-registry expectation fixtures, `test/e2e-fake/s1-02-profile-bot.test.ts`, and this plan. Exactly `12` source/test files changed; migration/docs/evidence are outside that cap.
+  - Focused GREEN: FUT unit `18 passed`; profile SQLite `10 passed`; profile fake journey `6 passed`.
+  - Aggregate checks: Node `v24.18.0`, pnpm `11.15.1`; `pnpm check` PASS — unit `61`, integration `80`, runtime `30`, build; separate `pnpm test:e2e:fake` PASS — `21`; `pnpm db:verify` PASS; `git diff --check` PASS; credential-shaped secret scan PASS.
+  - Acceptance evidence: deferred-reader E2E opened a second SQLite connection and observed completed receipt, saved profile and deleted session before resolving lookup; callback ack preceded lookup; exact string chat ID was preserved; duplicate update left one call; conditional storage preserved replaced/manual state; quick profile reached `application_message` without an audience step.
+  - Review result: independent read-only stage-final blocker review — PASS; post-commit/replay, eligibility/one-call policy, CAS/aggregate timestamp, migration/session intent and launch-blocker boundaries were rechecked; no fix wave and no second review cycle were needed.
+  - Notes/deviations: no dependency/config/public contract, real credential, Telegram network, bot process, production DB, push, PR, merge or deploy action. A real count/access comparison remains a separately authorized optional checkpoint and was not run.
+- **Stop conditions:** source/timestamp would require destructive migration; policy would require verification claims, periodic refresh, another platform integration, OAuth/scraping, production credentials/network, or a new persistent product field.
 
 ### C-01 — Telegram-first contact correction (post-S1, pre-S3)
 
@@ -415,8 +428,4 @@ Push, remote, PR, merge, deploy, credentials и real Telegram не следую�
 - **Manual first launch:** `S4`, отдельно авторизованный `LAC-12` и exact bot/channel checkpoint пройдены; ссылку можно отправлять людям.
 - **Production ready / 24/7 / scalable:** не является целью этого плана и не заявляется.
 
-Следующая команда после завершения `S0-07`:
-
-```text
-Выполни этап S1 по IMPLEMENTATION_PLAN.md
-```
+После `FUT-01` в реестре нет следующего авторизованного pending unit. Новая работа начинается только с отдельной decision-complete карточки и пользовательской авторизации.

@@ -2,7 +2,7 @@
 
 ## Status
 
-P0 and S0–S3 are implemented locally: the bot has the persistent profile, collaboration publication, feed/deep-link, application, author decision, pair-contact and own-list flows. S4 is in progress: allowlisted admin lookup/hide and the complete fake Telegram journey are local, while the separately authorized real Telegram checkpoint is still required before the bot link is declared ready to share.
+P0 and S0–S4 are complete, including the separately authorized real S4 journey and manual-launch handoff. FUT-01 is implemented locally as a one-time best-effort Telegram audience snapshot; its local/fake evidence does not establish live Telegram count accuracy.
 
 The project targets a fast manual first launch by one developer. It is not a hosted, scale-ready or always-on service.
 
@@ -24,6 +24,8 @@ The solo-launch MVP is a Russian-language Telegram market for collaboration part
 Later work includes completion reports/reminders, product analytics, advanced moderation, automatic deadlines, runtime heartbeat/status, scheduled cleanup, Unix-socket admission, automated backup/restore, LaunchAgent tooling, multiple profiles, other cities, richer search, recommendations, favorites, ratings, photos, Mini App/web/mobile clients, an HTTP API, and a Giveaway Bot handoff.
 
 Out of scope are running giveaways or selecting winners, changing or sharing the existing Giveaway Bot database, payments, deal guarantees, external audience/ownership verification, ML recommendations, and social-network imports.
+
+FUT-01 does not verify ownership, reach, authenticity or audience quality. It performs no periodic refresh, and manual audience entry remains authoritative.
 
 ## Intended technical shape
 
@@ -80,4 +82,5 @@ Only start the bot again after the copy command finishes. This is a manual stopp
 - S1–S3 make the compiled foreground bot manually runnable with profile, publication and two-user marketplace flows. Each local/fake result remains distinct from a real Telegram checkpoint.
 - Local launch candidate means S1–S4 and `LAC-01`–`LAC-11` pass locally and on fake Telegram.
 - Manual first launch means S4 and separately authorized `LAC-12` pass for one exact bot/channel, after which the author can manually share the link.
+- FUT-01 is optional post-launch enrichment and does not change `LFR-*`, `LAC-*`, launch-candidate or manual-first-launch claims.
 - Foreground start does not provide daemon supervision, hosted availability or automatic restart. Production-ready, deployed, scalable, 24/7 and SLA are not claimed by this plan.

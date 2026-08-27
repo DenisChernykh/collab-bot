@@ -84,11 +84,18 @@ export const profilePlatforms = sqliteTable(
 		username: text("username"),
 		telegramChatId: text("telegram_chat_id"),
 		audienceSize: integer("audience_size"),
+		audienceSource: text("audience_source", { enum: ["manual", "telegram_api"] as const }),
+		audienceObservedAt: integer("audience_observed_at"),
 	},
 	(table) => [
 		index("profile_platforms_profile_id").on(table.profileId),
 		check("profile_platforms_url_nonempty", sql`length(${table.url}) > 0`),
 		check("profile_platforms_audience_nonnegative", sql`${table.audienceSize} IS NULL OR ${table.audienceSize} >= 0`),
+		check("profile_platforms_audience_source", sql`${table.audienceSource} IS NULL OR ${table.audienceSource} IN ('manual', 'telegram_api')`),
+		check(
+			"profile_platforms_audience_provenance",
+			sql`(${table.audienceSource} IS NULL AND ${table.audienceObservedAt} IS NULL) OR (${table.audienceSource} IN ('manual', 'telegram_api') AND ${table.audienceSize} IS NOT NULL AND typeof(${table.audienceObservedAt}) = 'integer' AND ${table.audienceObservedAt} >= 0)`,
+		),
 	],
 );
 

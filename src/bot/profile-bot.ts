@@ -17,6 +17,7 @@ import type {
 import { PROFILE_SESSION_TTL_MS, PROFILE_SESSION_VERSION } from "../application/ports/profile-session-repository.js";
 import type { TelegramUserWriter } from "../application/ports/telegram-user-writer.js";
 import { ProfileService } from "../application/profiles/profile-service.js";
+import { ProfileAudienceService, type ProfileAudiencePlan } from "../application/profiles/profile-audience-service.js";
 import {
 	CollaborationDraftService,
 	CollaborationDraftStaleError,
@@ -40,13 +41,14 @@ import type {
 } from "../application/applications/application-service.js";
 import type { AdminModerationService } from "../application/moderation/admin-moderation-service.js";
 import type { CollaborationDraftInput, CollaborationDraftState, CollaborationWizardStep } from "../domain/collaborations/collaboration.js";
-import type { ProfileInput } from "../domain/profiles/profile.js";
+import type { ProfileInput, ProfileRecord } from "../domain/profiles/profile.js";
 import { DomainValidationError, parseCollaborationFormat, parsePlatformType, parseProfileType, parseTargetProfileType, parseTopic, type CollaborationFormat, type PlatformType, type ProfileType, type Topic } from "../domain/value-objects/enums.js";
 
 const PROFILE_STATIC_CALLBACKS = new Set(["menu:home", "profile:create", "profile:resume", "profile:view", "profile:edit", "profile:unavailable", "collaboration:start", "collaboration:resume", "collaboration:own", "application:own", "browse:start"]);
 const CALLBACK_ACTION_TTL_MS = 24 * 60 * 60 * 1_000;
 const PROFILE_LINK_PROMPT = "Добавьте публичную площадку. Она будет видна другим пользователям до принятия отклика.";
 const PROFILE_LINK_CHOICE_HINT = "Выберите личный Telegram-профиль или Telegram-канал. Для другой публичной площадки нажмите «Указать другую ссылку».";
+const AUDIENCE_SNAPSHOT_UNAVAILABLE = "Аудиторию Telegram определить не удалось; профиль сохранён, число можно указать позже в «Мой профиль».";
 const PROFILE_TYPE_LABELS: Record<ProfileType, string> = {
 	blogger: "Блогер",
 	telegram_channel: "Telegram-канал",
@@ -124,6 +126,7 @@ type ApplicationProfileSession = ProfileSessionRecord & { readonly state: Applic
 
 export interface ProfileBotOptions {
 	readonly profileService: ProfileService;
+	readonly profileAudienceService?: ProfileAudienceService;
 	readonly sessionRepository: ProfileSessionRepository;
 	readonly telegramUserRepository: TelegramUserWriter & {
 		findByTelegramUserId(telegramUserId: string): Promise<{ status: "active" | "blocked" } | undefined>;
@@ -421,12 +424,22 @@ interface ReplyAction {
 	readonly options?: ReplyOptions;
 }
 
+interface ProfileAudienceAction {
+	readonly plan: ProfileAudiencePlan;
+	readonly replyIndex: number;
+}
+
+const REPLY_COLLECTOR = Symbol("reply-collector");
+type CollectedContext = Context & { readonly [REPLY_COLLECTOR]?: ReplyCollector };
+
 class ReplyCollector {
 	readonly replies: ReplyAction[] = [];
 	readonly answers: AnswerOptions[] = [];
+	private audienceAction: ProfileAudienceAction | undefined;
 
 	context(ctx: Context): Context {
 		const proxy = Object.create(ctx) as Context;
+		Object.defineProperty(proxy, REPLY_COLLECTOR, { value: this });
 		proxy.reply = async (text: string, options?: ReplyOptions) => {
 			if (options === undefined) this.replies.push({ text });
 			else this.replies.push({ text, options });
@@ -439,6 +452,36 @@ class ReplyCollector {
 		};
 		return proxy;
 	}
+
+	scheduleAudience(plan: ProfileAudiencePlan): void {
+		if (this.audienceAction !== undefined) throw new Error("only one profile audience action may be scheduled per update");
+		const replyIndex = this.replies.length - 1;
+		if (replyIndex < 0) throw new Error("profile audience action requires a saved-profile reply");
+		this.audienceAction = { plan, replyIndex };
+	}
+
+	takeAudienceAction(): ProfileAudienceAction | undefined {
+		return this.audienceAction;
+	}
+
+	appendToReply(replyIndex: number, line: string): void {
+		const reply = this.replies[replyIndex];
+		if (reply === undefined) throw new Error("profile audience reply target is missing");
+		this.replies[replyIndex] = { ...reply, text: `${reply.text}\n\n${line}` };
+	}
+}
+
+function scheduleProfileAudience(
+	ctx: Context,
+	options: ProfileBotOptions,
+	profile: ProfileRecord,
+	draft: ProfileDraft,
+): void {
+	const plan = options.profileAudienceService?.plan(profile, draft.audienceAutofill ?? "allow");
+	if (plan === undefined) return;
+	const collector = (ctx as CollectedContext)[REPLY_COLLECTOR];
+	if (collector === undefined) throw new Error("profile audience action must use a durable reply collector");
+	collector.scheduleAudience(plan);
 }
 
 async function runDurable(
@@ -482,10 +525,27 @@ async function runDurable(
 		if (answer === undefined) await ctx.answerCallbackQuery();
 		else await ctx.answerCallbackQuery(answer);
 	}
+	let postCommitError: unknown;
+	const audienceAction = collector.takeAudienceAction();
+	if (audienceAction !== undefined && options.profileAudienceService !== undefined) {
+		try {
+			const outcome = await options.profileAudienceService.execute(audienceAction.plan);
+			collector.appendToReply(
+				audienceAction.replyIndex,
+				outcome.kind === "applied"
+					? `Аудитория Telegram: ${outcome.audienceSize} — снимок на момент сохранения.`
+					: AUDIENCE_SNAPSHOT_UNAVAILABLE,
+			);
+		} catch (error) {
+			collector.appendToReply(audienceAction.replyIndex, AUDIENCE_SNAPSHOT_UNAVAILABLE);
+			postCommitError = error;
+		}
+	}
 	for (const reply of collector.replies) {
 		if (reply.options === undefined) await ctx.reply(reply.text);
 		else await ctx.reply(reply.text, reply.options);
 	}
+	if (postCommitError !== undefined) throw postCommitError;
 }
 
 function isAdminCommandInput(input: CanonicalInput): boolean {
@@ -587,7 +647,7 @@ async function handleChatShared(ctx: Context, options: ProfileBotOptions, userId
 		return;
 	}
 	if (shared.username === undefined) {
-		const saved = await saveState(options, userId, withoutRequestId({ ...session.state, step: "platform_url", draft: { ...session.state.draft, platform: { platformType: "telegram", url: "https://t.me/manual" } } }));
+		const saved = await saveState(options, userId, withoutRequestId({ ...session.state, step: "platform_url", draft: { ...session.state.draft, platform: { platformType: "telegram", url: "https://t.me/manual" }, audienceAutofill: "allow" } }));
 		await ctx.reply("Telegram не передал публичное имя канала. Отправьте ссылку вида https://t.me/channel_name.", { reply_markup: cancelKeyboard(saved) });
 		return;
 	}
@@ -604,10 +664,10 @@ async function handleChatShared(ctx: Context, options: ProfileBotOptions, userId
 		...(shared.title === undefined ? {} : { title: shared.title }),
 	};
 	if (isApplicationState(session.state)) {
-		await finishQuickApplicationProfile(ctx, options, userId, withoutRequestId({ ...session.state, draft: { ...session.state.draft, platform } }));
+		await finishQuickApplicationProfile(ctx, options, userId, withoutRequestId({ ...session.state, draft: { ...session.state.draft, platform, audienceAutofill: "allow" } }));
 		return;
 	}
-	const saved = await saveState(options, userId, withoutRequestId({ version: PROFILE_SESSION_VERSION, generation: session.state.generation, step: "audience", draft: { ...session.state.draft, platform } }));
+	const saved = await saveState(options, userId, withoutRequestId({ version: PROFILE_SESSION_VERSION, generation: session.state.generation, step: "audience", draft: { ...session.state.draft, platform, audienceAutofill: "allow" } }));
 	await renderStep(ctx, options, userId, saved);
 }
 
@@ -691,7 +751,7 @@ async function advanceText(ctx: Context, options: ProfileBotOptions, userId: str
 				await ctx.reply("Площадка не выбрана. Начните заполнение заново.");
 				return;
 			}
-			await saveState(options, userId, { ...state, step: "review", draft: { ...state.draft, platform: { ...platform, audienceSize: Number(value) } } });
+			await saveState(options, userId, { ...state, step: "review", draft: { ...state.draft, platform: { ...platform, audienceSize: Number(value) }, audienceAutofill: "suppress" } });
 			await renderReview(ctx, options, userId);
 			return;
 		}
@@ -730,7 +790,15 @@ async function omitOptionalFromSession(ctx: Context, options: ProfileBotOptions,
 				await ctx.reply("Площадка не выбрана. Начните заполнение заново.");
 				return;
 			}
-			saved = await saveState(options, userId, { ...state, step: "review", draft: { ...state.draft, platform: withoutAudience(platform) } });
+			saved = await saveState(options, userId, {
+				...state,
+				step: "review",
+				draft: {
+					...state.draft,
+					platform: withoutAudience(platform),
+					audienceAutofill: platform.audienceSize === undefined ? "allow" : "suppress",
+				},
+			});
 			break;
 		}
 		default:
@@ -763,7 +831,7 @@ async function backSession(ctx: Context, options: ProfileBotOptions, userId: str
 			const saved = await saveState(options, userId, withoutRequestId({
 				...state,
 				step: "type",
-				draft: { description: null, topics: [] },
+				draft: { description: null, topics: [], audienceAutofill: "allow" },
 			}));
 			await renderStep(ctx, options, userId, saved);
 			return;
@@ -813,10 +881,10 @@ async function choosePlatform(ctx: Context, options: ProfileBotOptions, userId: 
 			}
 			const platform = { platformType: "telegram" as const, url: `https://t.me/${username}`, username };
 			if (isApplicationState(session.state)) {
-				await finishQuickApplicationProfile(ctx, options, userId, withoutRequestId({ ...session.state, draft: { ...session.state.draft, platform } }));
+				await finishQuickApplicationProfile(ctx, options, userId, withoutRequestId({ ...session.state, draft: { ...session.state.draft, platform, audienceAutofill: "allow" } }));
 				return;
 			}
-			const saved = await saveState(options, userId, withoutRequestId({ ...session.state, step: "audience", draft: { ...session.state.draft, platform } }));
+			const saved = await saveState(options, userId, withoutRequestId({ ...session.state, step: "audience", draft: { ...session.state.draft, platform, audienceAutofill: "allow" } }));
 			await renderStep(ctx, options, userId, saved);
 			return;
 		}
@@ -845,10 +913,10 @@ async function acceptPlatformUrl(ctx: Context, options: ProfileBotOptions, userI
 			? { platformType: "other" as const, url: value }
 			: { platformType: "telegram" as const, url: `https://t.me/${username}`, username };
 		if (isApplicationState(state)) {
-			await finishQuickApplicationProfile(ctx, options, userId, withoutRequestId({ ...state, draft: { ...state.draft, platform } }));
+			await finishQuickApplicationProfile(ctx, options, userId, withoutRequestId({ ...state, draft: { ...state.draft, platform, audienceAutofill: "allow" } }));
 			return;
 		}
-		const saved = await saveState(options, userId, withoutRequestId({ ...state, step: "audience", draft: { ...state.draft, platform } }));
+		const saved = await saveState(options, userId, withoutRequestId({ ...state, step: "audience", draft: { ...state.draft, platform, audienceAutofill: "allow" } }));
 		await renderStep(ctx, options, userId, saved);
 }
 
@@ -857,11 +925,12 @@ async function apply(ctx: Context, options: ProfileBotOptions, userId: string, e
 	if (session === undefined) return;
 	const input = toProfileInput(session.state.draft);
 	if (input === undefined) { await ctx.reply("Не все поля заполнены. Продолжите заполнение.", { reply_markup: resumeKeyboard(session) }); return; }
-	let existing;
+	let savedProfile: ProfileRecord;
 	try {
-		existing = await options.profileService.getOwn(userId);
-		if (existing === undefined) await options.profileService.create(userId, input);
-		else await options.profileService.update(userId, input);
+		const existing = await options.profileService.getOwn(userId);
+		savedProfile = existing === undefined
+			? await options.profileService.create(userId, input)
+			: await options.profileService.update(userId, input);
 	} catch (error) {
 		if (error instanceof Error && error.name === "DomainValidationError") {
 			await ctx.reply("Проверьте данные профиля и попробуйте ещё раз.", { reply_markup: resumeKeyboard(session) });
@@ -875,6 +944,7 @@ async function apply(ctx: Context, options: ProfileBotOptions, userId: string, e
 		try {
 			const started = await options.collaborationDraftService.start(userId);
 			await ctx.reply("Профиль сохранён. Продолжим создание коллаборации.");
+			scheduleProfileAudience(ctx, options, savedProfile, session.state.draft);
 			await renderCollaborationStep(ctx, options, userId, started);
 			return;
 		} catch (error) {
@@ -882,6 +952,7 @@ async function apply(ctx: Context, options: ProfileBotOptions, userId: string, e
 		}
 	}
 	await ctx.reply("Готово — профиль сохранён.", { reply_markup: menuKeyboard(options) });
+	scheduleProfileAudience(ctx, options, savedProfile, session.state.draft);
 }
 
 async function showProfile(ctx: Context, options: ProfileBotOptions, userId: string): Promise<void> {
@@ -917,11 +988,12 @@ async function startOrResume(ctx: Context, options: ProfileBotOptions, userId: s
 	}
 	const profile = edit ? await options.profileService.getOwn(userId) : undefined;
 	const firstPlatform = profile?.platforms[0];
-	const draft: ProfileDraft = profile === undefined ? {} : {
+	const draft: ProfileDraft = profile === undefined ? { audienceAutofill: "allow" } : {
 		type: profile.type,
 		displayName: profile.displayName,
 		description: profile.description,
 		topics: profile.topics,
+		audienceAutofill: "allow",
 		...(firstPlatform === undefined ? {} : { platform: firstPlatform }),
 	};
 	const saved = await saveState(options, userId, { version: PROFILE_SESSION_VERSION, generation: createSessionGeneration(), step: "type", draft, ...(continuation === undefined ? {} : { continuation }) });
@@ -1336,7 +1408,7 @@ async function handleApplicationStart(ctx: Context, options: ProfileBotOptions, 
 			version: PROFILE_SESSION_VERSION,
 			generation: createSessionGeneration(),
 			step: "application_message",
-			draft: {},
+			draft: { audienceAutofill: "allow" },
 			continuation,
 		});
 		await renderStep(ctx, options, userId, saved);
@@ -1347,7 +1419,7 @@ async function handleApplicationStart(ctx: Context, options: ProfileBotOptions, 
 			version: PROFILE_SESSION_VERSION,
 			generation: createSessionGeneration(),
 			step: "type",
-			draft: { description: null, topics: [] },
+			draft: { description: null, topics: [], audienceAutofill: "allow" },
 			continuation,
 		});
 		await ctx.reply("Чтобы откликнуться, создадим короткий профиль — это займёт около минуты.");
@@ -1369,8 +1441,9 @@ async function finishQuickApplicationProfile(
 		await ctx.reply("Не все обязательные данные профиля заполнены.", current === undefined ? undefined : { reply_markup: resumeKeyboard(current) });
 		return;
 	}
+	let createdProfile: ProfileRecord | undefined;
 	try {
-		if (await options.profileService.getOwn(userId) === undefined) await options.profileService.create(userId, input);
+		if (await options.profileService.getOwn(userId) === undefined) createdProfile = await options.profileService.create(userId, input);
 	} catch (error) {
 		if (error instanceof Error && (error.name === "DomainValidationError" || error.name === "ProfileAlreadyExistsError")) {
 			await ctx.reply("Не удалось сохранить короткий профиль. Проверьте данные и попробуйте ещё раз.");
@@ -1382,6 +1455,7 @@ async function finishQuickApplicationProfile(
 	if (applicationService === undefined) {
 		await options.sessionRepository.delete(userId);
 		await ctx.reply("Профиль сохранён, но отклик сейчас недоступен.", { reply_markup: menuKeyboard(options) });
+		if (createdProfile !== undefined) scheduleProfileAudience(ctx, options, createdProfile, state.draft);
 		return;
 	}
 	const eligibility = await applicationService.checkEligibility({
@@ -1392,6 +1466,7 @@ async function finishQuickApplicationProfile(
 	if (!eligibility.ok) {
 		await options.sessionRepository.delete(userId);
 		await replyApplicationFailure(ctx, options, eligibility.code, undefined, true);
+		if (createdProfile !== undefined) scheduleProfileAudience(ctx, options, createdProfile, state.draft);
 		return;
 	}
 	const saved = await saveState(options, userId, {
@@ -1400,6 +1475,7 @@ async function finishQuickApplicationProfile(
 		draft: state.draft,
 	});
 	await ctx.reply("Профиль сохранён. Теперь добавьте сообщение автору коллаборации.");
+	if (createdProfile !== undefined) scheduleProfileAudience(ctx, options, createdProfile, state.draft);
 	await renderStep(ctx, options, userId, saved);
 }
 
@@ -1698,7 +1774,7 @@ function sessionToken(session: ProfileSessionRecord): SessionToken {
 	return { generation: session.state.generation, revision: session.revision };
 }
 function withoutPlatform(draft: ProfileDraft): ProfileDraft {
-	const without = { ...draft };
+	const without = { ...draft, audienceAutofill: "allow" as const };
 	delete without.platform;
 	return without;
 }
