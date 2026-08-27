@@ -1,8 +1,8 @@
 # Collaboration Bot — solo-launch implementation plan
 
 - Статус документа: `Approved execution registry`
-- Версия: `0.5`
-- Дата: `2026-08-25`
+- Версия: `0.7`
+- Дата: `2026-08-27`
 - Цель: как можно быстрее получить работающий Telegram-цикл для ручного распространения
 - Ограничение: один stage за пользовательскую авторизацию, один локальный commit на unit, без push/PR/deploy
 
@@ -36,9 +36,9 @@
 |---|---|---:|---|
 | P0 — Repository baseline | `completed` | 2 | Репозиторий и execution rules |
 | S0 — Compact foundation | `completed` | 7 | Проверенный foundation без operational platform |
-| S1 — Profile vertical | `in_progress` | 2 | Реальный бот открывается, пользователь создаёт и видит профиль |
-| S2 — Card publication vertical | `pending` | 2 | Автор создаёт и публикует карточку в real showcase |
-| S3 — Marketplace vertical | `pending` | 2 | Два пользователя проходят отклик, решение и получают Telegram action |
+| S1 — Profile vertical | `completed` | 2 | Реальный бот открывается, пользователь создаёт и видит профиль |
+| S2 — Card publication vertical | `completed` | 2 | Автор создаёт и публикует карточку через fake showcase transport |
+| S3 — Marketplace vertical | `pending` | 4 | Два пользователя проходят отклик, решение и получают Telegram action |
 | S4 — Shareable launch | `pending` | 1 | Admin hide, полный real journey и готовая к распространению ссылка |
 
 ```text
@@ -46,7 +46,7 @@ P0-01 → P0-02
   → S0-01 → S0-02 → S0-03 → S0-04 → S0-05 → S0-06 → S0-07
   → S1-01 → S1-02
   → S2-01 → S2-02
-  → S3-01 → S3-02
+  → S3-01 → S3-02 → S3-03 → S3-04
   → S4-01
 ```
 
@@ -64,10 +64,16 @@ P0-01 → P0-02
 | S0-04 | `cdbbcf0419bcafed8f0f9af71766bddb2fc9ad7d` | ingress idempotency |
 | S0-05 | `c269771612978f9ba981f02238e9255793a30a2d` | atomic outbox и historical product-event store |
 | S0-06 | `5c7c4c9223131ecd2c7a4a4b50e19f1ae7fbdcc3` | fenced delivery recovery |
+| S0-07 | `8f1e91dc88e7f0109286ea0c45b064f79fd4e76f` | solo-launch rebaseline |
+| S1-01 | `226d70c46241fd80838d21493eb0568d1ed7c2f4` | persistent privacy-safe profiles |
+| S1-02 | `3ef8edff006304d4df485b9cad14e6e2934d4f27`, `7f9ef7f60117c82d5313dbd6fd13a0075c793a27`, `1a24880149c681d1c720fbade743a9a3ab26e6f1` | runnable profile flow and checkpoint corrections |
+| C-01 | `8ecf3ff1954bb2ef28bda97d2b4fafd3efc5cffd`, `aaa66f9bf79cfd9532829065ef786074d99d1c76` | Telegram-first contact migration and remediation |
+| S2-01 | `073ab018929ceb444a1ca00c91c69d4c7f3d3ce2` | resumable collaboration drafts |
+| S2-02 | `603f8a0c1749d5eb6457c8e9727595d3a4f6a06b` | known-result publication and own cards |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
-## 5. Активный unit
+## 5. Реестр units
 
 ### S0-07 — Закрыть foundation по solo-launch boundary
 
@@ -214,7 +220,7 @@ P0-01 → P0-02
 - **Objective:** Убрать обязательный private/alternate contact из profile wizard и storage; после будущего S3 acceptance оставить прямой Telegram action как единственный канонический контактный путь.
 - **Dependencies:** Existing `S1-02` profile wizard and `telegram_users` current identity snapshot. This is a bounded correction, not a third S1 unit and not a new stage dependency.
 - **Scope:** PRD/TD/plan contract update; S1 domain/input/repository/Drizzle mapping; `audience → review` wizard transition; session step/draft validation; migration `0005_s1-03-telegram-first-contact.sql` dropping `profiles.private_contact` and existing values without legacy/backup copy, removing `$.draft.privateContact` from every profile session, converting legacy table/JSON `private_contact` steps to `review`, and preserving profile/platform/topic/session metadata; fresh/upgrade/fake regression tests.
-- **S3 contract only:** After an accepted pair, S3 will render «Написать в Telegram», preferring `https://t.me/<current_username>` and falling back to inline `tg://user?id=<telegram_user_id>` with explicit privacy/failure behavior. If identity is unavailable, S3 may add a one-shot «Попросить контакт» handshake. No in-bot relay, history, moderation, automatic phone request or pre-match disclosure is implemented here.
+- **S3 contract only:** After an accepted pair, S3 will render «Написать в Telegram», preferring `https://t.me/<current_username>` and falling back to inline `tg://user?id=<telegram_user_id>` with explicit privacy/failure behavior. Missing/corrupt identity fails closed. No request-contact handshake, in-bot relay, history, moderation, automatic phone request or pre-match disclosure is implemented here.
 - **Invariants:** New/current profile flow never asks for or writes phone/email/alternate contact; public profile remains separate from `telegram_users`; migration preserves all non-contact authoritative data; S3 remains pending and no S3 buttons are implemented in this correction.
 - **Tests first:** domain validation without contact; fresh schema without `private_contact`; v4→v5 upgrade with valid legacy `private_contact` and `review` sessions for distinct users plus profile/platform/topic data; close/reopen `SqliteProfileSessionRepository` reads and raw JSON cleanup; profile aggregate read; fake `/start → create → native/manual platform → audience → review → apply → view/edit`; no contact prompt/assertion.
 - **Verification:** focused profile/migration/fake E2E, `pnpm db:verify`, `pnpm check`, `git diff --check`, exact changed-file and secret scans. No live DB migration, live bot process, credentials, real Telegram network or S3 contact action was used.
@@ -223,35 +229,69 @@ P0-01 → P0-02
 
 ### S3 — Marketplace vertical
 
-#### S3-01 — Feed, deep link and application
+#### S3-01 — Minimal applicant profiles
 
 - **Status:** `pending`
-- **Objective:** Let another user find an eligible card and submit one application.
-- **Requirements:** `LFR-04`–`LFR-05`, `LFR-10`; `LAC-03`, `LAC-08`.
+- **Objective:** Make type, display name and one public platform sufficient for an active profile while preserving existing full profiles.
+- **Requirements:** `LFR-01`, `LFR-10`; profile parts of `LAC-03`, `LAC-08`–`LAC-09`.
 - **Dependencies:** `S2-02`.
-- **Scope:** Simple feed, basic filters, deep-link query, application submit and author notification intent.
-- **Do not touch:** saved browse analytics/session history, withdraw, recommendations, deadline runner.
-- **Invariants:** Own/hidden/closed/full cards reject applications; private contact remains absent; duplicate command creates no second application/intent.
-- **Tests first:** feed eligibility, deep link, submit guards, duplicate replay, notification failure independence.
-- **Verification:** focused unit/SQLite/fake tests.
-- **Exit criteria:** `LAC-03` passes; one commit `S3-01: browse cards and submit applications`.
+- **Read first:** PRD §7, §19.1, §20.1; TD §7 migrations, §8.2–§8.4, §10.3 and §22 S3; current profile domain/repository/session/bot flow.
+- **Scope:** Add `0008_s3-01-minimal-profiles.sql`; make description nullable, topics 0–3 and audience optional; keep type/display name/city/one platform mandatory. Ordinary create/edit exposes skip/clear for optional enrichment. Public/own render omits absent enrichment.
+- **Do not touch:** feed, deep links, applications, contact identity, second profile, audience lookup or product events.
+- **Invariants:** Existing profile/platform/topic IDs, values, active-profile index and collaboration references survive upgrade; no placeholder values; at least one public platform remains mandatory; private contact remains absent.
+- **Tests first:** minimal/full domain validation, skip/clear edit, own/public render, fresh and `0007→0008` upgrade with close/reopen and dependent rows.
+- **Verification:** focused profile unit/SQLite/fake tests, migration fresh/upgrade, `pnpm db:verify`, `pnpm check`, fake E2E, diff/secret scans.
+- **Exit criteria:** Full and minimal profiles are valid and restart-safe; one commit `S3-01: allow minimal applicant profiles`.
 - **Evidence:** Fill exact evidence and `Commit SHA: SELF`.
-- **Stop conditions:** Requires analytics, recommendation policy or real Telegram before the stage-final authorized checkpoint.
+- **Stop conditions:** Nullable migration cannot preserve current IDs/FKs/indexes/rows, scope exceeds the bounded unit, or implementation needs placeholder data or another product field.
 
-#### S3-02 — Decisions, capacity, Telegram contact action and own applications
+#### S3-02 — Feed and deep links
 
 - **Status:** `pending`
-- **Objective:** Let the author accept/reject, close recruitment and expose a pairwise Telegram contact action; show authoritative application statuses.
-- **Requirements:** `LFR-06`–`LFR-08`, `LFR-11`; `LAC-04`–`LAC-06`, `LAC-08`–`LAC-09`.
+- **Objective:** Let any private-chat user browse eligible cards and open one exact card from the showcase deep link without a profile.
+- **Requirements:** `LFR-04`, `LFR-10`; feed/deep-link parts of `LAC-03`, `LAC-08`–`LAC-09`.
 - **Dependencies:** `S3-01`.
-- **Scope:** Decision transaction, slot guard, manual close, accepted-pair Telegram action (username link, user-ID fallback or one-shot request), own-application list and intents.
-- **Do not touch:** completion, reminders, automatic deadline, block/unblock or block/accept policy.
-- **Invariants:** Capacity never exceeds slots; Telegram action only for accepted pair; no pre-match identity disclosure or in-bot relay; DM failure never rolls back decision; replay returns current result.
-- **Tests first:** accept/reject, last slot, manual close, Telegram action visibility/fallback matrix, failed DM, restart/replay.
-- **Verification:** focused unit/SQLite/fake tests, core fake journey, `pnpm check`, one stage-final critical review; after separate Telegram authorization, manual two-account checkpoint `browse → apply → accept/reject → contact → own lists`.
-- **Exit criteria:** `LAC-04`–`LAC-06` pass and the same flow is wired into the runnable bot. With separately authorized accounts, the author can touch the core product immediately after S3; one commit `S3-02: decide applications and reveal pair contacts`.
+- **Read first:** PRD §8–§9, §19.1, §20.1; TD §8.5–§8.6, §9.12, §10.6 and §22 S3; current publication renderer/repositories/runtime.
+- **Scope:** Add immutable `published_at`, a 24-hour current browse session, three AND filters, stable keyset paging, `/feed`, menu wiring and strict `/start c_<token>` lookup. Keep one card per screen with Apply/Next/Filters/Reset actions.
+- **Do not touch:** applications, decisions, contact identity, analytics/view events or long-term browse history.
+- **Invariants:** Feed/deep link are read-only; own/non-published/expired cards are not actionable; malformed/unknown/hidden tokens disclose no internal data; public token never grants mutation authority.
+- **Tests first:** migration/backfill, filter matrix, stable ordering/cursor/reset/TTL/restart, own/status/deadline exclusions, deep-link availability matrix and duplicate callbacks.
+- **Verification:** focused browse unit/SQLite/fake tests, migration fresh/upgrade, `pnpm db:verify`, `pnpm check`, fake E2E, diff/secret scans.
+- **Exit criteria:** A user without a profile can browse and open the exact public card; one commit `S3-02: browse cards by feed and deep link`.
 - **Evidence:** Fill exact evidence and `Commit SHA: SELF`.
-- **Stop conditions:** Telegram action privacy/fallback cannot be proven, implementation needs automatic phone collection/in-bot relay, or scope requires Later lifecycle.
+- **Stop conditions:** Stable public lookup requires application or analytics state, token privacy cannot be preserved, or unit boundary is exceeded.
+
+#### S3-03 — Resumable application submission
+
+- **Status:** `pending`
+- **Objective:** Let a user with a full or quick profile submit exactly one durable application and notify the author after commit.
+- **Requirements:** `LFR-01`, `LFR-05`, `LFR-10`–`LFR-11`; `LAC-03`, `LAC-06`, `LAC-08`–`LAC-09`.
+- **Dependencies:** `S3-02`.
+- **Read first:** PRD §7, §9–§10.2, §19.1, §20.1; TD §8.7, §9.2, §10.3 and §22 S3; profile continuation, durable command and outbox contracts.
+- **Scope:** Add applications and `first_application_at`; extend profile continuation with typed target/source and `application_message`; implement quick `type → display_name → platform`, guard rerun, atomic submit and one safe author-DM intent. Extend feed exclusions for full/already-applied cards.
+- **Do not touch:** withdraw, decisions, contact identity, deadline runner, recommendations or product-event emission.
+- **Invariants:** Every application references one active profile; quick flow stores no placeholders/application text; cancel creates no application; submit atomically writes application/first timestamp/outbox; duplicate command creates no second effect; Telegram delivery occurs after commit.
+- **Tests first:** full-profile bypass, quick happy path/Back/Cancel/restart, stale target after profile creation, own/type/status/deadline/full/duplicate guards, atomic outbox and failed/ambiguous DM independence.
+- **Verification:** focused application unit/SQLite/fake tests, migration fresh/upgrade, `pnpm db:verify`, `pnpm check`, fake E2E, diff/secret scans.
+- **Exit criteria:** `LAC-03` passes from deep link without a pre-existing profile; one commit `S3-03: submit resumable applications`.
+- **Evidence:** Fill exact evidence and `Commit SHA: SELF`.
+- **Stop conditions:** Safe continuation cannot survive restart, atomicity needs Telegram inside SQLite transaction, profile/target privacy cannot be preserved, or unit boundary is exceeded.
+
+#### S3-04 — Decisions, capacity and pair contacts
+
+- **Status:** `pending`
+- **Objective:** Let the author decide pending applications, close capacity and let only each accepted pair open a current Telegram contact action.
+- **Requirements:** `LFR-06`–`LFR-08`, `LFR-10`–`LFR-11`; `LAC-04`–`LAC-06`, `LAC-08`–`LAC-09`.
+- **Dependencies:** `S3-03`.
+- **Read first:** PRD §10–§11, §19.1, §20.1; TD §8.7, §9.4–§9.6, §10.4 and §22 S3; callback-action, publication projection, outbox and Telegram-user lookup contracts.
+- **Scope:** Add `matched_at`; serialized accept/reject/manual close; slot and pending-close guards; durable DM/showcase intents; author management and own applications; actor-bound decision tokens; username then user-ID Telegram action.
+- **Do not touch:** withdraw, completion/reminders, deadline runner, block/unblock, automatic phone request, request-contact handshake or in-bot relay.
+- **Invariants:** Accepted never exceeds slots; last slot/manual close produces authoritative matched state and closes remaining pending; outbound failure never rolls back business state; contact is recomputed from current identity and visible only to the exact accepted pair.
+- **Tests first:** accept/reject/replay, concurrent last slot, manual close, failed/ambiguous DM/showcase edit, authoritative lists, foreign/stale callbacks, username/user-ID/fail-closed matrix and multi-slot pair isolation.
+- **Verification:** focused unit/SQLite/fake tests, migration fresh/upgrade, core fake journey, `pnpm db:verify`, `pnpm check`, diff/secret scans and one stage-final critical review; real two-account checkpoint remains separately authorized.
+- **Exit criteria:** `LAC-04`–`LAC-06` and the core fake journey pass; one commit `S3-04: decide applications and reveal pair contacts`.
+- **Evidence:** Fill exact evidence and `Commit SHA: SELF`.
+- **Stop conditions:** Capacity/privacy/fallback cannot be proven, implementation requires Later lifecycle or real Telegram for local acceptance, or unit boundary is exceeded.
 
 ### S4 — Shareable launch
 
@@ -260,7 +300,7 @@ P0-01 → P0-02
 - **Status:** `pending`
 - **Objective:** Add the minimum moderation escape hatch, prove the complete flow and hand the author a bot link that can be shared manually.
 - **Requirements:** `LFR-09`; `LAC-07`, `LAC-10`–`LAC-12`.
-- **Dependencies:** `S3-02`.
+- **Dependencies:** `S3-04`.
 - **Scope:** Allowlisted lookup/hide, hide delivery intent, full fake journey, exact bot/channel preflight, separately authorized real journey and concise manual start/stop/restart/database-copy handoff.
 - **Do not touch:** restore, block/unblock, cascades, analytics, completion, scheduler, status/heartbeat, backup/LaunchAgent.
 - **Invariants:** Non-admin cannot hide; hidden card is absent from feed and rejects applications; contact already revealed is not revoked; Telegram delete failure does not make the card visible in authoritative feed.

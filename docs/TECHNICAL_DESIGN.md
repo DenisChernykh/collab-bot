@@ -1,8 +1,8 @@
 # Collaboration Bot — Technical Design
 
 - Статус: `Approved for solo-launch implementation`
-- Версия: `0.4`
-- Дата: `2026-08-25`
+- Версия: `0.5`
+- Дата: `2026-08-26`
 - Product source of truth: `docs/PRD.md`
 
 ## 1. Назначение и границы
@@ -291,7 +291,7 @@ interface CommandContext {
 - `ListAdminIncidents`;
 - `CalculatePilotFunnel`.
 
-Query DTO не возвращает Telegram identity до подтверждённого `accepted`. Pairwise contact view после accepted вычисляет action для второй стороны: `https://t.me/<current_username>` в приоритете, иначе inline `tg://user?id=<telegram_user_id>`. Если identity недоступна, adapter может предложить одноразовый «Попросить контакт» handshake; бот не становится relay и не хранит историю переписки.
+Query DTO не возвращает Telegram identity до подтверждённого `accepted`. Pairwise contact view после accepted вычисляет action для второй стороны: `https://t.me/<current_username>` в приоритете, иначе inline `tg://user?id=<telegram_user_id>`. Если identity отсутствует или повреждена, adapter fail closed; request-contact handshake, relay и история переписки не входят в S3.
 
 ### 5.4. Domain value types
 
@@ -388,7 +388,7 @@ Block является identity policy. Внутренняя причина хр
 | `telegram_user_id TEXT FK` | владелец |
 | `type TEXT` | `ProfileType` CHECK |
 | `display_name TEXT` | 2–100 |
-| `description TEXT NOT NULL` | 10–500 |
+| `description TEXT NULL` | NULL либо 10–500 |
 | `city_code TEXT` | CHECK = `ekaterinburg` |
 | `status TEXT` | `active` или `archived` |
 | `created_at / updated_at INTEGER` | UTC ms |
@@ -402,6 +402,8 @@ WHERE status = 'active';
 ```
 
 Для будущих нескольких active profiles индекс снимается отдельной migration одновременно с появлением profile switcher.
+
+Минимально завершённый active profile требует `type`, `display_name`, город и хотя бы одну platform. `description`, topics и `audience_size` являются необязательным enrichment: обычный create/edit wizard позволяет пропустить или очистить их, а public renderer опускает отсутствующие поля и не подставляет заглушки. Существующая таблица `profiles` переводится на nullable description data-preserving migration с сохранением IDs, active-index и всех внешних ссылок; существующие непустые значения не переписываются.
 
 Все поля active profile редактируемы. Изменение profile type или других полей не отменяет существующие collaborations/applications и не запускает их ретроактивную validation: eligibility фиксируется в момент `SubmitApplication`. Все последующие public projections используют текущий profile; accepted pairwise query вычисляет Telegram action из актуального `telegram_users` snapshot.
 
@@ -424,7 +426,7 @@ Public URL валидируется как абсолютный `https` URL дл
 
 ### 8.4. `profile_topics`
 
-Composite PK `(profile_id, topic)`. CHECK на канонический `Topic`. Use case ограничивает количество 1–3.
+Composite PK `(profile_id, topic)`. CHECK на канонический `Topic`. Use case ограничивает количество 0–3; отсутствие rows означает, что пользователь ещё не добавил необязательные тематики.
 
 ### 8.5. `collaborations`
 
@@ -500,7 +502,7 @@ UNIQUE `(application_id, reporter_profile_id)`. Pairwise confirmation созда
 | `revision INTEGER` | optimistic UI version |
 | `expires_at / updated_at INTEGER` | UTC ms |
 
-TTL считается от `updated_at`: browse — 24 часа, profile wizard — 30 суток, collaboration wizard — 30 суток, moderation — 1 час. Browse state содержит filters, keyset cursor и список показанных collaboration IDs. Expired profile/moderation/browse session удаляется. Expired collaboration session обрабатывается через ту же транзакционную cancel policy, что и ручная `Отмена`, чтобы не оставить orphan draft.
+TTL считается от `updated_at`: browse — 24 часа, profile wizard — 30 суток, collaboration wizard — 30 суток, moderation — 1 час. Solo-launch browse state содержит только текущие filters, keyset cursor, revision и TTL; долговременная история просмотров и analytics не сохраняются. Expired profile/moderation/browse session удаляется. Expired collaboration session обрабатывается через ту же транзакционную cancel policy, что и ручная `Отмена`, чтобы не оставить orphan draft.
 
 ### 8.10. `telegram_actions`
 
@@ -659,6 +661,8 @@ Raw user content, contacts and tokens are forbidden.
 
 ### 9.2. `SubmitApplication`
 
+Telegram adapter разрешает открыть карточку и нажать `Откликнуться` без профиля. Если active profile отсутствует, mutation ещё не начинается: durable profile session сохраняет typed continuation на collaboration и source, запускает quick mode с обязательными `type → display_name → platform`, сохраняет минимально завершённый profile и затем повторно открывает ввод application message. Description, topics и audience в quick mode не запрашиваются. После restart flow продолжается с сохранённого шага; после завершения target повторно проходит текущие guards.
+
 В одной transaction:
 
 1. claim Telegram update и command receipt с input hash;
@@ -669,8 +673,7 @@ Raw user content, contacts and tokens are forbidden.
 6. insert `pending` application with collaboration version;
 7. set `first_application_at` once;
 8. insert author notification intent;
-9. insert `application_submitted` event;
-10. commit.
+9. commit.
 
 Telegram DM отправляется после commit.
 
@@ -695,18 +698,17 @@ Telegram DM отправляется после commit.
    - close remaining `pending`;
    - create their notifications;
 10. create channel sync intent для новой projection revision;
-11. create product events;
-12. commit.
+11. commit.
 
 Сериализованный DatabaseBoundary делает конкурентное принятие последнего места детерминированным. Integration test обязан запускать минимум две concurrent promises.
 
 ### 9.5. `DecideApplication: reject`
 
-Transaction проверяет ownership и `pending`, переводит один application в `rejected` и создаёт notification/event. Collaboration и slots не меняются.
+Transaction проверяет ownership и `pending`, переводит один application в `rejected` и создаёт notification intent. Collaboration и slots не меняются.
 
 ### 9.6. `CompleteRecruitment`
 
-Сериализованная transaction require active author, owned `published` collaboration, отсутствие pending revision/sync lock и минимум один `accepted`. Затем она ставит `matched_at`, переводит collaboration в `matched`, закрывает все `pending`, increment-ит `projection_revision` и атомарно создаёт projection/notification/event intents. Повтор возвращает completed receipt; outbound failure не откатывает `matched`.
+Сериализованная transaction require active author, owned `published` collaboration, отсутствие pending revision/sync lock и минимум один `accepted`. Затем она ставит `matched_at`, переводит collaboration в `matched`, закрывает все `pending`, increment-ит `projection_revision` и атомарно создаёт projection/notification intents. Повтор возвращает completed receipt; outbound failure не откатывает `matched`.
 
 ### 9.7. `CancelCollaboration`
 
@@ -812,7 +814,7 @@ Validation, permissions, slots и state transitions находятся в applic
 - `Отмена` в profile/browse flow удаляет только session; в collaboration flow вызывает `CancelCollaborationDraft`, который удаляет draft/topics/session одной transaction. Опубликованные entities `Отмена` никогда не меняет.
 - Новый flow при существующем session предлагает `Продолжить` или `Отменить текущий`.
 - Unknown session schema version закрывается безопасно и предлагает начать заново.
-- Deferred profile session хранит typed continuation: `{ kind: "create_collaboration" }` либо `{ kind: "submit_application", collaborationId, source, suspendedBrowseState? }`. После completion исходное действие повторно проходит текущие guards; недоступная или устаревшая target collaboration даёт безопасный актуальный result, после чего восстанавливается сохранённая browse state либо главное меню.
+- Deferred profile session хранит typed continuation: `{ kind: "create_collaboration" }` либо `{ kind: "submit_application", collaborationId, source, suspendedBrowseState? }`. Для `submit_application` session также фиксирует quick mode: обязательны только `type`, `display_name` и одна platform; description/topics/audience steps отсутствуют. После completion исходное действие повторно проходит текущие guards; недоступная или устаревшая target collaboration даёт безопасный актуальный result, после чего восстанавливается сохранённая browse state либо главное меню.
 
 ### 10.4. Callback safety
 
@@ -1057,7 +1059,7 @@ Business entities, operator audit и product events автоматически �
 
 - Profile не собирает и не хранит phone/email/alternate contact. Telegram identity живёт в `telegram_users` и используется для direct action только после accepted authorization.
 - Приоритет action: текущий `username` → `https://t.me/<username>`; fallback — `tg://user?id=<telegram_user_id>` с явным сообщением о приватности и возможной недоступности.
-- Если direct identity недоступна, S3 может сделать одноразовый `Попросить контакт` handshake; request не создаёт relay, chat history или moderation.
+- Если direct identity отсутствует или повреждена, S3 fail closed без частичного раскрытия; request-contact handshake, relay, chat history и moderation не реализуются.
 - Phone `request_contact` не вызывается автоматически; alternate contacts стороны обменивают самостоятельно в Telegram.
 - Logs/events не содержат raw profile description, offer, expectation, application message, phone, email или identity action payload.
 
@@ -1341,7 +1343,7 @@ Later runtime checks:
 
 ### 20.5. End-to-end fake journey
 
-Обязательный first-launch journey: `profile → publish → browse/deep link → apply → accept/reject → Telegram contact action → own lists → admin hide → restart`. Completion, block/unblock и analytics не входят в этот gate.
+Обязательный first-launch journey: `author profile → publish → applicant deep link → quick profile → apply → accept/reject → Telegram contact action → own lists → admin hide → restart`. Completion, block/unblock и analytics не входят в этот gate.
 
 Расширенный Later journey (не является first-launch gate):
 
@@ -1396,7 +1398,7 @@ S3 checkpoint выполняет steps 1–6 и restart-проверку: это
 
 | PRD | Use case / owner | Data and invariant | Telegram entrypoint | Failure policy | Tests | Slice |
 |---|---|---|---|---|---|---|
-| FR-P01 | Create/UpdateProfile | `profiles`; partial UNIQUE active/user | `Мой профиль`, deferred create | duplicate/race returns current profile | unit, SQLite, adapter, E2E | S1 |
+| FR-P01 | Create/UpdateProfile | `profiles`; partial UNIQUE active/user; nullable enrichment | `Мой профиль`, deferred create, quick application profile | duplicate/race returns current profile | unit, SQLite, adapter, E2E | S1/S3 |
 | FR-P02 | profile visibility query | `profile_platforms`; Telegram identity remains in `telegram_users` | profile card, accepted result | redact identity by default; unauthorized is neutral | unit, SQLite, E2E | S1 |
 | FR-P03 | channel selection adapter | platform chat ID/URL; request ID bound to session | profile wizard `request_chat` | inaccessible/missing username uses manual URL | adapter, real smoke | S1 |
 | FR-C01 | draft commands | nullable `collaborations`, topics, session; cancel cascade | `/new`, Back, `/cancel`, resume | invalid input preserves step; restart resumes | SQLite, adapter, restart | S2 |
@@ -1407,7 +1409,7 @@ S3 checkpoint выполняет steps 1–6 и restart-проверку: это
 | FR-S02 | public-token query | UNIQUE opaque token, no mutation authority | `/start c_<token>` | unknown/hidden gives neutral unavailable | adapter, E2E, smoke | S2/S3 |
 | FR-A01 | Submit/WithdrawApplication | UNIQUE card/profile; receipt; terms version | apply/withdraw callbacks | duplicate replay; closed/deadline rejected | unit, SQLite, E2E | S3 |
 | FR-A02 | DecideApplication | serialized transaction, application status, slots | actor/version-bound decision callback | race returns current; blocked applicant closes | concurrency integration, E2E | S3 |
-| FR-A03 | pairwise Telegram action query | accepted authorization over current `telegram_users` identity | decision result, `Мои...` | missing identity offers one-shot request; no relay | unit, SQLite, E2E | S3 |
+| FR-A03 | pairwise Telegram action query | accepted authorization over current `telegram_users` identity | decision result, `Мои...` | missing/corrupt identity fails closed; no relay | unit, SQLite, E2E | S3 |
 | FR-O01 | Complete/ReportCompletion | UNIQUE report/application/reporter | completion callbacks/reminder | negative/mismatch saved, no confirmed event | unit, SQLite, E2E | S4 |
 | FR-V01 | publication projection runner | message ID, attempts, projection revision/hash | automatic post and admin reconcile | send ambiguity no retry; edit/delete bounded | adapter, runtime, smoke | S2–S4 |
 | FR-M01 | Hide/Restore | hidden overlay, operator audit, delete/restore attempt | `/admin` hide/restore | delete ambiguity stays hidden; restore waits success | SQLite, E2E, smoke | S4 |
@@ -1420,8 +1422,8 @@ S3 checkpoint выполняет steps 1–6 и restart-проверку: это
 
 | AC | Основное доказательство | Gate | Slice |
 |---|---|---|---|
-| AC-001 | deferred-profile adapter journey | fake Telegram + SQLite | S1 |
-| AC-002 | public/private projection authorization | unit + SQLite + E2E | S1 |
+| AC-001 | no-profile deep link → quick profile → resumed application journey | fake Telegram + SQLite | S1/S3 |
+| AC-002 | minimal-profile enrichment and public/private projection authorization | unit + SQLite + E2E | S1/S3 |
 | AC-003 | `ChatShared` actor/request binding and URL fallback | adapter + real smoke | S1 |
 | AC-004 | persisted Back/Cancel/resume preview | restart adapter test | S2 |
 | AC-005 | known send stores one message before `published` | fake Bot API + SQLite | S2 |
@@ -1505,14 +1507,14 @@ Exit: `LAC-02`, restart draft test и safe known-failure behavior на fake Tele
 Добавить:
 
 - простую ленту и deep link;
-- submit application;
+- submit application, включая durable quick profile `type → display name → platform` и возврат к исходной карточке для пользователя без профиля;
 - accept/reject и закрытие набора при заполнении мест или вручную;
 - pairwise contact query/notification;
 - `Мои отклики` и authoritative statuses.
 
 Не добавлять completion, reminders, automatic deadline processing или analytics.
 
-Exit: `LAC-03`–`LAC-06`, `LAC-08`–`LAC-09` и core fake journey до контакта; после отдельной авторизации тот же flow проверяется двумя real Telegram accounts.
+Exit: `LAC-03`–`LAC-06`, `LAC-08`–`LAC-09` и core fake journey от deep link через quick profile до контакта; после отдельной авторизации тот же flow проверяется двумя real Telegram accounts.
 
 ### S4. Minimal administration and shareable launch
 
