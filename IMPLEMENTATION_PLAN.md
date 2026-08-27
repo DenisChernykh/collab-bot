@@ -42,7 +42,7 @@
 | S4 — Shareable launch | `completed` | 1 | Admin hide, полный real journey и готовая к распространению ссылка |
 | FUT — Telegram audience snapshot | `completed` | 1 | Best-effort снимок аудитории Telegram после сохранения профиля |
 | R1 — Post-launch maintainability | `completed` | 14 | Те же пользовательские контракты с feature-owned кодом и проверяемыми границами |
-| R2 — Complete feature-first layout | `in_progress` | 22 | Весь бизнес-код принадлежит явным модулям; legacy feature paths отсутствуют |
+| R2 — Complete feature-first layout | `in_progress` | 31 | Весь бизнес-код принадлежит явным модулям; legacy feature paths отсутствуют |
 
 ```text
 P0-01 → P0-02
@@ -58,7 +58,9 @@ P0-01 → P0-02
   → R2-00 → R2-01 → R2-02 → R2-03 → R2-04
   → R2-05A → R2-05B → R2-06 → R2-07A → R2-07B → R2-08
   → R2-09A → R2-09B → R2-10A → R2-10B
-  → R2-11A → R2-11B → R2-11C → R2-12 → R2-13 → R2-14 → R2-15
+  → R2-11A → R2-11B → R2-11C → R2-12
+  → R2-13A → R2-13B → R2-13C → R2-13D → R2-13E → R2-13F
+  → R2-14A → R2-14B → R2-14C → R2-14D → R2-14E → R2-15
 ```
 
 ## 4. Завершённый ledger
@@ -120,6 +122,7 @@ P0-01 → P0-02
 | R2-10B | `2c4523bb334983292be0c971806bee926319c036` | moderation Telegram presentation ownership |
 | R2-11A | `f4383a79e9784c42be4fa2d77d5357a2df47f8aa` | neutral durable Telegram ingress ownership |
 | R2-11B | `3c12fbab1e91b2e55d92c488c3a8e41a6a7bfe3f` | neutral Telegram router ownership |
+| R2-11C | `fa5859801398d3ce85c731f9ce163825da21535c` | removed legacy bot presentation paths |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -962,7 +965,7 @@ P0-01 → P0-02
 
 #### R2-12 — Compose runtime through feature factories
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Убрать ручное создание feature internals из runtime composition.
 - **Dependencies:** `R2-11C`.
 - **Read first:** bot application, all module factories/public APIs and lifecycle tests.
@@ -971,39 +974,157 @@ P0-01 → P0-02
 - **Invariants:** one DB boundary, one transaction runner, one bot, one worker and one close.
 - **Verification:** composition/lifecycle/runtime tests; all fake E2E; architecture; `pnpm check`; `pnpm db:verify`.
 - **Exit criteria:** runtime imports no feature internal file; один commit `R2-12: compose runtime from feature APIs`.
+- **Completion evidence:** Commit SHA: `SELF`; replaced all manual profiles, collaborations, marketplace, applications and moderation service/adapter construction in `bot-application.ts` with one call to each feature public factory. Every factory receives the same `DatabaseBoundary`, transaction runner, clock and shared outbox store where required; profiles sessions are passed by port to collaborations, the mutable showcase capability remains shared with preflight/worker, and one collaboration publication instance serves Telegram plus all delivery projections. `ProfilesFeature.sessions` now exposes its application port rather than a concrete SQLite type. A dependency-cruiser rule first failed on all 14 legacy runtime feature edges and now enforces public module entrypoints. Three source/config paths plus this plan changed; bootstrap, migration, identity, preflight, polling, worker and shutdown order stayed unchanged. Runtime PASS (47); focused S1/S2/S3 fake journeys PASS (21); architecture PASS (156 modules, 450 dependencies); `pnpm check` PASS (69 unit, 88 integration, 47 runtime, lint/typecheck/build); all fake E2E PASS (33); `pnpm db:verify` PASS. No credential, real Telegram, remote or production mutation.
 - **Stop conditions:** factory duplication changes instance/transaction identity.
 
-#### R2-13 — Remove legacy production feature paths
+#### R2-13A — Cut profile consumers to the module owner
 
-- **Status:** `pending`
-- **Objective:** Удалить temporary barrels и feature-specific code из shared layers.
+- **Status:** `in_progress`
+- **Objective:** Перевести runtime compatibility export и profile-related tests со shared legacy paths на `modules/profiles`.
 - **Dependencies:** `R2-12`.
-- **Read first:** all source imports, module entrypoints and architecture graph.
-- **Scope:** cut remaining production consumers to module public paths; delete legacy domain/application/port/infrastructure feature files and compatibility barrels.
-- **Do not touch:** shared commands/outbox/platform adapters or tests beyond import fixes required for build.
-- **Invariants:** no code duplication; every surviving shared contract has at least two cross-feature consumers or explicit platform ownership.
-- **Verification:** zero legacy production scan; architecture; `pnpm check`; all fake E2E; `pnpm db:verify`.
-- **Exit criteria:** completion definition holds for `src`; один commit `R2-13: remove legacy feature paths`.
-- **Stop conditions:** a surviving consumer lacks a stable public module contract.
+- **Read first:** nine remaining profile bridge consumers, profiles public/application/infrastructure surfaces and focused tests.
+- **Scope:** switch `runtime/bot-runtime.ts` and the eight profile/cross-feature tests to the profiles module root or the exact module-owned adapter under test; no bridge deletion yet.
+- **Do not touch:** assertions, profile behavior, SQL, factories or fake locations.
+- **Invariants:** public contracts and direct adapter coverage remain identical; no module export is widened solely for tests.
+- **Verification:** profile unit/integration/fake tests; architecture; `pnpm check`; all fake E2E; `pnpm db:verify`.
+- **Exit criteria:** no active consumer imports a legacy profile path; один commit `R2-13A: cut profile consumers to module owner`.
+- **Stop conditions:** a consumer cannot express the same test through a module-owned surface.
 
-#### R2-14 — Align test support with module APIs
+#### R2-13B — Delete profile compatibility paths
 
 - **Status:** `pending`
-- **Objective:** Убрать зависимость tests от удалённых внутренних путей и test-only adapters из production source.
-- **Dependencies:** `R2-13`.
-- **Read first:** direct test imports, `test/support`, fake clocks/Telegram adapters and module factories.
-- **Scope:** module-focused fixtures/public APIs; relocate genuine test-only fakes under `test/support`; retain direct platform internals only in platform tests.
-- **Do not touch:** assertions, lifecycle visibility, DB isolation or fake/real evidence boundary.
-- **Invariants:** tests continue using real migrations and explicit start/stop/restart; FakeTelegramApi and port transport remain distinct.
-- **Verification:** support tests, all suites together, architecture, `pnpm check`, `pnpm test:e2e:fake`, `pnpm db:verify`.
-- **Exit criteria:** production `src` has no test-only adapter; один commit `R2-14: align tests with feature modules`.
-- **Stop conditions:** helper hides lifecycle or weakens behavioral assertions.
+- **Objective:** Удалить восемь profile compatibility files из shared domain/application/infrastructure.
+- **Dependencies:** `R2-13A`.
+- **Read first:** exact profile zero-consumer scan and module replacements.
+- **Scope:** delete legacy profile domain, services, ports, SQLite adapters and grammY audience adapter; extend graph enforcement to reject those paths.
+- **Do not touch:** module implementations, tests or shared Telegram transport.
+- **Invariants:** every deleted file is a passive re-export with zero consumer.
+- **Verification:** exact profile old-path scan; architecture; `pnpm check`; all fake E2E; `pnpm db:verify`.
+- **Exit criteria:** shared layers contain no profile implementation or bridge; один commit `R2-13B: remove profile compatibility paths`.
+- **Stop conditions:** any active import remains.
+
+#### R2-13C — Cut collaboration consumers to the module owner
+
+- **Status:** `pending`
+- **Objective:** Перевести showcase preflight и collaboration-focused tests на module-owned contracts/adapters.
+- **Dependencies:** `R2-13B`.
+- **Read first:** remaining collaboration bridge consumers, public API, module internals under focused test and preflight capability port.
+- **Scope:** switch production preflight and five collaboration/domain tests; no bridge deletion yet.
+- **Do not touch:** assertions, publication/draft behavior, SQL, outbox or Telegram copy.
+- **Invariants:** preflight mutates the same capability object; direct adapter tests retain their original construction and coverage.
+- **Verification:** collaboration unit/integration/fake and preflight tests; architecture; `pnpm check`; all fake E2E; `pnpm db:verify`.
+- **Exit criteria:** no active consumer imports a legacy collaboration-core path; один commit `R2-13C: cut collaboration consumers to module owner`.
+- **Stop conditions:** cutover changes capability identity or test topology.
+
+#### R2-13D — Delete collaboration compatibility paths
+
+- **Status:** `pending`
+- **Objective:** Удалить одиннадцать collaboration compatibility files из shared layers.
+- **Dependencies:** `R2-13C`.
+- **Read first:** exact collaboration zero-consumer scan and module replacements.
+- **Scope:** delete collaboration domain, draft/publication/renderer, four ports and three SQLite adapter bridges; extend graph enforcement.
+- **Do not touch:** marketplace browse bridges, module code, shared outbox/platform adapters or tests.
+- **Invariants:** every removed path is a passive re-export; module imports remain internal or public-root imports.
+- **Verification:** exact collaboration old-path scan; architecture; `pnpm check`; all fake E2E; `pnpm db:verify`.
+- **Exit criteria:** shared layers contain no collaboration-core implementation or bridge; один commit `R2-13D: remove collaboration compatibility paths`.
+- **Stop conditions:** any active import remains.
+
+#### R2-13E — Cut remaining feature consumers to module owners
+
+- **Status:** `pending`
+- **Objective:** Перевести marketplace, applications и moderation consumers со shared compatibility paths.
+- **Dependencies:** `R2-13D`.
+- **Read first:** neutral Telegram router and S3/S4 focused tests; three module entrypoints and owned adapters.
+- **Scope:** switch the router browse type plus marketplace/applications/moderation unit/integration consumers; no bridge deletion yet.
+- **Do not touch:** assertions, callback/deep-link bytes, SQL, hide/application behavior or route priority.
+- **Invariants:** module roots remain consumer contracts; direct adapter imports are limited to focused module tests.
+- **Verification:** browse/application/moderation focused tests; architecture; `pnpm check`; all fake E2E; `pnpm db:verify`.
+- **Exit criteria:** no active consumer imports any remaining legacy feature path; один commit `R2-13E: cut remaining feature consumers`.
+- **Stop conditions:** a stable module-owned replacement is missing.
+
+#### R2-13F — Remove remaining feature bridges and misplaced deadline policy
+
+- **Status:** `pending`
+- **Objective:** Физически удалить marketplace, applications и moderation compatibility files, а collaboration deadline policy передать доменному owner.
+- **Dependencies:** `R2-13E`.
+- **Read first:** exact source import graph, seven remaining bridge files, `infrastructure/time/deadline.ts`, its two production consumers and primitive test.
+- **Scope:** delete three browse, one applications and three moderation re-exports; move deadline parsing/formatting/due predicates under collaboration domain and switch its canonical domain/application consumers plus primitive test; finalize architecture rejection of all legacy feature paths.
+- **Do not touch:** shared command/outbox/platform code, deadline semantics/assertions, unrelated module implementations or test support.
+- **Invariants:** no feature code or compatibility export survives in shared domain/application/infrastructure; deadline behavior has one collaboration-owned implementation.
+- **Verification:** zero legacy feature scan over `src` and `test`; architecture; `pnpm check`; all fake E2E; `pnpm db:verify`.
+- **Exit criteria:** feature-first completion definition holds for production `src`; один commit `R2-13F: remove remaining feature bridges`.
+- **Stop conditions:** any bridge still has an active consumer.
+
+#### R2-14A — Move the grammY API fake to test support
+
+- **Status:** `pending`
+- **Objective:** Убрать `FakeTelegramApi` из production source.
+- **Dependencies:** `R2-13F`.
+- **Read first:** fake implementation and its ten sorted consumers.
+- **Scope:** move the fake to `test/support/fake-telegram-api.ts` and switch all ten consumers in one bounded mechanical cutover.
+- **Do not touch:** assertions, fake response behavior or `FakeTelegramTransport`.
+- **Invariants:** grammY HTTP fake remains distinct from the application transport fake.
+- **Verification:** affected fake/runtime tests; all suites; architecture; `pnpm check`; `pnpm test:e2e:fake`; `pnpm db:verify`.
+- **Exit criteria:** old API-fake path is absent; один commit `R2-14A: move Telegram API fake to test support`.
+- **Stop conditions:** any production code consumes the fake.
+
+#### R2-14B — Move the Telegram transport fake to test support
+
+- **Status:** `pending`
+- **Objective:** Убрать port-level `FakeTelegramTransport` из production source.
+- **Dependencies:** `R2-14A`.
+- **Read first:** transport fake and its four integration/runtime consumers.
+- **Scope:** move the fake to `test/support/fake-telegram-transport.ts` and switch all consumers.
+- **Do not touch:** provider behavior, assertions or grammY API fake.
+- **Invariants:** delivery result/error semantics remain byte-for-byte compatible.
+- **Verification:** affected delivery/application/moderation tests; all suites; architecture; `pnpm check`; `pnpm test:e2e:fake`; `pnpm db:verify`.
+- **Exit criteria:** old transport-fake path is absent; один commit `R2-14B: move Telegram transport fake to test support`.
+- **Stop conditions:** any production code consumes the fake.
+
+#### R2-14C — Establish the test-owned fake clock
+
+- **Status:** `pending`
+- **Objective:** Создать test-support owner для `FakeClock` без oversized consumer diff.
+- **Dependencies:** `R2-14B`.
+- **Read first:** fake clock and the recorded first cohort: unit `s0-02`; integration `s0-04-ingress`, `s0-04-schema`, `s0-05-outbox`, `r1-07`, `r1-03`, `r2-03`, `r2-06`, `r2-07a`; runtime `s0-06`, `r1-06b`.
+- **Scope:** add `test/support/fake-clock.ts` as a temporary exact re-export of the still-canonical source implementation and switch those eleven consumers.
+- **Do not touch:** source implementation, clock behavior, timestamps, assertions or remaining importers.
+- **Invariants:** production source never imports test support; every test retains its explicit clock instance.
+- **Verification:** affected tests; all suites; architecture; `pnpm check`; `pnpm test:e2e:fake`; `pnpm db:verify`.
+- **Exit criteria:** canonical implementation is test-owned and first cohort uses it; один commit `R2-14C: establish test-owned fake clock`.
+- **Stop conditions:** source production code imports `FakeClock`.
+
+#### R2-14D — Cut the second fake-clock consumer cohort
+
+- **Status:** `pending`
+- **Objective:** Перевести двенадцать записанных integration/unit consumers на test-support facade.
+- **Dependencies:** `R2-14C`.
+- **Read first:** integration `r2-08`, `r2-10a`, `s1-01`, `s1-02`, `s2-01`, `s2-02`, `s3-02`, `s3-03`, `s3-04`, `s4-01`; unit `fut-01`, `s3-04`.
+- **Scope:** twelve import-only changes; test-support facade continues to re-export the source implementation.
+- **Do not touch:** fake implementation, assertions or final three E2E consumers.
+- **Invariants:** test timestamps/lifecycle remain explicit and unchanged.
+- **Verification:** affected tests; all suites; architecture; `pnpm check`; `pnpm test:e2e:fake`; `pnpm db:verify`.
+- **Exit criteria:** only three E2E tests import the source path; один commit `R2-14D: cut second fake-clock cohort`.
+- **Stop conditions:** recorded cohort or importer count differs at preflight.
+
+#### R2-14E — Remove the fake-clock source bridge
+
+- **Status:** `pending`
+- **Objective:** Перевести последние три E2E importers и удалить последний test-only production path.
+- **Dependencies:** `R2-14D`.
+- **Read first:** E2E `s1-02`, `s2-01`, `s3-02`, facade content and exact `src/infrastructure/testing|time` scan.
+- **Scope:** replace the test-support facade with the unchanged implementation, switch final three imports, delete `src/infrastructure/time/fake-clock.ts` and enforce absence of all three test-only adapters from `src`.
+- **Do not touch:** assertions, production clocks/deadlines or test lifecycle.
+- **Invariants:** all tests use the same moved implementation and no production module depends on it.
+- **Verification:** all suites together; architecture; `pnpm check`; `pnpm test:e2e:fake`; `pnpm db:verify`; zero test-only source scan.
+- **Exit criteria:** production `src` has no test-only adapter; один commit `R2-14E: remove fake-clock source bridge`.
+- **Stop conditions:** any source consumer or behavioral difference remains.
 
 #### R2-15 — Close the physical transition
 
 - **Status:** `pending`
 - **Objective:** Синхронизировать TD/README, доказать completed tree и независимо проверить весь R2 candidate.
-- **Dependencies:** `R2-14`.
+- **Dependencies:** `R2-14E`.
 - **Read first:** full R2 diff/log, actual tree/import graph, all unit evidence and docs.
 - **Scope:** docs/status/ledger; full stage gates; one blocker-limited independent review; at most one consolidated fix wave.
 - **Do not touch:** new behavior/dependency/refactor, real Telegram, production or remote.

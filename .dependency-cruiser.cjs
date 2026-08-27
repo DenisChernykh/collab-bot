@@ -27,6 +27,14 @@ module.exports = {
 		},
 		...crossModuleInternalRules,
 		{
+			name: "bot-application-must-compose-features-through-public-entrypoints",
+			severity: "error",
+			from: { path: "(^|/)src/runtime/bot-application\\.ts$" },
+			to: {
+				path: "(^|/)src/(modules/(profiles|collaborations|marketplace|applications|moderation)/(?!index\\.ts$).+|application/(profiles|collaborations|moderation)(/|$)|infrastructure/(database/(profile(-session)?|collaboration(-browse|-publication|-session)?|admin-moderation)-repository\\.ts$|telegram/grammy-telegram-audience-reader\\.ts$))",
+			},
+		},
+		{
 			name: "domain-must-not-import-outer-layers",
 			severity: "error",
 			from: { path: "(^|/)src/(domain|modules/[^/]+/domain)(/|$)" },

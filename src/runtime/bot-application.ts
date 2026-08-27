@@ -3,39 +3,28 @@ import type { Bot, BotError } from "grammy";
 import { CallbackActionService } from "../application/commands/callback-action.js";
 import { DurableCommandExecutor } from "../application/commands/command-executor.js";
 import { RequireActiveActor } from "../application/commands/require-active-actor.js";
-import { CollaborationBrowseService } from "../application/collaborations/collaboration-browse-service.js";
-import { CollaborationDraftService } from "../application/collaborations/collaboration-draft-service.js";
-import { CollaborationPublicationService } from "../application/collaborations/collaboration-publication-service.js";
-import { AdminModerationService } from "../application/moderation/admin-moderation-service.js";
 import { DeliveryRunner } from "../application/outbox/delivery-runner.js";
-import { OutboxDeliveryService } from "../application/outbox/outbox-service.js";
 import { OUTBOX_DELIVERY_KINDS } from "../application/ports/outbox-delivery-store.js";
 import type { Clock } from "../application/ports/clock.js";
-import { ProfileAudienceService } from "../application/profiles/profile-audience-service.js";
-import { ProfileService } from "../application/profiles/profile-service.js";
 import { registerTelegramRouter } from "../presentation/telegram/telegram-router.js";
 import type { AppConfig } from "../config/parse-config.js";
 import { hashCanonicalInput } from "../infrastructure/crypto/canonical-input-hash.js";
 import { RandomClaimTokenGenerator } from "../infrastructure/crypto/claim-token.js";
 import { NodeOpaqueTokenCodec } from "../infrastructure/crypto/ingress-codecs.js";
-import { SqliteAdminModerationRepository } from "../infrastructure/database/admin-moderation-repository.js";
 import { SqliteCallbackActionRepository } from "../infrastructure/database/callback-action-repository.js";
-import { SqliteCollaborationBrowseRepository } from "../infrastructure/database/collaboration-browse-repository.js";
-import { SqliteCollaborationPublicationRepository } from "../infrastructure/database/collaboration-publication-repository.js";
-import { SqliteCollaborationRepository } from "../infrastructure/database/collaboration-repository.js";
-import { SqliteCollaborationSessionRepository } from "../infrastructure/database/collaboration-session-repository.js";
 import type { DatabaseBoundary } from "../infrastructure/database/database-boundary.js";
 import { SqliteDurableCommandStore } from "../infrastructure/database/durable-command-repository.js";
 import { SqliteOutboxDeliveryRepository } from "../infrastructure/database/outbox-delivery-repository.js";
-import { SqliteProfileRepository } from "../infrastructure/database/profile-repository.js";
-import { SqliteProfileSessionRepository } from "../infrastructure/database/profile-session-repository.js";
 import { SqliteTelegramUserRepository } from "../infrastructure/database/telegram-user-repository.js";
 import { DatabaseBoundaryTransactionRunner } from "../infrastructure/database/transaction-runner.js";
 import { SafeLogger } from "../infrastructure/logging/safe-logger.js";
-import { GrammyTelegramAudienceReader } from "../infrastructure/telegram/grammy-telegram-audience-reader.js";
 import { GrammyTelegramTransport } from "../infrastructure/telegram/grammy-telegram-transport.js";
 import { SystemProviderDeadline } from "../infrastructure/time/provider-deadline.js";
 import { createApplicationsFeature } from "../modules/applications/index.js";
+import { createCollaborationsFeature } from "../modules/collaborations/index.js";
+import { createMarketplaceFeature } from "../modules/marketplace/index.js";
+import { createModerationFeature } from "../modules/moderation/index.js";
+import { createProfilesFeature } from "../modules/profiles/index.js";
 import type { BotRuntimeLifecycleOperations } from "./bot-lifecycle.js";
 import { DeliveryWorker } from "./delivery-worker.js";
 import { preflightShowcase } from "./showcase-preflight.js";
@@ -70,54 +59,30 @@ export function composeBotApplication(options: BotApplicationCompositionOptions)
 	const { bot, boundary, clock } = options;
 	const userRepository = new SqliteTelegramUserRepository(boundary);
 	const transactionRunner = new DatabaseBoundaryTransactionRunner(boundary);
-	const profileSessionRepository = new SqliteProfileSessionRepository(boundary);
-	const profileRepository = new SqliteProfileRepository(boundary);
-	const profileService = new ProfileService(
-		profileRepository,
-		transactionRunner,
-		clock,
-	);
-	const profileAudienceService = new ProfileAudienceService(
-		new GrammyTelegramAudienceReader(bot),
-		profileRepository,
-		transactionRunner,
-		clock,
-		new SystemProviderDeadline(),
-	);
-	const collaborationDraftService = new CollaborationDraftService(
-		new SqliteCollaborationRepository(boundary),
-		new SqliteCollaborationSessionRepository(boundary),
-		transactionRunner,
-		clock,
-		profileSessionRepository,
-	);
 	const capability = { canPublish: false, reason: "showcase preflight has not run" as string | null };
 	const outboxStore = new SqliteOutboxDeliveryRepository(boundary);
-	const adminModerationService = new AdminModerationService({
-		repository: new SqliteAdminModerationRepository(boundary),
-		outbox: new OutboxDeliveryService(outboxStore, transactionRunner, clock),
+	const profilesFeature = createProfilesFeature({
+		boundary,
 		transactions: transactionRunner,
 		clock,
-		botUsername: options.config.expectedBotUsername,
-		adminTelegramIds: options.config.adminTelegramIds,
+		deadline: new SystemProviderDeadline(),
+		telegramBot: bot,
 	});
-	const collaborationPublicationService = new CollaborationPublicationService(
-		new SqliteCollaborationRepository(boundary),
-		new SqliteCollaborationPublicationRepository(boundary),
-		new SqliteCollaborationSessionRepository(boundary),
+	const collaborationsFeature = createCollaborationsFeature({
+		boundary,
+		transactions: transactionRunner,
+		clock,
 		outboxStore,
-		transactionRunner,
-		clock,
 		capability,
-		options.config.showcaseChannelId,
-		options.config.expectedBotUsername,
-	);
-	const collaborationBrowseRepository = new SqliteCollaborationBrowseRepository(boundary);
-	const collaborationBrowseService = new CollaborationBrowseService(
-		collaborationBrowseRepository,
-		transactionRunner,
+		channelChatId: options.config.showcaseChannelId,
+		botUsername: options.config.expectedBotUsername,
+		profileSessions: profilesFeature.sessions,
+	});
+	const marketplaceFeature = createMarketplaceFeature({
+		boundary,
+		transactions: transactionRunner,
 		clock,
-	);
+	});
 	const applicationsFeature = createApplicationsFeature({
 		boundary,
 		outboxStore,
@@ -125,7 +90,14 @@ export function composeBotApplication(options: BotApplicationCompositionOptions)
 		clock,
 		botUsername: options.config.expectedBotUsername,
 	});
-	const applicationService = applicationsFeature.api;
+	const moderationFeature = createModerationFeature({
+		boundary,
+		outboxStore,
+		transactions: transactionRunner,
+		clock,
+		botUsername: options.config.expectedBotUsername,
+		adminTelegramIds: options.config.adminTelegramIds,
+	});
 	const durableCommandExecutor = new DurableCommandExecutor(transactionRunner, new SqliteDurableCommandStore(boundary), { hash: hashCanonicalInput }, clock);
 	const callbackActionService = new CallbackActionService({
 		transactionRunner,
@@ -134,7 +106,7 @@ export function composeBotApplication(options: BotApplicationCompositionOptions)
 		repository: new SqliteCallbackActionRepository(boundary),
 		actorGuard: new RequireActiveActor(userRepository),
 		allowedActionTypes: new Set(["application.accept", "application.reject", "collaboration.close"]),
-		currentVersion: (entityId) => applicationService.currentActionVersion(entityId),
+		currentVersion: (entityId) => applicationsFeature.api.currentActionVersion(entityId),
 		tokenCodec: new NodeOpaqueTokenCodec(),
 	});
 
@@ -150,19 +122,19 @@ export function composeBotApplication(options: BotApplicationCompositionOptions)
 		}
 	});
 	registerTelegramRouter(bot, {
-		profileService,
-		profileAudienceService,
-		sessionRepository: profileSessionRepository,
+		profileService: profilesFeature.api,
+		profileAudienceService: profilesFeature.audience,
+		sessionRepository: profilesFeature.sessions,
 		telegramUserRepository: userRepository,
 		durableCommandExecutor,
 		clock,
 		helpContact: options.config.helpContact,
-		collaborationDraftService,
-		collaborationPublicationService,
-		collaborationBrowseService,
-		applicationService,
+		collaborationDraftService: collaborationsFeature.draft,
+		collaborationPublicationService: collaborationsFeature.publication,
+		collaborationBrowseService: marketplaceFeature.browse,
+		applicationService: applicationsFeature.api,
 		callbackActionService,
-		adminModerationService,
+		adminModerationService: moderationFeature.api,
 	});
 	const logger = new SafeLogger((entry) => options.logSink?.(JSON.stringify(entry)), clock, "bot");
 	bot.catch((error: BotError) => {
@@ -170,13 +142,13 @@ export function composeBotApplication(options: BotApplicationCompositionOptions)
 	});
 
 	const deliveryRunner = new DeliveryRunner(outboxStore, new GrammyTelegramTransport(bot), new SystemProviderDeadline(), new RandomClaimTokenGenerator(), clock, async (result) => {
-		if (result.deliveryId !== undefined) await collaborationPublicationService.projectDelivery(result.deliveryId, outboxStore);
+		if (result.deliveryId !== undefined) await collaborationsFeature.publication.projectDelivery(result.deliveryId, outboxStore);
 	}, () => capability.canPublish ? OUTBOX_DELIVERY_KINDS : ["dm_send"]);
 	const deliveryWorker = new DeliveryWorker({
 		canPublish: () => capability.canPublish,
 		recoverStale: () => deliveryRunner.recoverStale(),
-		projectTerminalOutcomes: () => collaborationPublicationService.projectTerminalOutcomes(outboxStore),
-		cancelExpiredPrepared: () => collaborationPublicationService.cancelExpiredPrepared(),
+		projectTerminalOutcomes: () => collaborationsFeature.publication.projectTerminalOutcomes(outboxStore),
+		cancelExpiredPrepared: () => collaborationsFeature.publication.cancelExpiredPrepared(),
 		supersedeStaleProjections: () => applicationsFeature.projectionMaintenance.supersedeStaleProjectionDeliveries(clock.now().getTime()),
 		runOnce: () => deliveryRunner.runOnce(),
 	});
