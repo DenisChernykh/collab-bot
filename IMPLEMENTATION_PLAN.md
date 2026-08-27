@@ -721,7 +721,7 @@ P0-01 → P0-02
 
 #### R2-02 — Move profiles domain and application ownership
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Собрать profile domain, use cases, session contract и repositories ports под `modules/profiles`.
 - **Dependencies:** `R2-01`.
 - **Read first:** profile domain/services/ports and focused unit/integration tests.
@@ -730,11 +730,12 @@ P0-01 → P0-02
 - **Invariants:** exported types/errors and runtime semantics byte-for-byte equivalent.
 - **Verification:** profile unit/session integration; architecture; `pnpm check`; `pnpm db:verify`.
 - **Exit criteria:** profile core has one feature owner; one commit `R2-02: move profiles core into feature module`.
+- **Completion evidence:** Commit SHA: `SELF`; moved profile domain, services and two consumer ports into `modules/profiles/{domain,application}` with a pure `application/index.ts`; five old paths are exact temporary re-export barrels so current consumers remain green until their scheduled cutover. The previous declaration merge for `audienceAutofill` was replaced by the same explicit optional field in the owned session contract; emitted/runtime behavior is unchanged. Eleven source paths plus this plan changed, with no repository implementation, SQL, presentation, payload/session serialization or policy edit. Focused profile domain/audience tests PASS (23), profile/repository/session integration PASS (13); architecture PASS (121 modules, 376 dependencies); `pnpm check` PASS (69 unit, 83 integration, 47 runtime, lint/typecheck/build); all fake E2E PASS (30); `pnpm db:verify` PASS; migrations/PRD diff and `git diff --check` PASS. No credential, real Telegram, remote or production mutation.
 - **Stop conditions:** runtime cycle through public barrel or consumer-visible contract drift.
 
 #### R2-03 — Move profiles adapters and composition
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Дать profiles собственные SQLite/audience adapters и factory.
 - **Dependencies:** `R2-02`.
 - **Read first:** profile repositories, audience reader, runtime composition and restart tests.
