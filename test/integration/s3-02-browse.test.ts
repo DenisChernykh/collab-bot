@@ -186,7 +186,10 @@ describe("S3-02 collaboration browse state", () => {
 
 			const selected = await service.openFeed("999");
 			expect(selected.card?.id).toBe(cardId("f"));
-			await boundary.execute("UPDATE collaborations SET status = 'hidden', updated_at = ? WHERE id = ?", [NOW, cardId("f")]);
+			await boundary.execute(
+				"UPDATE collaborations SET status = 'hidden', hidden_from_status = 'published', hidden_at = ?, updated_at = ? WHERE id = ?",
+				[NOW, NOW, cardId("f")],
+			);
 
 			const revalidated = await service.revalidate(selected);
 			expect(revalidated.card?.id).toBe(cardId("e"));
@@ -340,7 +343,7 @@ async function insertLegacyCard(boundary: DatabaseBoundary, fixture: CardFixture
 
 async function insertBrowseCard(boundary: DatabaseBoundary, fixture: CardFixture): Promise<void> {
 	await boundary.execute(
-		"INSERT INTO collaborations (id, public_token, author_profile_id, format, target_profile_type, title, offer_text, expectation_text, slots_total, response_deadline_at, event_date_local, city_code, status, version, projection_revision, created_at, updated_at, published_at) VALUES (?, ?, ?, ?, ?, ?, 'Useful collaboration offer', 'Reliable partner expected', 2, ?, NULL, 'ekaterinburg', ?, 1, 0, ?, ?, ?)",
+		"INSERT INTO collaborations (id, public_token, author_profile_id, format, target_profile_type, title, offer_text, expectation_text, slots_total, response_deadline_at, event_date_local, city_code, status, version, projection_revision, created_at, updated_at, published_at, hidden_from_status, hidden_at) VALUES (?, ?, ?, ?, ?, ?, 'Useful collaboration offer', 'Reliable partner expected', 2, ?, NULL, 'ekaterinburg', ?, 1, 0, ?, ?, ?, ?, ?)",
 		[
 			fixture.id,
 			fixture.token,
@@ -353,6 +356,8 @@ async function insertBrowseCard(boundary: DatabaseBoundary, fixture: CardFixture
 			NOW - 1000,
 			NOW - 1000,
 			fixture.publishedAt ?? null,
+			fixture.status === "hidden" ? "published" : null,
+			fixture.status === "hidden" ? NOW - 1000 : null,
 		],
 	);
 	for (const topic of fixture.topics ?? ["city"]) await boundary.execute("INSERT INTO collaboration_topics (collaboration_id, topic) VALUES (?, ?)", [fixture.id, topic]);

@@ -267,7 +267,10 @@ describe("S3-02 fake Telegram browse journey", () => {
 		const { directory, fake, runtime } = fixture;
 		try {
 			await startQuickProfileUntilPlatformUrl(runtime, fake, 430, 1, "Stale Target Applicant");
-			await runtime.boundary.execute("UPDATE collaborations SET status = 'hidden', updated_at = ? WHERE id = ?", [NOW, FIRST_ID]);
+			await runtime.boundary.execute(
+				"UPDATE collaborations SET hidden_from_status = status, status = 'hidden', hidden_at = ?, projection_revision = projection_revision + 1, updated_at = ? WHERE id = ?",
+				[NOW, NOW, FIRST_ID],
+			);
 			await runtime.bot.handleUpdate({ update_id: 6, message: privateMessageForUser(6, 430, "https://example.com/stale-target-applicant") });
 
 			expect(await runtime.boundary.query("SELECT id FROM profiles WHERE telegram_user_id = '430' AND status = 'active'")).toHaveLength(1);
@@ -280,7 +283,7 @@ describe("S3-02 fake Telegram browse journey", () => {
 		}
 	});
 
-	it("runs the complete S3 checkpoint from author profile and publication through last-slot match, contacts and restart", async () => {
+	it("runs the complete shareable checkpoint through accept, reject, admin hide and restart", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "collaboration-s3-checkpoint-e2e-"));
 		const databasePath = join(directory, "app.sqlite");
 		const clock = new FakeClock(NOW);
@@ -290,7 +293,7 @@ describe("S3-02 fake Telegram browse journey", () => {
 		});
 		let runtime: Awaited<ReturnType<typeof createBotRuntime>> | undefined;
 		try {
-			runtime = await createRuntime(databasePath, fake, clock, { startDelivery: true });
+			runtime = await createRuntime(databasePath, fake, clock, { startDelivery: true, adminTelegramIds: ["900"] });
 
 			await runtime.bot.handleUpdate({ update_id: 1001, message: privateMessageForUser(1001, 600, "/start", "full_author") });
 			await runtime.bot.handleUpdate({ update_id: 1002, callback_query: callbackForUser(1002, 600, callbackData(fake, "collaboration:start"), "full_author") });
@@ -395,12 +398,33 @@ describe("S3-02 fake Telegram browse journey", () => {
 			await runtime.bot.handleUpdate({ update_id: 1220, message: privateMessageForUser(1220, 600, "/my_collaborations", "full_author") });
 			expect(messagesSince(fake, authorListStart).join("\n").toLowerCase()).toContain("совпадение");
 
+			const cardLink = `https://t.me/collab_bot?start=c_${published.public_token}`;
+			const adminLookupStart = fake.calls.length;
+			await runtime.bot.handleUpdate({ update_id: 1221, message: privateMessageForUser(1221, 900, `/admin ${cardLink}`) });
+			expect(messagesSince(fake, adminLookupStart).join("\n")).toContain("Полный S3 checkpoint");
+			await runtime.bot.handleUpdate({ update_id: 1222, message: privateMessageForUser(1222, 900, `/admin hide ${cardLink} Конец полного fake checkpoint`) });
+			await waitUntil(async () => (await runtime!.boundary.query<{ status: string }>(
+				"SELECT status FROM outbox_deliveries WHERE idempotency_key = ?",
+				[`channel:${published.id}:hide:${matchedProjectionRevision + 1}`],
+			))[0]?.status === "sent", 6_000);
+			expect(await runtime.boundary.query("SELECT status, hidden_from_status, projection_revision FROM collaborations WHERE id = ?", [published.id])).toEqual([{
+				status: "hidden",
+				hidden_from_status: "matched",
+				projection_revision: matchedProjectionRevision + 1,
+			}]);
+			const contactAfterHideStart = fake.calls.length;
+			await runtime.bot.handleUpdate({
+				update_id: 1223,
+				message: privateMessageForUser(1223, Number(acceptedUsers[0]!.telegram_user_id), "/my_applications"),
+			});
+			expect(urlValuesSince(fake, contactAfterHideStart)).toContain("https://t.me/full_author");
+
 			const beforeRestart = await runtime.boundary.query(
-				"SELECT (SELECT count(*) FROM applications WHERE collaboration_id = ?) AS applications, (SELECT count(*) FROM outbox_deliveries) AS deliveries",
+				"SELECT (SELECT count(*) FROM applications WHERE collaboration_id = ?) AS applications, (SELECT count(*) FROM outbox_deliveries) AS deliveries, (SELECT count(*) FROM operator_actions) AS operator_actions",
 				[published.id],
 			);
 			await runtime.shutdown();
-			runtime = await createRuntime(databasePath, fake, clock);
+			runtime = await createRuntime(databasePath, fake, clock, { adminTelegramIds: ["900"] });
 			const restartStart = fake.calls.length;
 			await runtime.bot.handleUpdate({
 				update_id: 1230,
@@ -409,7 +433,7 @@ describe("S3-02 fake Telegram browse journey", () => {
 			expect(messagesSince(fake, restartStart).join("\n").toLowerCase()).toContain("принят");
 			expect(urlValuesSince(fake, restartStart)).toContain("https://t.me/full_author");
 			expect(await runtime.boundary.query(
-				"SELECT (SELECT count(*) FROM applications WHERE collaboration_id = ?) AS applications, (SELECT count(*) FROM outbox_deliveries) AS deliveries",
+				"SELECT (SELECT count(*) FROM applications WHERE collaboration_id = ?) AS applications, (SELECT count(*) FROM outbox_deliveries) AS deliveries, (SELECT count(*) FROM operator_actions) AS operator_actions",
 				[published.id],
 			)).toEqual(beforeRestart);
 		} finally {
@@ -637,11 +661,120 @@ describe("S3-02 fake Telegram browse journey", () => {
 	});
 });
 
+describe("S4-01 fake Telegram admin hide journey", () => {
+	it("hides through allowlisted commands, deletes after commit and preserves accepted contact across restart", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "collaboration-s4-admin-hide-e2e-"));
+		const databasePath = join(directory, "app.sqlite");
+		const clock = new FakeClock(NOW);
+		const fake = new FakeTelegramApi({
+			token: "fake-token",
+			botInfo: { id: 777, is_bot: true, first_name: "Collab", username: "collab_bot" } as unknown as UserFromGetMe,
+		});
+		let runtime: Awaited<ReturnType<typeof createBotRuntime>> | undefined;
+		try {
+			runtime = await createRuntime(databasePath, fake, clock, { startDelivery: true, adminTelegramIds: ["900"] });
+			await seedCards(runtime.boundary);
+			await seedApplicantProfile(runtime.boundary, "300", "30000000-0000-4000-8000-000000000001", "Accepted applicant");
+			await seedApplicantProfile(runtime.boundary, "301", "30100000-0000-4000-8000-000000000001", "Pending applicant");
+			await insertApplication(runtime.boundary, {
+				id: "30000000-0000-4000-8000-000000000004",
+				applicantProfileId: "30000000-0000-4000-8000-000000000001",
+				message: "Принятый кандидат сохраняет право на контакт.",
+				status: "accepted",
+				decidedByProfileId: "10000000-0000-4000-8000-000000000001",
+				decidedAt: NOW,
+			});
+			await insertApplication(runtime.boundary, {
+				id: "30100000-0000-4000-8000-000000000004",
+				applicantProfileId: "30100000-0000-4000-8000-000000000001",
+				message: "Ожидающий кандидат должен быть закрыт при hide.",
+			});
+
+			const link = `https://t.me/collab_bot?start=c_${FIRST_TOKEN}`;
+			await runtime.bot.handleUpdate({ update_id: 1, message: privateMessageForUser(1, 400, `/start c_${FIRST_TOKEN}`) });
+			const staleApply = callbackData(fake, `application:start:d:${FIRST_TOKEN}`);
+
+			const outsiderStart = fake.calls.length;
+			await runtime.bot.handleUpdate({ update_id: 2, message: privateMessageForUser(2, 901, `/admin ${link}`) });
+			const outsiderText = messagesSince(fake, outsiderStart).join("\n");
+			expect(outsiderText).toContain("Не удалось распознать команду");
+			expect(outsiderText).not.toContain("First browse card");
+
+			const lookupStart = fake.calls.length;
+			await runtime.bot.handleUpdate({ update_id: 3, message: privateMessageForUser(3, 900, `/admin ${link}`) });
+			const lookupText = messagesSince(fake, lookupStart).join("\n");
+			expect(lookupText).toContain("First browse card");
+			expect(lookupText).toContain("опубликована");
+			expect(lookupText).not.toContain(FIRST_ID);
+			expect(lookupText).not.toContain(FIRST_TOKEN);
+
+			const reason = "Ручная модерация тестовой карточки";
+			const hideStart = fake.calls.length;
+			const hideMessage = privateMessageForUser(4, 900, `/admin hide ${link} ${reason}`);
+			await runtime.bot.handleUpdate({ update_id: 4, message: hideMessage });
+			await runtime.bot.handleUpdate({ update_id: 4, message: hideMessage });
+			await waitUntil(async () => fake.calls.some((call) => call.method === "deleteMessage"));
+			const hideText = messagesSince(fake, hideStart).join("\n");
+			expect(hideText).toContain("Карточка скрыта");
+			expect(hideText).not.toContain(reason);
+			expect(hideText).not.toContain(FIRST_TOKEN);
+			expect(fake.calls.filter((call) => call.method === "deleteMessage")).toHaveLength(1);
+			expect(fake.calls.find((call) => call.method === "deleteMessage")?.payload).toMatchObject({ chat_id: "-1001", message_id: 41 });
+
+			expect(await runtime.boundary.query("SELECT status, hidden_from_status, projection_revision FROM collaborations WHERE id = ?", [FIRST_ID])).toEqual([{
+				status: "hidden",
+				hidden_from_status: "published",
+				projection_revision: 1,
+			}]);
+			expect(await runtime.boundary.query("SELECT status FROM applications WHERE collaboration_id = ? ORDER BY id", [FIRST_ID])).toEqual([{ status: "accepted" }, { status: "closed" }]);
+			expect(await runtime.boundary.query("SELECT action_type, actor_telegram_user_id, reason FROM operator_actions")).toEqual([{
+				action_type: "hide_collaboration",
+				actor_telegram_user_id: "900",
+				reason,
+			}]);
+			expect(await runtime.boundary.query("SELECT status, attempt_count FROM outbox_deliveries WHERE kind = 'channel_delete'")).toEqual([{ status: "sent", attempt_count: 1 }]);
+
+			await runtime.bot.handleUpdate({ update_id: 5, callback_query: callbackForUser(5, 400, staleApply) });
+			expect(String(fake.lastMessage()?.text)).toContain("Предложение недоступно");
+			expect(await runtime.boundary.query("SELECT telegram_user_id FROM profile_sessions WHERE telegram_user_id = '400'")).toEqual([]);
+			await runtime.bot.handleUpdate({ update_id: 6, message: privateMessageForUser(6, 400, `/start c_${FIRST_TOKEN}`) });
+			expect(String(fake.lastMessage()?.text)).toContain("Предложение недоступно");
+
+			const authorStart = fake.calls.length;
+			await runtime.bot.handleUpdate({ update_id: 7, message: privateMessageForUser(7, 100, "/my_collaborations") });
+			expect(messagesSince(fake, authorStart).join("\n")).toContain("скрыта");
+			const applicantStart = fake.calls.length;
+			await runtime.bot.handleUpdate({ update_id: 8, message: privateMessageForUser(8, 300, "/my_applications") });
+			expect(messagesSince(fake, applicantStart).join("\n")).toContain("принят");
+			expect(urlValuesSince(fake, applicantStart)).toContain("tg://user?id=100");
+
+			await runtime.shutdown();
+			runtime = await createRuntime(databasePath, fake, clock, { adminTelegramIds: ["900"] });
+			await runtime.bot.handleUpdate({ update_id: 9, message: privateMessageForUser(9, 300, "/my_applications") });
+			expect(String(fake.lastMessage()?.text)).toContain("принят");
+			expect(await runtime.boundary.query("SELECT status, hidden_from_status FROM collaborations WHERE id = ?", [FIRST_ID])).toEqual([{ status: "hidden", hidden_from_status: "published" }]);
+			await runtime.bot.handleUpdate({ update_id: 10, message: privateMessageForUser(10, 400, `/start c_${FIRST_TOKEN}`) });
+			expect(String(fake.lastMessage()?.text)).toContain("Предложение недоступно");
+			await runtime.bot.handleUpdate({ update_id: 11, callback_query: callbackForUser(11, 400, staleApply) });
+			expect(String(fake.lastMessage()?.text)).toContain("Предложение недоступно");
+			const feedAfterRestartStart = fake.calls.length;
+			await runtime.bot.handleUpdate({ update_id: 12, message: privateMessageForUser(12, 400, "/feed") });
+			expect(messagesSince(fake, feedAfterRestartStart).join("\n")).not.toContain("First browse card");
+			const authorAfterRestartStart = fake.calls.length;
+			await runtime.bot.handleUpdate({ update_id: 13, message: privateMessageForUser(13, 100, "/my_collaborations") });
+			expect(messagesSince(fake, authorAfterRestartStart).join("\n")).toContain("скрыта");
+		} finally {
+			await runtime?.shutdown();
+			await rm(directory, { recursive: true, force: true });
+		}
+	});
+});
+
 async function createRuntime(
 	databasePath: string,
 	fake: FakeTelegramApi,
 	clock: FakeClock,
-	options: { readonly startDelivery?: boolean } = {},
+	options: { readonly startDelivery?: boolean; readonly adminTelegramIds?: readonly string[] } = {},
 ) {
 	const bot = new Bot("fake-token", { client: { fetch: fake.fetch } });
 	if (options.startDelivery === true) {
@@ -651,7 +784,7 @@ async function createRuntime(
 	const runtime = await createBotRuntime({
 		bot,
 		config: {
-			botToken: "fake-token", expectedBotId: "777", expectedBotUsername: "collab_bot", adminTelegramIds: [],
+			botToken: "fake-token", expectedBotId: "777", expectedBotUsername: "collab_bot", adminTelegramIds: options.adminTelegramIds ?? [],
 			showcaseChannelId: "-1001", showcaseChannelUsername: "showcase", databasePath,
 			logLevel: "info", timeZone: "Asia/Yekaterinburg", helpContact: "@helpdesk",
 		},
@@ -798,8 +931,8 @@ async function seedCards(boundary: DatabaseBoundary): Promise<void> {
 
 async function insertCard(boundary: DatabaseBoundary, id: string, token: string, profileId: string, title: string, target: string, status: string, publishedAt: number): Promise<void> {
 	await boundary.execute(
-		"INSERT INTO collaborations (id, public_token, author_profile_id, format, target_profile_type, title, offer_text, expectation_text, slots_total, response_deadline_at, event_date_local, city_code, status, version, projection_revision, created_at, updated_at, published_at) VALUES (?, ?, ?, 'barter', ?, ?, 'Useful collaboration offer', 'Reliable partner expected', 2, ?, NULL, 'ekaterinburg', ?, 1, 0, ?, ?, ?)",
-		[id, token, profileId, target, title, NOW + 86_400_000, status, NOW - 1000, NOW - 1000, publishedAt],
+		"INSERT INTO collaborations (id, public_token, author_profile_id, format, target_profile_type, title, offer_text, expectation_text, slots_total, response_deadline_at, event_date_local, city_code, status, version, projection_revision, created_at, updated_at, published_at, hidden_from_status, hidden_at) VALUES (?, ?, ?, 'barter', ?, ?, 'Useful collaboration offer', 'Reliable partner expected', 2, ?, NULL, 'ekaterinburg', ?, 1, 0, ?, ?, ?, ?, ?)",
+		[id, token, profileId, target, title, NOW + 86_400_000, status, NOW - 1000, status === "hidden" ? NOW - 50 : NOW - 1000, publishedAt, status === "hidden" ? "published" : null, status === "hidden" ? NOW - 50 : null],
 	);
 	await boundary.execute("INSERT INTO collaboration_topics (collaboration_id, topic) VALUES (?, 'city')", [id]);
 	if (status === "published") {

@@ -39,7 +39,7 @@
 | S1 — Profile vertical | `completed` | 2 | Реальный бот открывается, пользователь создаёт и видит профиль |
 | S2 — Card publication vertical | `completed` | 2 | Автор создаёт и публикует карточку через fake showcase transport |
 | S3 — Marketplace vertical | `completed` | 4 | Два пользователя проходят отклик, решение и получают Telegram action |
-| S4 — Shareable launch | `pending` | 1 | Admin hide, полный real journey и готовая к распространению ссылка |
+| S4 — Shareable launch | `completed` | 1 | Admin hide, полный real journey и готовая к распространению ссылка |
 
 ```text
 P0-01 → P0-02
@@ -76,6 +76,7 @@ P0-01 → P0-02
 | S3-04 | `65890ffcdbb4c00813e1542d1e6bc37c94ed583f` | serialized decisions and pairwise contacts |
 | S3-C1 | `bf9407f63398576bd8fa7dd13bcd2f209304e15e` | real-checkpoint collaboration card rendering correction |
 | S3-C2 | `SELF` | explicit personal Telegram platform opt-in |
+| S4-01 | `SELF` | allowlisted hide, complete fake/real journey and manual launch handoff |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -368,17 +369,30 @@ P0-01 → P0-02
 
 #### S4-01 — Simple admin hide, real smoke and shareable handoff
 
-- **Status:** `pending`
+- **Status:** `completed`
 - **Objective:** Add the minimum moderation escape hatch, prove the complete flow and hand the author a bot link that can be shared manually.
 - **Requirements:** `LFR-09`; `LAC-07`, `LAC-10`–`LAC-12`.
 - **Dependencies:** `S3-C2`.
+- **Read first:** PRD §11, §14.2, §15, §19.1 and §20.1; TD §5.1, §8.5, §8.16, §9.10, §11.5, §20.5–§20.6 and §22 S4; current command receipt, browse/application guard, publication and outbox contracts.
+- **Preconditions:** clean `main` at unique `S3-C2`; Node `>=24.18.0 <25`; pnpm `>=11.15.1 <12`; no existing `S4-01` commit; no real Telegram, credentials, remote or production action without separate authorization.
 - **Scope:** Allowlisted lookup/hide, hide delivery intent, full fake journey, exact bot/channel preflight, separately authorized real journey and concise manual start/stop/restart/database-copy handoff.
 - **Do not touch:** restore, block/unblock, cascades, analytics, completion, scheduler, status/heartbeat, backup/LaunchAgent.
 - **Invariants:** Non-admin cannot hide; hidden card is absent from feed and rejects applications; contact already revealed is not revoked; Telegram delete failure does not make the card visible in authoritative feed.
 - **Tests first:** admin/non-admin, hide active card, failed delete, feed/apply guards, full fake journey and a real-smoke checklist with abort conditions before external mutations.
 - **Verification:** focused tests, full fake journey, migrations, `pnpm check`, staged secret scan and one critical review; then, after separate credentials/Telegram authorization, exact identity/channel and full real journey through admin hide and restart.
 - **Exit criteria:** `LAC-01`–`LAC-12` pass at their applicable local/fake/real evidence level; the author has the exact manual command and may share the bot link; one commit `S4-01: prove shareable collaboration journey`.
-- **Evidence:** Fill exact evidence and `Commit SHA: SELF`.
+- **Evidence:**
+  - Commit SHA: `SELF` — local commit subject: `S4-01: prove shareable collaboration journey`.
+  - Preflight: `main` at unique `S3-C2` `29d057db9b43958c7b35b7a6a94a3d5dae8a18d8`; cached `origin/main` matched; tree was clean; no existing `S4-01` commit; Node `v24.18.0`; pnpm `11.15.1`.
+  - Implementation: additive migration `0012_s4-01-admin-hide.sql`; strict allowlisted `/admin <canonical-link>` and `/admin hide <canonical-link> <reason>`; Telegram admin receipts/replay; atomic hidden overlay, pending-application closure, append-only safe audit and one known-target `channel_delete`; real adapter mapping for already-absent delete targets; foreground/manual stopped-database handoff in `README.md`.
+  - Focused checks: S4 integration `8 passed` covers fresh and `0011 → 0012`, legacy-hidden fail-closed guard, five hideable statuses, 1/500 reason boundaries, invalid/non-admin inputs, receipt replay, accepted-decision preservation, append-only audit, rollback, delete not-found and fifth-attempt permanent failure; Telegram transport `2 passed`; complete shareable and focused admin-hide fake checkpoints `2 passed`.
+  - Aggregate checks: `pnpm check` PASS — unit `43`, integration `78`, runtime `30`, build; `pnpm test:e2e:fake` PASS — `19`; `pnpm db:verify` PASS; `git diff --check` PASS; staged credential/logger scan PASS.
+  - Acceptance evidence: `LAC-01`–`LAC-11` pass at their applicable local/fake level. The full fake flow creates the author/profile/card, publishes, creates three quick-profile applications, exercises reject and accept/contact branches, shows own lists, hides a matched card, dispatches one channel delete and preserves accepted contact plus audit/status across restart. Hidden feed/deep-link/apply guards and delete-failure authority are separately asserted.
+  - Real preflight: after explicit authorization, the private ignored `.runtime/bot.env` remained mode `0600`; stopped SQLite `quick_check` returned `ok`, a private stopped-state copy was created, and migration `0012` applied without legacy hidden rows. Bot `@davay_vmeste_bot` and channel `@davay_vmeste_collab` matched the configured identities exactly; the target was a channel and the bot had post, edit and delete rights. The initially stale admin allowlist matched no known account; the user-designated `@ChDenis` identity was applied only to ignored runtime config, then verified by non-admin-before/admin-after behavior without recording a numeric ID, token or reason here.
+  - Real journey / `LAC-12`: `@ChernykDenis` created the meaningful blogger profile `Денис — городские проекты` and published `Осенний гид по локальным местам Екатеринбурга`; `@ChDenis` opened the showcase deep link, created a minimal profile, applied with a scenario-specific proposal, and observed pending status. The author accepted the application; both own lists showed the authoritative matched/accepted result and the applicant received the Telegram contact action. Allowlisted lookup returned the matched card, hide overlaid `hidden` from `matched`, preserved the accepted application/contact, appended exactly one audit row and delivered exactly one known-target `channel_delete` in one attempt. A fresh channel view retained earlier content but no longer contained this post.
+  - Restart persistence: graceful stop produced `quick_check = ok`; the final foreground restart emitted `runtime_ready` and `poll_started`. After reopening SQLite, migration `12`, `hidden` from `matched`, accepted application, one audit row and sent delete intent remained authoritative. Telegram again returned a neutral hidden deep-link response; applicant own list/contact and author hidden `1 из 1` view persisted, and a reloaded channel still omitted the deleted post.
+  - Review result: independent read-only stage-final review — PASS; no credential/privacy exposure, authoritative-data corruption, duplicate effect, broken core journey, unrunnable stage or Later-scope expansion found. No second review cycle was run.
+  - Notes/deviations: no dependencies, Node/pnpm contract, restore, block/unblock, analytics, completion, scheduler, LaunchAgent or automatic backup were added. The real checkpoint used one manual foreground topology and one manual stopped-state SQLite copy; it does not establish hosted availability, 24/7, production readiness or SLA. No credential value, private database, backup, numeric identity, deep-link token or internal moderation reason is committed. No remote, push, PR, merge or deploy was performed.
 - **Stop conditions:** Requires block/restore policy, wrong bot/channel identity, missing explicit real-Telegram authorization, non-green local gate or risk to another bot.
 
 ## 7. Git и evidence

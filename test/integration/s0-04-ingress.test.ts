@@ -66,6 +66,15 @@ function adminContext(commandId: string): CommandContext {
 	};
 }
 
+function adminTelegramContext(commandId: string, updateId: number): CommandContext {
+	return {
+		commandId,
+		telegramUpdateId: updateId,
+		actor: { kind: "admin", telegramUserId: "900" },
+		occurredAt: new Date(10 * DAY_MS),
+	};
+}
+
 function runnerContext(commandId: string, runner: "cleanup" | "delivery"): CommandContext {
 	return {
 		commandId,
@@ -97,6 +106,35 @@ async function insertUser(boundary: DatabaseBoundary, id: string, status: "activ
 }
 
 describe("durable command executor", () => {
+	it("persists allowlisted Telegram admin updates as Telegram receipts and replays once", async () => {
+		await withDatabase(async (boundary, clock) => {
+			const executor = createExecutor(boundary, clock);
+			let effects = 0;
+			const request = {
+				context: adminTelegramContext("telegram:update:9", 9),
+				input: { kind: "message", text: "/admin hide https://t.me/collab_bot?start=c_token internal reason" } as const,
+				effect: async () => {
+					effects += 1;
+					return completedResult;
+				},
+			};
+
+			expect(await executor.execute(request)).toEqual(completedResult);
+			expect(await executor.execute(request)).toEqual(completedResult);
+			expect(effects).toBe(1);
+			expect(await boundary.query("SELECT command_id, source, telegram_update_id, status FROM command_receipts WHERE command_id = 'telegram:update:9'")).toEqual([{
+				command_id: "telegram:update:9",
+				source: "telegram",
+				telegram_update_id: 9,
+				status: "completed",
+			}]);
+			expect(await boundary.query("SELECT update_id, command_id FROM processed_updates WHERE update_id = 9")).toEqual([{
+				update_id: 9,
+				command_id: "telegram:update:9",
+			}]);
+		});
+	});
+
 	it("command replay and input hash conflict reject source/update conflicts without effects", async () => {
 		await withDatabase(async (boundary, clock) => {
 			await boundary.execute("CREATE TABLE effect_probe (id INTEGER PRIMARY KEY, label TEXT NOT NULL)");

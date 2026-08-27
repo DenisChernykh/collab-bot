@@ -60,7 +60,7 @@ describe("S3-04 application-decision migration", () => {
 		const boundary = new DatabaseBoundary(join(directory, "app.sqlite"));
 		try {
 			const runner = new MigrationRunner(await MigrationSource.fromDirectory(migrationsPath), new FakeClock(NOW));
-			expect((await runner.migrate(boundary)).applied).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+			expect((await runner.migrate(boundary)).applied).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
 			expect(await boundary.query("SELECT name FROM pragma_table_info('collaborations') WHERE name = 'matched_at'")).toEqual([
 				{ name: "matched_at" },
 			]);
@@ -554,7 +554,7 @@ async function withDecisionDatabase(work: (fixture: DecisionFixture) => Promise<
 	const boundary = new DatabaseBoundary(join(directory, "app.sqlite"));
 	const clock = new FakeClock(NOW);
 	try {
-		expect((await new MigrationRunner(await MigrationSource.fromDirectory(migrationsPath), clock).migrate(boundary)).applied).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+		expect((await new MigrationRunner(await MigrationSource.fromDirectory(migrationsPath), clock).migrate(boundary)).applied).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
 		await seedDecisionFixture(boundary);
 		await work({ boundary, clock, service: createApplicationService(boundary, clock) });
 	} finally {

@@ -19,6 +19,8 @@ export const SAFE_RESULT_MESSAGE_KEYS = [
 	"callback_stale",
 	"callback_expired",
 	"callback_consumed",
+	"collaboration_already_hidden",
+	"collaboration_unavailable",
 ] as const;
 export type SafeResultMessageKey = (typeof SAFE_RESULT_MESSAGE_KEYS)[number];
 

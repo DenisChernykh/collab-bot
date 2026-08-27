@@ -125,11 +125,11 @@ function deriveIdentity(
 			telegramUpdateId = updateId;
 			break;
 		case "admin":
-			if (!isTelegramUserId(context.actor.telegramUserId) || updateId !== undefined) {
+			if (!isTelegramUserId(context.actor.telegramUserId)) {
 				throw new CommandContextValidationError();
 			}
-			source = "operator";
-			telegramUpdateId = null;
+			source = updateId === undefined ? "operator" : "telegram";
+			telegramUpdateId = updateId ?? null;
 			break;
 		case "runner":
 			if (updateId !== undefined) {

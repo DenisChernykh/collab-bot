@@ -152,6 +152,8 @@ export const collaborations = sqliteTable(
 		publishedAt: integer("published_at"),
 		firstApplicationAt: integer("first_application_at"),
 		matchedAt: integer("matched_at"),
+		hiddenFromStatus: text("hidden_from_status", { enum: ["published", "matched", "completed", "cancelled", "expired"] as const }),
+		hiddenAt: integer("hidden_at"),
 		createdAt: integer("created_at").notNull(),
 		updatedAt: integer("updated_at").notNull(),
 	},
@@ -171,6 +173,10 @@ export const collaborations = sqliteTable(
 		check(
 			"collaborations_matched_at_coherence",
 			sql`(${table.status} IN ('matched', 'completed') AND ${table.matchedAt} IS NOT NULL) OR (${table.status} IN ('cancelled', 'hidden')) OR (${table.status} NOT IN ('matched', 'completed', 'cancelled', 'hidden') AND ${table.matchedAt} IS NULL)`,
+		),
+		check(
+			"collaborations_hidden_overlay_coherence",
+			sql`(${table.status} = 'hidden' AND ${table.hiddenFromStatus} IN ('published', 'matched', 'completed', 'cancelled', 'expired') AND typeof(${table.hiddenAt}) = 'integer' AND ${table.hiddenAt} >= ${table.createdAt} AND ${table.hiddenAt} <= ${table.updatedAt}) OR (${table.status} <> 'hidden' AND ${table.hiddenFromStatus} IS NULL AND ${table.hiddenAt} IS NULL)`,
 		),
 		check("collaborations_timestamp_coherence", sql`${table.updatedAt} >= ${table.createdAt}`),
 	],
@@ -230,6 +236,37 @@ export const applications = sqliteTable(
 			sql`(${table.status} IN ('accepted', 'rejected') AND ${table.decidedByProfileId} IS NOT NULL AND ${table.decidedAt} IS NOT NULL) OR (${table.status} IN ('pending', 'withdrawn', 'closed') AND ${table.decidedByProfileId} IS NULL AND ${table.decidedAt} IS NULL)`,
 		),
 		check("applications_decision_timestamp", sql`${table.decidedAt} IS NULL OR ${table.decidedAt} >= ${table.createdAt}`),
+	],
+);
+
+export const operatorActions = sqliteTable(
+	"operator_actions",
+	{
+		id: text("id").primaryKey(),
+		actorKind: text("actor_kind", { enum: ["admin"] as const }).notNull(),
+		actorTelegramUserId: text("actor_telegram_user_id")
+			.notNull()
+			.references(() => telegramUsers.telegramUserId),
+		collaborationId: text("collaboration_id")
+			.notNull()
+			.references(() => collaborations.id),
+		actionType: text("action_type", { enum: ["hide_collaboration"] as const }).notNull(),
+		reason: text("reason").notNull(),
+		beforeStateJson: text("before_state_json").notNull(),
+		afterStateJson: text("after_state_json").notNull(),
+		commandId: text("command_id").notNull(),
+		createdAt: integer("created_at").notNull(),
+	},
+	(table) => [
+		uniqueIndex("operator_actions_command_id").on(table.commandId),
+		index("operator_actions_collaboration_created").on(table.collaborationId, table.createdAt, table.id),
+		index("operator_actions_actor_created").on(table.actorTelegramUserId, table.createdAt, table.id),
+		check("operator_actions_actor_kind", sql`${table.actorKind} = 'admin'`),
+		check("operator_actions_action_type", sql`${table.actionType} = 'hide_collaboration'`),
+		check("operator_actions_reason", sql`${table.reason} = trim(${table.reason}) AND length(${table.reason}) BETWEEN 1 AND 500 AND instr(${table.reason}, char(0)) = 0`),
+		check("operator_actions_before_state_json", sql`json_valid(${table.beforeStateJson}) = 1 AND json_type(${table.beforeStateJson}) = 'object'`),
+		check("operator_actions_after_state_json", sql`json_valid(${table.afterStateJson}) = 1 AND json_type(${table.afterStateJson}) = 'object'`),
+		check("operator_actions_created_at", sql`typeof(${table.createdAt}) = 'integer' AND ${table.createdAt} >= 0`),
 	],
 );
 

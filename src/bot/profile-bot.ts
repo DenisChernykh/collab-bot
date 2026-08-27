@@ -38,6 +38,7 @@ import type {
 	ApplicationService,
 	ApplicationFailureCode,
 } from "../application/applications/application-service.js";
+import type { AdminModerationService } from "../application/moderation/admin-moderation-service.js";
 import type { CollaborationDraftInput, CollaborationDraftState, CollaborationWizardStep } from "../domain/collaborations/collaboration.js";
 import type { ProfileInput } from "../domain/profiles/profile.js";
 import { DomainValidationError, parseCollaborationFormat, parsePlatformType, parseProfileType, parseTargetProfileType, parseTopic, type CollaborationFormat, type PlatformType, type ProfileType, type Topic } from "../domain/value-objects/enums.js";
@@ -136,6 +137,7 @@ export interface ProfileBotOptions {
 	readonly collaborationBrowseService?: CollaborationBrowseService;
 	readonly applicationService?: ApplicationService;
 	readonly callbackActionService?: CallbackActionService;
+	readonly adminModerationService?: AdminModerationService;
 }
 
 export interface RegisteredProfileBot {
@@ -265,6 +267,14 @@ export function registerProfileBot(bot: Bot, options: ProfileBotOptions): Regist
 
 async function handleText(ctx: Context, options: ProfileBotOptions, userId: string, text: string): Promise<void> {
 	const command = text.trim().split(/\s+/, 1)[0]?.toLowerCase();
+	if (command === "/admin") {
+		if (options.adminModerationService?.isAdminTelegramUserId(userId) !== true) {
+			await replyUnknownCommand(ctx, options);
+			return;
+		}
+		await handleAdminCommand(ctx, options, userId, text);
+		return;
+	}
 	if (command === "/start") {
 		const startParameter = text.trim().slice(command.length).trim();
 		if (startParameter.startsWith("c_")) {
@@ -325,10 +335,83 @@ async function handleText(ctx: Context, options: ProfileBotOptions, userId: stri
 			await advanceCollaborationText(ctx, options, userId, collaborationSession, text);
 			return;
 		}
-		await ctx.reply("Не удалось распознать команду. Откройте главное меню командой /start или воспользуйтесь /help.", { reply_markup: menuKeyboard(options) });
+		await replyUnknownCommand(ctx, options);
 		return;
 	}
 	await advanceText(ctx, options, userId, session, text);
+}
+
+async function handleAdminCommand(ctx: Context, options: ProfileBotOptions, userId: string, text: string): Promise<void> {
+	const moderation = options.adminModerationService;
+	if (moderation === undefined) {
+		await replyUnknownCommand(ctx, options);
+		return;
+	}
+	const body = text.trim().slice("/admin".length).trim();
+	if (body === "") {
+		await ctx.reply("Укажите полную ссылку на карточку. Для скрытия используйте: /admin hide <ссылка> <причина>.");
+		return;
+	}
+	if (body.toLowerCase() === "hide" || body.toLowerCase().startsWith("hide ")) {
+		const hideBody = body.slice("hide".length).trim();
+		const separator = hideBody.search(/\s/);
+		if (separator < 0) {
+			await ctx.reply("Укажите полную ссылку и внутреннюю причину скрытия от 1 до 500 символов.");
+			return;
+		}
+		const deepLink = hideBody.slice(0, separator);
+		const reason = hideBody.slice(separator).trim();
+		const updateId = getUpdateId(ctx.update);
+		if (updateId === undefined) return;
+		const result = await moderation.hide({
+			adminTelegramUserId: userId,
+			commandId: `telegram:update:${updateId}`,
+			deepLink,
+			reason,
+		});
+		if (result.ok) {
+			await ctx.reply("Карточка скрыта. Публикация поставлена на удаление.");
+			return;
+		}
+		switch (result.code) {
+			case "invalid_reason":
+				await ctx.reply("Причина после удаления пробелов должна содержать от 1 до 500 символов.");
+				return;
+			case "already_hidden":
+				await ctx.reply("Карточка уже скрыта.");
+				return;
+			case "invalid_link":
+				await ctx.reply("Не удалось распознать ссылку на карточку этого бота.");
+				return;
+			case "not_found":
+				await ctx.reply("Карточка не найдена.");
+				return;
+			case "forbidden":
+				await replyUnknownCommand(ctx, options);
+				return;
+			case "unavailable":
+				await ctx.reply("Эту карточку сейчас нельзя скрыть.");
+				return;
+		}
+	}
+	if (/\s/.test(body)) {
+		await ctx.reply("Укажите одну полную ссылку на карточку.");
+		return;
+	}
+	const result = await moderation.lookup({ adminTelegramUserId: userId, deepLink: body });
+	if (result.ok) {
+		await ctx.reply(`Карточка найдена.\nНазвание: ${result.title}\nСтатус: ${collaborationStatusLabel(result.status)}`);
+		return;
+	}
+	if (result.code === "forbidden") {
+		await replyUnknownCommand(ctx, options);
+		return;
+	}
+	await ctx.reply(result.code === "invalid_link" ? "Не удалось распознать ссылку на карточку этого бота." : "Карточка не найдена.");
+}
+
+function replyUnknownCommand(ctx: Context, options: ProfileBotOptions): Promise<unknown> {
+	return ctx.reply("Не удалось распознать команду. Откройте главное меню командой /start или воспользуйтесь /help.", { reply_markup: menuKeyboard(options) });
 }
 
 type ReplyOptions = Parameters<Context["reply"]>[1];
@@ -369,11 +452,15 @@ async function runDurable(
 	if (updateId === undefined || from === undefined) return;
 	const collector = new ReplyCollector();
 	const workContext = collector.context(ctx);
+	const telegramUserId = String(from.id);
+	const actor = isAdminCommandInput(input) && options.adminModerationService?.isAdminTelegramUserId(telegramUserId) === true
+		? { kind: "admin" as const, telegramUserId }
+		: { kind: "telegram_user" as const, telegramUserId };
 	await options.durableCommandExecutor.execute({
 		context: {
 			commandId: `telegram:update:${updateId}`,
 			telegramUpdateId: updateId,
-			actor: { kind: "telegram_user", telegramUserId: String(from.id) },
+			actor,
 			occurredAt: telegramOccurredAt(ctx.update),
 		},
 		input,
@@ -399,6 +486,13 @@ async function runDurable(
 		if (reply.options === undefined) await ctx.reply(reply.text);
 		else await ctx.reply(reply.text, reply.options);
 	}
+}
+
+function isAdminCommandInput(input: CanonicalInput): boolean {
+	if (input === null || typeof input !== "object" || Array.isArray(input)) return false;
+	const record = input as { readonly kind?: unknown; readonly text?: unknown };
+	if (record.kind !== "message" || typeof record.text !== "string") return false;
+	return record.text.trim().split(/\s+/, 1)[0]?.toLowerCase() === "/admin";
 }
 
 async function handleOpaqueCallback(ctx: Context, options: ProfileBotOptions, callbackPayload: string): Promise<void> {

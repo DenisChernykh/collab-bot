@@ -38,6 +38,9 @@ import { RandomClaimTokenGenerator } from "../infrastructure/crypto/claim-token.
 import { NodeOpaqueTokenCodec } from "../infrastructure/crypto/ingress-codecs.js";
 import { GrammyTelegramTransport } from "../infrastructure/telegram/grammy-telegram-transport.js";
 import { OUTBOX_DELIVERY_KINDS } from "../application/ports/outbox-delivery-store.js";
+import { OutboxDeliveryService } from "../application/outbox/outbox-service.js";
+import { AdminModerationService } from "../application/moderation/admin-moderation-service.js";
+import { SqliteAdminModerationRepository } from "../infrastructure/database/admin-moderation-repository.js";
 import { preflightShowcase } from "./showcase-preflight.js";
 
 export const ALLOWED_UPDATES = ["message", "callback_query"] as const;
@@ -93,6 +96,14 @@ export async function createBotRuntime(options: BotRuntimeOptions): Promise<BotR
 		);
 		const capability = { canPublish: false, reason: "showcase preflight has not run" as string | null };
 		const outboxStore = new SqliteOutboxDeliveryRepository(boundary);
+		const adminModerationService = new AdminModerationService({
+			repository: new SqliteAdminModerationRepository(boundary),
+			outbox: new OutboxDeliveryService(outboxStore, transactionRunner, clock),
+			transactions: transactionRunner,
+			clock,
+			botUsername: options.config.expectedBotUsername,
+			adminTelegramIds: options.config.adminTelegramIds,
+		});
 		const collaborationPublicationService = new CollaborationPublicationService(
 			new SqliteCollaborationRepository(boundary),
 			new SqliteCollaborationPublicationRepository(boundary),
@@ -151,6 +162,7 @@ export async function createBotRuntime(options: BotRuntimeOptions): Promise<BotR
 			collaborationBrowseService,
 			applicationService,
 			callbackActionService,
+			adminModerationService,
 		});
 		const logger = new SafeLogger((entry) => options.logSink?.(JSON.stringify(entry)), clock, "bot");
 		bot.catch((error: BotError) => {

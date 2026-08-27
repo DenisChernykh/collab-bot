@@ -78,7 +78,7 @@ describe("S3-03 application migration", () => {
 		const boundary = new DatabaseBoundary(join(directory, "app.sqlite"));
 		try {
 			const runner = new MigrationRunner(await MigrationSource.fromDirectory(migrationsPath), new FakeClock(NOW));
-			expect((await runner.migrate(boundary)).applied).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+			expect((await runner.migrate(boundary)).applied).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
 			expect((await boundary.query<{ name: string }>("PRAGMA table_info(applications)")).map((column) => column.name)).toEqual([
 				"id",
 				"collaboration_id",
@@ -424,7 +424,7 @@ async function withApplicationDatabase(work: (fixture: ApplicationFixture) => Pr
 	const boundary = new DatabaseBoundary(join(directory, "app.sqlite"));
 	const clock = new FakeClock(NOW);
 	try {
-		expect((await new MigrationRunner(await MigrationSource.fromDirectory(migrationsPath), clock).migrate(boundary)).applied).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+		expect((await new MigrationRunner(await MigrationSource.fromDirectory(migrationsPath), clock).migrate(boundary)).applied).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
 		await seedApplicationFixture(boundary);
 		await work({ boundary, clock, service: createApplicationService(boundary, clock) });
 	} finally {
@@ -541,6 +541,7 @@ interface CardOptions {
 }
 
 async function insertCard(boundary: DatabaseBoundary, options: CardOptions): Promise<void> {
+	const status = options.status ?? "published";
 	await boundary.execute(
 		"INSERT INTO collaborations (id, public_token, author_profile_id, format, target_profile_type, title, offer_text, expectation_text, slots_total, response_deadline_at, event_date_local, city_code, status, version, projection_revision, created_at, updated_at, published_at) VALUES (?, ?, ?, 'joint_content', ?, 'Городской видеопроект', 'Совместный материал для аудитории города.', 'Нужен партнёр для съёмки и согласования.', ?, ?, NULL, 'ekaterinburg', ?, 1, 0, ?, ?, ?)",
 		[
@@ -550,14 +551,20 @@ async function insertCard(boundary: DatabaseBoundary, options: CardOptions): Pro
 			options.targetProfileType ?? "blogger",
 			options.slotsTotal ?? 2,
 			options.deadlineAt ?? NOW + DAY,
-			options.status ?? "published",
+			status === "hidden" ? "published" : status,
 			NOW - DAY,
 			NOW - DAY,
 			options.publishedAt,
 		],
 	);
+	if (status === "hidden") {
+		await boundary.execute(
+			"UPDATE collaborations SET status = 'hidden', hidden_from_status = 'published', hidden_at = ? WHERE id = ?",
+			[NOW - DAY, options.id],
+		);
+	}
 	await boundary.execute("INSERT INTO collaboration_topics (collaboration_id, topic) VALUES (?, 'city')", [options.id]);
-	if ((options.status ?? "published") === "published") {
+	if (status === "published") {
 		await boundary.execute(
 			"INSERT INTO channel_publications (collaboration_id, channel_chat_id, message_id, status, rendered_terms_version, rendered_projection_revision, rendered_hash, current_attempt_no, last_delivery_id, last_error_kind, updated_at) VALUES (?, '-1001', ?, 'published', 1, 0, ?, 1, NULL, NULL, ?)",
 			[options.id, 701, options.id.replaceAll("-", "").padEnd(64, "0").slice(0, 64), options.publishedAt],
