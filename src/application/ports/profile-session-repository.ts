@@ -11,7 +11,16 @@ export type ProfileSessionStep =
 	| "platform"
 	| "platform_url"
 	| "audience"
-	| "review";
+	| "review"
+	| "application_message";
+
+export type ProfileSessionContinuation =
+	| { readonly kind: "create_collaboration" }
+	| {
+		readonly kind: "submit_application";
+		readonly collaborationId: string;
+		readonly source: "feed" | "deep_link";
+	};
 
 export interface ProfileDraft {
 	readonly type?: ProfileInput["type"];
@@ -27,7 +36,7 @@ export interface ProfileSessionState {
 	readonly step: ProfileSessionStep;
 	readonly draft: ProfileDraft;
 	readonly requestId?: number;
-	readonly continuation?: { readonly kind: "create_collaboration" };
+	readonly continuation?: ProfileSessionContinuation;
 }
 
 export interface ProfileSessionRecord {

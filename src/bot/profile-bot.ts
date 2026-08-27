@@ -32,6 +32,10 @@ import {
 	type BrowsePage,
 } from "../application/collaborations/collaboration-browse-service.js";
 import type { BrowseCollaborationRecord, BrowseSessionRecord } from "../application/ports/collaboration-browse-repository.js";
+import type {
+	ApplicationService,
+	ApplicationFailureCode,
+} from "../application/applications/application-service.js";
 import type { CollaborationDraftInput, CollaborationDraftState, CollaborationWizardStep } from "../domain/collaborations/collaboration.js";
 import type { ProfileInput } from "../domain/profiles/profile.js";
 import { DomainValidationError, parseCollaborationFormat, parsePlatformType, parseProfileType, parseTargetProfileType, parseTopic, type CollaborationFormat, type PlatformType, type ProfileType, type Topic } from "../domain/value-objects/enums.js";
@@ -82,7 +86,7 @@ const COLLABORATION_FORMAT_LABELS: Record<CollaborationFormat, string> = {
 	event: "Мероприятие",
 	other: "Другое",
 };
-type ProfileMutationKind = "cancel" | "apply" | "type" | "platform" | "omit";
+type ProfileMutationKind = "back" | "cancel" | "apply" | "type" | "platform" | "omit";
 interface ProfileMutationCallback {
 	readonly kind: ProfileMutationKind;
 	readonly value?: string;
@@ -104,8 +108,15 @@ interface BrowseMutation {
 	readonly generation: string;
 	readonly revision: number;
 }
+interface ApplicationStart {
+	readonly publicToken: string;
+	readonly source: "feed" | "deep_link";
+}
 type SessionToken = { readonly generation: string; readonly revision: number };
 type SessionIdentity = ProfileSessionRecord | SessionToken;
+type ApplicationContinuation = Extract<NonNullable<ProfileSessionState["continuation"]>, { readonly kind: "submit_application" }>;
+type ApplicationProfileState = ProfileSessionState & { readonly continuation: ApplicationContinuation };
+type ApplicationProfileSession = ProfileSessionRecord & { readonly state: ApplicationProfileState };
 
 export interface ProfileBotOptions {
 	readonly profileService: ProfileService;
@@ -120,6 +131,7 @@ export interface ProfileBotOptions {
 	readonly collaborationDraftService?: CollaborationDraftService;
 	readonly collaborationPublicationService?: CollaborationPublicationService;
 	readonly collaborationBrowseService?: CollaborationBrowseService;
+	readonly applicationService?: ApplicationService;
 }
 
 export interface RegisteredProfileBot {
@@ -159,11 +171,14 @@ export function registerProfileBot(bot: Bot, options: ProfileBotOptions): Regist
 			const mutation = parseProfileMutationCallback(data);
 			const collaborationMutation = parseCollaborationMutationCallback(data);
 			const browseMutation = parseBrowseMutation(data);
-			const applicationToken = parseApplicationStart(data);
-			if (!PROFILE_STATIC_CALLBACKS.has(data) && mutation === undefined && collaborationMutation === undefined && browseMutation === undefined && applicationToken === undefined) return;
+			const applicationStart = parseApplicationStart(data);
+			if (!PROFILE_STATIC_CALLBACKS.has(data) && mutation === undefined && collaborationMutation === undefined && browseMutation === undefined && applicationStart === undefined) return;
 			const userId = String(workCtx.from.id);
 			if (mutation !== undefined) {
 				switch (mutation.kind) {
+					case "back":
+						await backSession(workCtx, options, userId, mutation);
+						return;
 					case "cancel":
 						await cancelSession(workCtx, options, userId, mutation);
 						return;
@@ -189,8 +204,8 @@ export function registerProfileBot(bot: Bot, options: ProfileBotOptions): Regist
 				await handleBrowseMutation(workCtx, options, userId, browseMutation);
 				return;
 			}
-			if (applicationToken !== undefined) {
-				await handleApplicationStart(workCtx, options, userId, applicationToken);
+			if (applicationStart !== undefined) {
+				await handleApplicationStart(workCtx, options, userId, applicationStart);
 				return;
 			}
 			switch (data) {
@@ -258,8 +273,12 @@ async function handleText(ctx: Context, options: ProfileBotOptions, userId: stri
 			await ctx.reply("Черновик коллаборации отменён.", { reply_markup: menuKeyboard(options) });
 			return;
 		}
+		const profileSession = await activeSession(options, userId);
 		await options.sessionRepository.delete(userId);
-		await ctx.reply("Заполнение профиля отменено.", { reply_markup: menuKeyboard(options) });
+		await ctx.reply(
+			isApplicationSession(profileSession) ? "Отклик отменён. Сохранённый профиль не изменён." : "Заполнение профиля отменено.",
+			{ reply_markup: menuKeyboard(options) },
+		);
 		return;
 	}
 	if (command === "/new") {
@@ -390,6 +409,10 @@ async function handleChatShared(ctx: Context, options: ProfileBotOptions, userId
 		telegramChatId: String(shared.chat_id),
 		...(shared.title === undefined ? {} : { title: shared.title }),
 	};
+	if (isApplicationState(session.state)) {
+		await finishQuickApplicationProfile(ctx, options, userId, withoutRequestId({ ...session.state, draft: { ...session.state.draft, platform } }));
+		return;
+	}
 	const saved = await saveState(options, userId, withoutRequestId({ version: PROFILE_SESSION_VERSION, generation: session.state.generation, step: "audience", draft: { ...session.state.draft, platform } }));
 	await renderStep(ctx, options, userId, saved);
 }
@@ -397,6 +420,10 @@ async function handleChatShared(ctx: Context, options: ProfileBotOptions, userId
 async function advanceText(ctx: Context, options: ProfileBotOptions, userId: string, session: ProfileSessionRecord, text: string): Promise<void> {
 	const state = session.state;
 	const value = text.trim();
+	if (isApplicationState(state) && ["назад", "← назад", "back"].includes(value.toLowerCase())) {
+		await backSession(ctx, options, userId, sessionToken(session));
+		return;
+	}
 	switch (state.step) {
 		case "type":
 			await chooseType(ctx, options, userId, value);
@@ -406,7 +433,11 @@ async function advanceText(ctx: Context, options: ProfileBotOptions, userId: str
 				await ctx.reply("Название должно быть длиной от 2 до 100 символов.");
 				return;
 			}
-			const saved = await saveState(options, userId, { ...state, step: "topics", draft: { ...state.draft, displayName: value } });
+			const saved = await saveState(options, userId, {
+				...state,
+				step: isApplicationState(state) ? "platform" : "topics",
+				draft: { ...state.draft, displayName: value },
+			});
 			await renderStep(ctx, options, userId, saved);
 			return;
 		}
@@ -473,6 +504,13 @@ async function advanceText(ctx: Context, options: ProfileBotOptions, userId: str
 		case "review":
 			await ctx.reply("Проверьте данные и сохраните профиль либо отмените заполнение.", { reply_markup: reviewKeyboard(session) });
 			return;
+		case "application_message":
+			if (!isApplicationSession(session)) {
+				await ctx.reply("Сохранённое заполнение повреждено. Начните отклик заново.", { reply_markup: menuKeyboard(options) });
+				return;
+			}
+			await submitApplicationMessage(ctx, options, userId, session, value);
+			return;
 	}
 }
 
@@ -512,7 +550,51 @@ async function cancelSession(ctx: Context, options: ProfileBotOptions, userId: s
 	const session = await sessionAtRevision(ctx, options, userId, expected);
 	if (session === undefined) return;
 	await options.sessionRepository.delete(userId);
-	await ctx.reply("Заполнение профиля отменено.", { reply_markup: menuKeyboard(options) });
+	await ctx.reply(
+		isApplicationSession(session) ? "Отклик отменён. Сохранённый профиль не изменён." : "Заполнение профиля отменено.",
+		{ reply_markup: menuKeyboard(options) },
+	);
+}
+
+async function backSession(ctx: Context, options: ProfileBotOptions, userId: string, expected: SessionToken): Promise<void> {
+	const session = await sessionAtRevision(ctx, options, userId, expected);
+	if (session === undefined) return;
+	if (!isApplicationSession(session)) {
+		await ctx.reply("Назад можно вернуться только из короткого заполнения отклика.", { reply_markup: resumeKeyboard(session) });
+		return;
+	}
+	const state = session.state;
+	switch (state.step) {
+		case "display_name": {
+			const saved = await saveState(options, userId, withoutRequestId({
+				...state,
+				step: "type",
+				draft: { description: null, topics: [] },
+			}));
+			await renderStep(ctx, options, userId, saved);
+			return;
+		}
+		case "platform":
+		case "platform_url": {
+			const saved = await saveState(options, userId, withoutRequestId({
+				...state,
+				step: "display_name",
+				draft: withoutPlatform(state.draft),
+			}));
+			await renderStep(ctx, options, userId, saved);
+			return;
+		}
+		case "type":
+			await options.sessionRepository.delete(userId);
+			await ctx.reply("Короткое заполнение отменено.", { reply_markup: menuKeyboard(options) });
+			return;
+		case "application_message":
+			await options.sessionRepository.delete(userId);
+			await reopenApplicationCard(ctx, options, userId, state.continuation.collaborationId);
+			return;
+		default:
+			await ctx.reply("Продолжите с текущего шага.", { reply_markup: applicationNavigationKeyboard(session) });
+	}
 }
 
 async function chooseType(ctx: Context, options: ProfileBotOptions, userId: string, raw: string, expected?: SessionToken): Promise<void> {
@@ -522,7 +604,7 @@ async function chooseType(ctx: Context, options: ProfileBotOptions, userId: stri
 		try { type = PROFILE_TYPE_INPUTS.get(raw.trim().toLowerCase()) ?? parseProfileType(raw); } catch { await ctx.reply("Выберите один из предложенных вариантов.", { reply_markup: typeKeyboard(session) }); return; }
 		const draft = session?.state.draft ?? {};
 		const saved = await saveState(options, userId, withoutRequestId({ version: PROFILE_SESSION_VERSION, generation: session.state.generation, step: "display_name", draft: { ...draft, type }, ...(session.state.continuation === undefined ? {} : { continuation: session.state.continuation }) }));
-		await ctx.reply("Как назвать ваш профиль? Это может быть ваше имя, название канала, заведения или бренда (2–100 символов).", { reply_markup: cancelKeyboard(saved) });
+		await renderStep(ctx, options, userId, saved);
 }
 
 async function choosePlatform(ctx: Context, options: ProfileBotOptions, userId: string, raw: string, requestIdFactory: () => number, expected?: SessionToken): Promise<void> {
@@ -533,7 +615,9 @@ async function choosePlatform(ctx: Context, options: ProfileBotOptions, userId: 
 		if (platformType === "telegram") {
 			const requestId = uniqueRequestId(requestIdFactory(), session.state.requestId);
 			await saveState(options, userId, { ...session.state, step: "platform", requestId });
-			const keyboard = new Keyboard().requestChat("Выбрать Telegram-канал", requestId, { chat_is_channel: true, request_title: true, request_username: true }).row().text("Указать другую ссылку").resized();
+			const keyboard = new Keyboard().requestChat("Выбрать Telegram-канал", requestId, { chat_is_channel: true, request_title: true, request_username: true }).row().text("Указать другую ссылку");
+			if (isApplicationState(session.state)) keyboard.row().text("← Назад").text("/cancel");
+			keyboard.resized();
 			await ctx.reply(PROFILE_LINK_CHOICE_HINT, { reply_markup: keyboard });
 			return;
 		}
@@ -551,6 +635,10 @@ async function acceptPlatformUrl(ctx: Context, options: ProfileBotOptions, userI
 		const platform = username === undefined
 			? { platformType: "other" as const, url: value }
 			: { platformType: "telegram" as const, url: `https://t.me/${username}`, username };
+		if (isApplicationState(state)) {
+			await finishQuickApplicationProfile(ctx, options, userId, withoutRequestId({ ...state, draft: { ...state.draft, platform } }));
+			return;
+		}
 		const saved = await saveState(options, userId, withoutRequestId({ ...state, step: "audience", draft: { ...state.draft, platform } }));
 		await renderStep(ctx, options, userId, saved);
 }
@@ -898,19 +986,180 @@ async function renderDeepLinkResult(ctx: Context, options: ProfileBotOptions, re
 	}
 }
 
-async function handleApplicationStart(ctx: Context, options: ProfileBotOptions, userId: string, publicToken: string): Promise<void> {
-	const service = options.collaborationBrowseService;
-	if (service === undefined) return;
-	const result = await service.openDeepLink(userId, `c_${publicToken}`);
-	if (result.kind === "card" && result.actionable) {
-		await ctx.reply("Отклик будет доступен на следующем этапе. Карточка сохранена в текущем экране.", { reply_markup: deepLinkCardKeyboard(result.card, true) });
+async function handleApplicationStart(ctx: Context, options: ProfileBotOptions, userId: string, start: ApplicationStart): Promise<void> {
+	const browseService = options.collaborationBrowseService;
+	const applicationService = options.applicationService;
+	if (browseService === undefined || applicationService === undefined) {
+		await ctx.reply("Отклик сейчас недоступен.", { reply_markup: menuKeyboard(options) });
 		return;
 	}
-	if (result.kind === "card") {
-		await ctx.reply("Кнопка недоступна.", { reply_markup: menuKeyboard(options) });
+	const currentSession = await activeSession(options, userId);
+	if (currentSession !== undefined) {
+		await ctx.reply("Сначала завершите или отмените текущее заполнение.", { reply_markup: resumeKeyboard(currentSession) });
 		return;
 	}
-	await renderDeepLinkResult(ctx, options, result);
+	const result = await browseService.openDeepLink(userId, `c_${start.publicToken}`);
+	if (result.kind !== "card") {
+		await renderDeepLinkResult(ctx, options, result);
+		return;
+	}
+	const eligibility = await applicationService.checkEligibility({
+		telegramUserId: userId,
+		collaborationId: result.card.id,
+		occurredAt: telegramOccurredAt(ctx.update).getTime(),
+	});
+	const continuation: ApplicationContinuation = {
+		kind: "submit_application",
+		collaborationId: result.card.id,
+		source: start.source,
+	};
+	if (eligibility.ok) {
+		const saved = await saveState(options, userId, {
+			version: PROFILE_SESSION_VERSION,
+			generation: createSessionGeneration(),
+			step: "application_message",
+			draft: {},
+			continuation,
+		});
+		await renderStep(ctx, options, userId, saved);
+		return;
+	}
+	if (eligibility.code === "profile_required") {
+		const saved = await saveState(options, userId, {
+			version: PROFILE_SESSION_VERSION,
+			generation: createSessionGeneration(),
+			step: "type",
+			draft: { description: null, topics: [] },
+			continuation,
+		});
+		await ctx.reply("Чтобы откликнуться, создадим короткий профиль — это займёт около минуты.");
+		await renderStep(ctx, options, userId, saved);
+		return;
+	}
+	await replyApplicationFailure(ctx, options, eligibility.code);
+}
+
+async function finishQuickApplicationProfile(
+	ctx: Context,
+	options: ProfileBotOptions,
+	userId: string,
+	state: ApplicationProfileState,
+): Promise<void> {
+	const input = toProfileInput(state.draft);
+	if (input === undefined) {
+		const current = await activeSession(options, userId);
+		await ctx.reply("Не все обязательные данные профиля заполнены.", current === undefined ? undefined : { reply_markup: resumeKeyboard(current) });
+		return;
+	}
+	try {
+		if (await options.profileService.getOwn(userId) === undefined) await options.profileService.create(userId, input);
+	} catch (error) {
+		if (error instanceof Error && (error.name === "DomainValidationError" || error.name === "ProfileAlreadyExistsError")) {
+			await ctx.reply("Не удалось сохранить короткий профиль. Проверьте данные и попробуйте ещё раз.");
+			return;
+		}
+		throw error;
+	}
+	const applicationService = options.applicationService;
+	if (applicationService === undefined) {
+		await options.sessionRepository.delete(userId);
+		await ctx.reply("Профиль сохранён, но отклик сейчас недоступен.", { reply_markup: menuKeyboard(options) });
+		return;
+	}
+	const eligibility = await applicationService.checkEligibility({
+		telegramUserId: userId,
+		collaborationId: state.continuation.collaborationId,
+		occurredAt: telegramOccurredAt(ctx.update).getTime(),
+	});
+	if (!eligibility.ok) {
+		await options.sessionRepository.delete(userId);
+		await replyApplicationFailure(ctx, options, eligibility.code, undefined, true);
+		return;
+	}
+	const saved = await saveState(options, userId, {
+		...state,
+		step: "application_message",
+		draft: state.draft,
+	});
+	await ctx.reply("Профиль сохранён. Теперь добавьте сообщение автору коллаборации.");
+	await renderStep(ctx, options, userId, saved);
+}
+
+async function submitApplicationMessage(
+	ctx: Context,
+	options: ProfileBotOptions,
+	userId: string,
+	session: ApplicationProfileSession,
+	message: string,
+): Promise<void> {
+	const applicationService = options.applicationService;
+	if (applicationService === undefined) {
+		await ctx.reply("Отклик сейчас недоступен.", { reply_markup: applicationNavigationKeyboard(session) });
+		return;
+	}
+	const result = await applicationService.submit({
+		telegramUserId: userId,
+		collaborationId: session.state.continuation.collaborationId,
+		message,
+		occurredAt: telegramOccurredAt(ctx.update).getTime(),
+	});
+	if (result.ok) {
+		await options.sessionRepository.delete(userId);
+		await ctx.reply("Отклик отправлен автору коллаборации.", { reply_markup: menuKeyboard(options) });
+		return;
+	}
+	if (result.code !== "invalid_message") await options.sessionRepository.delete(userId);
+	await replyApplicationFailure(ctx, options, result.code, result.code === "invalid_message" ? session : undefined);
+}
+
+async function reopenApplicationCard(ctx: Context, options: ProfileBotOptions, userId: string, collaborationId: string): Promise<void> {
+	const applicationService = options.applicationService;
+	const browseService = options.collaborationBrowseService;
+	if (applicationService === undefined || browseService === undefined) {
+		await ctx.reply("Предложение недоступно.", { reply_markup: menuKeyboard(options) });
+		return;
+	}
+	const eligibility = await applicationService.checkEligibility({
+		telegramUserId: userId,
+		collaborationId,
+		occurredAt: telegramOccurredAt(ctx.update).getTime(),
+	});
+	if (!eligibility.ok) {
+		await replyApplicationFailure(ctx, options, eligibility.code);
+		return;
+	}
+	const publicToken = eligibility.target.publicToken;
+	if (publicToken === null) {
+		await ctx.reply("Предложение недоступно.", { reply_markup: menuKeyboard(options) });
+		return;
+	}
+	await renderDeepLinkResult(ctx, options, await browseService.openDeepLink(userId, `c_${publicToken}`));
+}
+
+async function replyApplicationFailure(
+	ctx: Context,
+	options: ProfileBotOptions,
+	code: ApplicationFailureCode,
+	session?: SessionIdentity,
+	profileWasSaved = false,
+): Promise<void> {
+	if (code === "invalid_message") {
+		await ctx.reply("Сообщение должно содержать от 10 до 500 символов.", {
+			reply_markup: session === undefined ? menuKeyboard(options) : applicationNavigationKeyboard(session),
+		});
+		return;
+	}
+	const text: Record<Exclude<ApplicationFailureCode, "invalid_message">, string> = {
+		actor_inactive: "Отклик сейчас недоступен.",
+		profile_required: "Для отклика нужен активный профиль.",
+		target_unavailable: "Предложение больше недоступно для отклика.",
+		own_collaboration: "Нельзя откликнуться на собственную коллаборацию.",
+		profile_type_mismatch: "Ваш тип профиля не подходит для этой коллаборации.",
+		deadline_passed: "Срок приёма откликов уже истёк.",
+		duplicate: "Вы уже откликались на эту коллаборацию.",
+		full: "Все места в этой коллаборации уже заняты.",
+	};
+	await ctx.reply(`${profileWasSaved ? "Профиль сохранён. " : ""}${text[code]}`, { reply_markup: menuKeyboard(options) });
 }
 
 async function renderBrowseFilterDimensions(ctx: Context, session: BrowseSessionRecord): Promise<void> {
@@ -943,7 +1192,7 @@ function collaborationStatusLabel(status: import("../domain/value-objects/enums.
 	return ({ draft: "черновик", publishing: "публикация запущена", published: "опубликована", publication_failed: "ошибка публикации", expired: "истекла", matched: "совпадение", completed: "завершена", cancelled: "отменена", hidden: "скрыта" } as Record<string, string>)[status] ?? status;
 }
 
-	async function renderStep(ctx: Context, options: ProfileBotOptions, userId: string, session: ProfileSessionRecord): Promise<void> {
+async function renderStep(ctx: Context, options: ProfileBotOptions, userId: string, session: ProfileSessionRecord): Promise<void> {
 	const state = session.state;
 	switch (state.step) {
 		case "type": await ctx.reply("Выберите, кто вы:", { reply_markup: typeKeyboard(session) }); return;
@@ -954,6 +1203,7 @@ function collaborationStatusLabel(status: import("../domain/value-objects/enums.
 		case "platform_url": await ctx.reply("Укажите другую публичную ссылку https://...", { reply_markup: cancelKeyboard(session) }); return;
 		case "audience": await ctx.reply("Укажите размер аудитории числом или пропустите поле.", { reply_markup: optionalKeyboard(session, state.draft.platform?.audienceSize !== undefined) }); return;
 		case "review": await renderReview(ctx, options, userId); return;
+		case "application_message": await ctx.reply("Напишите сообщение автору: почему вам интересна коллаборация и что вы можете предложить (10–500 символов).", { reply_markup: applicationNavigationKeyboard(session) }); return;
 	}
 }
 
@@ -1045,12 +1295,13 @@ function telegramOccurredAt(update: Update): Date {
 	return new Date(update.update_id);
 }
 function parseProfileMutationCallback(data: string): ProfileMutationCallback | undefined {
-	const match = /^(profile:(?:cancel|apply|omit)|profile:(?:type|platform):([a-z_]+)):g([a-f0-9]{16}):r(\d+)$/.exec(data);
+	const match = /^(profile:(?:back|cancel|apply|omit)|profile:(?:type|platform):([a-z_]+)):g([a-f0-9]{16}):r(\d+)$/.exec(data);
 	if (match === null) return undefined;
 	const [, action, value, generation, revisionRaw] = match;
 	if (action === undefined || generation === undefined || revisionRaw === undefined) return undefined;
 	const revision = Number(revisionRaw);
 	if (!Number.isSafeInteger(revision) || revision < 0) return undefined;
+	if (action === "profile:back") return { kind: "back", generation, revision };
 	if (action === "profile:cancel") return { kind: "cancel", generation, revision };
 	if (action === "profile:apply") return { kind: "apply", generation, revision };
 	if (action === "profile:omit") return { kind: "omit", generation, revision };
@@ -1081,8 +1332,10 @@ function parseBrowseMutation(data: string): BrowseMutation | undefined {
 	return undefined;
 }
 
-function parseApplicationStart(data: string): string | undefined {
-	return /^application:start:([A-Za-z0-9_-]{22})$/.exec(data)?.[1];
+function parseApplicationStart(data: string): ApplicationStart | undefined {
+	const match = /^application:start:(f|d):([A-Za-z0-9_-]{22})$/.exec(data);
+	if (match?.[1] === undefined || match[2] === undefined) return undefined;
+	return { publicToken: match[2], source: match[1] === "f" ? "feed" : "deep_link" };
 }
 
 function parseBase36Revision(value: string): number | undefined {
@@ -1102,10 +1355,19 @@ function toBrowseFilterDimension(value: BrowseMutation["dimension"]): BrowseFilt
 	if (value === "format" || value === "topic") return value;
 	return undefined;
 }
-function withoutRequestId(state: Omit<ProfileSessionState, "requestId"> & { requestId?: number }): ProfileSessionState {
-	const without = { ...state };
+function withoutRequestId<T extends ProfileSessionState>(state: T): Omit<T, "requestId"> {
+	const without: { -readonly [Key in keyof T]: T[Key] } = { ...state };
 	delete without.requestId;
 	return without;
+}
+function isApplicationState(state: ProfileSessionState): state is ApplicationProfileState {
+	return state.continuation?.kind === "submit_application";
+}
+function isApplicationSession(session: ProfileSessionRecord | undefined): session is ApplicationProfileSession {
+	return session !== undefined && isApplicationState(session.state);
+}
+function sessionToken(session: ProfileSessionRecord): SessionToken {
+	return { generation: session.state.generation, revision: session.revision };
 }
 function withoutPlatform(draft: ProfileDraft): ProfileDraft {
 	const without = { ...draft };
@@ -1195,7 +1457,7 @@ function menuKeyboard(options?: ProfileBotOptions): InlineKeyboard {
 function browseCallback(action: string, session: BrowseSessionRecord): string { return `${action}:${session.generation}:${session.revision.toString(36)}`; }
 function browseCardKeyboard(card: BrowseCollaborationRecord, session: BrowseSessionRecord): InlineKeyboard {
 	const keyboard = new InlineKeyboard();
-	if (card.publicToken !== null) keyboard.text("Откликнуться", `application:start:${card.publicToken}`).row();
+	if (card.publicToken !== null) keyboard.text("Откликнуться", `application:start:f:${card.publicToken}`).row();
 	return keyboard
 		.text("Дальше", browseCallback("b:n", session)).row()
 		.text("Фильтры", browseCallback("b:fs", session)).row()
@@ -1209,7 +1471,7 @@ function browseEmptyKeyboard(session: BrowseSessionRecord): InlineKeyboard {
 }
 function deepLinkCardKeyboard(card: BrowseCollaborationRecord, actionable: boolean): InlineKeyboard {
 	const keyboard = new InlineKeyboard();
-	if (actionable && card.publicToken !== null) keyboard.text("Откликнуться", `application:start:${card.publicToken}`).row();
+	if (actionable && card.publicToken !== null) keyboard.text("Откликнуться", `application:start:d:${card.publicToken}`).row();
 	return keyboard.text("Открыть ленту", "browse:start").row().text("← В главное меню", "menu:home");
 }
 function createSessionGeneration(): string { return randomBytes(8).toString("hex"); }
@@ -1217,9 +1479,31 @@ function revisionCallback(action: string, identity: SessionIdentity): string {
 	const normalized = "state" in identity ? { generation: identity.state.generation, revision: identity.revision } : identity;
 	return `${action}:g${normalized.generation}:r${normalized.revision}`;
 }
-function resumeKeyboard(identity: SessionIdentity): InlineKeyboard { return new InlineKeyboard().text("▶️ Продолжить профиль", "profile:resume").row().text("Отменить заполнение", revisionCallback("profile:cancel", identity)); }
+function resumeKeyboard(identity: SessionIdentity): InlineKeyboard {
+	const application = "state" in identity && isApplicationState(identity.state);
+	return new InlineKeyboard()
+		.text(application ? "▶️ Продолжить отклик" : "▶️ Продолжить профиль", "profile:resume").row()
+		.text(application ? "Отменить отклик" : "Отменить заполнение", revisionCallback("profile:cancel", identity));
+}
 function reviewKeyboard(identity: SessionIdentity): InlineKeyboard { return new InlineKeyboard().text("Сохранить профиль", revisionCallback("profile:apply", identity)).row().text("Отменить заполнение", revisionCallback("profile:cancel", identity)); }
-function cancelKeyboard(identity: SessionIdentity): InlineKeyboard { return new InlineKeyboard().text("Отменить заполнение", revisionCallback("profile:cancel", identity)); }
+function cancelKeyboard(identity: SessionIdentity): InlineKeyboard {
+	return "state" in identity && isApplicationState(identity.state)
+		? applicationNavigationKeyboard(identity)
+		: new InlineKeyboard().text("Отменить заполнение", revisionCallback("profile:cancel", identity));
+}
 function optionalKeyboard(identity: SessionIdentity, populated: boolean): InlineKeyboard { return new InlineKeyboard().text(populated ? "Очистить" : "Пропустить", revisionCallback("profile:omit", identity)).row().text("Отменить заполнение", revisionCallback("profile:cancel", identity)); }
-function typeKeyboard(identity: SessionIdentity): InlineKeyboard { return new InlineKeyboard().text("Блогер", revisionCallback("profile:type:blogger", identity)).row().text("Telegram-канал", revisionCallback("profile:type:telegram_channel", identity)).row().text("Заведение или бренд", revisionCallback("profile:type:venue_or_brand", identity)); }
-function platformKeyboard(identity: SessionIdentity): InlineKeyboard { return new InlineKeyboard().text("Выбрать Telegram-канал", revisionCallback("profile:platform:telegram", identity)).row().text("Указать другую ссылку", revisionCallback("profile:platform:other", identity)); }
+function typeKeyboard(identity: SessionIdentity): InlineKeyboard {
+	const keyboard = new InlineKeyboard().text("Блогер", revisionCallback("profile:type:blogger", identity)).row().text("Telegram-канал", revisionCallback("profile:type:telegram_channel", identity)).row().text("Заведение или бренд", revisionCallback("profile:type:venue_or_brand", identity));
+	if ("state" in identity && isApplicationState(identity.state)) keyboard.row().text("← Назад", revisionCallback("profile:back", identity)).row().text("Отменить", revisionCallback("profile:cancel", identity));
+	return keyboard;
+}
+function platformKeyboard(identity: SessionIdentity): InlineKeyboard {
+	const keyboard = new InlineKeyboard().text("Выбрать Telegram-канал", revisionCallback("profile:platform:telegram", identity)).row().text("Указать другую ссылку", revisionCallback("profile:platform:other", identity));
+	if ("state" in identity && isApplicationState(identity.state)) keyboard.row().text("← Назад", revisionCallback("profile:back", identity)).row().text("Отменить", revisionCallback("profile:cancel", identity));
+	return keyboard;
+}
+function applicationNavigationKeyboard(identity: SessionIdentity): InlineKeyboard {
+	return new InlineKeyboard()
+		.text("← Назад", revisionCallback("profile:back", identity)).row()
+		.text("Отменить", revisionCallback("profile:cancel", identity));
+}

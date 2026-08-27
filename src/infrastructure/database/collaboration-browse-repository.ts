@@ -5,9 +5,17 @@ import type {
 	FindBrowseCardByIdInput,
 	FindNextBrowseCardInput,
 } from "../../application/ports/collaboration-browse-repository.js";
+import type {
+	ApplicantSnapshot,
+	ApplicationRecord,
+	ApplicationSubmissionContext,
+	ApplicationSubmissionStore,
+	ApplicationTarget,
+} from "../../application/applications/application-service.js";
 import {
 	parseCollaborationFormat,
 	parseCollaborationStatus,
+	parsePlatformType,
 	parseProfileType,
 	parseTargetProfileType,
 	parseTopic,
@@ -51,7 +59,39 @@ interface BrowseCardRow {
 
 interface TopicRow { topic?: unknown }
 
-export class SqliteCollaborationBrowseRepository implements CollaborationBrowseRepository {
+interface SubmissionContextRow {
+	actor_status?: unknown;
+	applicant_profile_id?: unknown;
+	applicant_type?: unknown;
+	applicant_display_name?: unknown;
+	applicant_description?: unknown;
+	collaboration_id?: unknown;
+	public_token?: unknown;
+	author_profile_id?: unknown;
+	author_telegram_user_id?: unknown;
+	author_profile_status?: unknown;
+	author_actor_status?: unknown;
+	title?: unknown;
+	status?: unknown;
+	version?: unknown;
+	target_profile_type?: unknown;
+	slots_total?: unknown;
+	response_deadline_at?: unknown;
+	published_at?: unknown;
+	publication_status?: unknown;
+	publication_message_id?: unknown;
+	existing_application_id?: unknown;
+	accepted_count?: unknown;
+}
+
+interface ApplicantPlatformRow {
+	platform_type?: unknown;
+	url?: unknown;
+	title?: unknown;
+	audience_size?: unknown;
+}
+
+export class SqliteCollaborationBrowseRepository implements CollaborationBrowseRepository, ApplicationSubmissionStore {
 	constructor(private readonly boundary: DatabaseBoundary) {}
 
 	async findSession(telegramUserId: string): Promise<BrowseSessionRecord | undefined> {
@@ -138,6 +178,104 @@ export class SqliteCollaborationBrowseRepository implements CollaborationBrowseR
 		return rows[0] === undefined ? undefined : this.readCard(rows[0]);
 	}
 
+	async findSubmissionContext(
+		telegramUserId: string,
+		collaborationId: string,
+	): Promise<ApplicationSubmissionContext | undefined> {
+		const rows = await this.boundary.query<SubmissionContextRow>(
+			`SELECT
+				actor.status AS actor_status,
+				applicant.id AS applicant_profile_id,
+				applicant.type AS applicant_type,
+				applicant.display_name AS applicant_display_name,
+				applicant.description AS applicant_description,
+				c.id AS collaboration_id,
+				c.public_token,
+				c.author_profile_id,
+				author.telegram_user_id AS author_telegram_user_id,
+				author.status AS author_profile_status,
+				author_actor.status AS author_actor_status,
+				c.title,
+				c.status,
+				c.version,
+				c.target_profile_type,
+				c.slots_total,
+				c.response_deadline_at,
+				c.published_at,
+				publication.status AS publication_status,
+				publication.message_id AS publication_message_id,
+				(
+					SELECT application.id
+					FROM applications application
+					WHERE application.collaboration_id = c.id
+					  AND application.applicant_profile_id = applicant.id
+					LIMIT 1
+				) AS existing_application_id,
+				(
+					SELECT count(*)
+					FROM applications accepted
+					WHERE accepted.collaboration_id = c.id AND accepted.status = 'accepted'
+				) AS accepted_count
+			FROM telegram_users actor
+			LEFT JOIN profiles applicant
+				ON applicant.telegram_user_id = actor.telegram_user_id AND applicant.status = 'active'
+			LEFT JOIN collaborations c ON c.id = ?
+			LEFT JOIN profiles author ON author.id = c.author_profile_id
+			LEFT JOIN telegram_users author_actor ON author_actor.telegram_user_id = author.telegram_user_id
+			LEFT JOIN channel_publications publication ON publication.collaboration_id = c.id
+			WHERE actor.telegram_user_id = ?
+			LIMIT 1`,
+			[collaborationId, telegramUserId],
+		);
+		const row = rows[0];
+		if (row === undefined) return undefined;
+		if (row.actor_status !== "active" && row.actor_status !== "blocked") {
+			throw new Error("application actor row is corrupt");
+		}
+		const applicant = row.applicant_profile_id === null
+			? null
+			: await this.readApplicant(row);
+		if ((row.existing_application_id !== null && typeof row.existing_application_id !== "string") || !Number.isSafeInteger(row.accepted_count) || (row.accepted_count as number) < 0) {
+			throw new Error("application submission context is corrupt");
+		}
+		return {
+			actorStatus: row.actor_status,
+			applicant,
+			target: mapApplicationTarget(row),
+			existingApplicationId: row.existing_application_id as string | null,
+			acceptedCount: row.accepted_count as number,
+		};
+	}
+
+	async insertPending(record: ApplicationRecord): Promise<void> {
+		await this.boundary.execute(
+			`INSERT INTO applications (
+				id, collaboration_id, applicant_profile_id, message, terms_version,
+				collaboration_version, status, decided_by_profile_id, decided_at, created_at
+			) VALUES (?, ?, ?, ?, ?, ?, 'pending', NULL, NULL, ?)`,
+			[
+				record.id,
+				record.collaborationId,
+				record.applicantProfileId,
+				record.message,
+				record.termsVersion,
+				record.collaborationVersion,
+				record.createdAt,
+			],
+		);
+	}
+
+	async setFirstApplicationAt(collaborationId: string, firstApplicationAt: number): Promise<boolean> {
+		const result = await this.boundary.execute(
+			`UPDATE collaborations
+			SET first_application_at = ?,
+				updated_at = CASE WHEN updated_at < ? THEN ? ELSE updated_at END
+			WHERE id = ? AND first_application_at IS NULL`,
+			[firstApplicationAt, firstApplicationAt, firstApplicationAt, collaborationId],
+		) as { changes?: number };
+		return result.changes === 1;
+	}
+
 	private selectSql(): string {
 		return `SELECT
 			c.id, c.public_token, c.author_profile_id, author.telegram_user_id AS author_telegram_user_id,
@@ -157,8 +295,13 @@ export class SqliteCollaborationBrowseRepository implements CollaborationBrowseR
 			"c.published_at IS NOT NULL",
 			"c.response_deadline_at >= ?",
 			"author.telegram_user_id <> ?",
+			"author.status = 'active'",
+			"EXISTS (SELECT 1 FROM telegram_users author_actor WHERE author_actor.telegram_user_id = author.telegram_user_id AND author_actor.status = 'active')",
+			"c.slots_total IS NOT NULL",
+			"(SELECT count(*) FROM applications accepted WHERE accepted.collaboration_id = c.id AND accepted.status = 'accepted') < c.slots_total",
+			"NOT EXISTS (SELECT 1 FROM applications used JOIN profiles used_profile ON used_profile.id = used.applicant_profile_id WHERE used.collaboration_id = c.id AND used_profile.telegram_user_id = ?)",
 		];
-		const parameters: (string | number)[] = [input.now, input.viewerTelegramUserId];
+		const parameters: (string | number)[] = [input.now, input.viewerTelegramUserId, input.viewerTelegramUserId];
 		if (input.filters.targetProfileType !== null) {
 			predicates.push("(c.target_profile_type = ? OR c.target_profile_type = 'any')");
 			parameters.push(input.filters.targetProfileType);
@@ -179,6 +322,76 @@ export class SqliteCollaborationBrowseRepository implements CollaborationBrowseR
 		const topics = await this.boundary.query<TopicRow>("SELECT topic FROM collaboration_topics WHERE collaboration_id = ? ORDER BY topic", [base.id]);
 		return { ...base, topics: topics.map((row) => parseTopic(row.topic)) };
 	}
+
+	private async readApplicant(row: SubmissionContextRow): Promise<ApplicantSnapshot> {
+		if (
+			typeof row.applicant_profile_id !== "string" || typeof row.applicant_type !== "string" ||
+			typeof row.applicant_display_name !== "string" ||
+			(row.applicant_description !== null && typeof row.applicant_description !== "string")
+		) throw new Error("application applicant row is corrupt");
+		const platformRows = await this.boundary.query<ApplicantPlatformRow>(
+			"SELECT platform_type, url, title, audience_size FROM profile_platforms WHERE profile_id = ? ORDER BY id LIMIT 1",
+			[row.applicant_profile_id],
+		);
+		const platform = platformRows[0];
+		if (
+			platform === undefined || typeof platform.platform_type !== "string" || typeof platform.url !== "string" ||
+			(platform.title !== null && typeof platform.title !== "string") ||
+			(platform.audience_size !== null && (!Number.isSafeInteger(platform.audience_size) || (platform.audience_size as number) < 0))
+		) throw new Error("application applicant platform row is corrupt");
+		const topicRows = await this.boundary.query<TopicRow>(
+			"SELECT topic FROM profile_topics WHERE profile_id = ? ORDER BY topic",
+			[row.applicant_profile_id],
+		);
+		return {
+			profileId: row.applicant_profile_id,
+			type: parseProfileType(row.applicant_type),
+			displayName: row.applicant_display_name,
+			description: row.applicant_description as string | null,
+			topics: topicRows.map((topic) => parseTopic(topic.topic)),
+			platform: {
+				platformType: parsePlatformType(platform.platform_type),
+				url: platform.url,
+				title: platform.title as string | null,
+				audienceSize: platform.audience_size as number | null,
+			},
+		};
+	}
+}
+
+function mapApplicationTarget(row: SubmissionContextRow): ApplicationTarget | null {
+	if (row.collaboration_id === null) return null;
+	if (
+		typeof row.collaboration_id !== "string" ||
+		(row.public_token !== null && typeof row.public_token !== "string") ||
+		typeof row.author_profile_id !== "string" || typeof row.author_telegram_user_id !== "string" ||
+		(row.author_profile_status !== "active" && row.author_profile_status !== "archived") ||
+		(row.author_actor_status !== "active" && row.author_actor_status !== "blocked") ||
+		(row.title !== null && typeof row.title !== "string") || typeof row.status !== "string" ||
+		!Number.isSafeInteger(row.version) || (row.target_profile_type !== null && typeof row.target_profile_type !== "string") ||
+		(row.slots_total !== null && !Number.isSafeInteger(row.slots_total)) ||
+		(row.response_deadline_at !== null && !Number.isSafeInteger(row.response_deadline_at)) ||
+		(row.published_at !== null && !Number.isSafeInteger(row.published_at)) ||
+		(row.publication_status !== null && typeof row.publication_status !== "string") ||
+		(row.publication_message_id !== null && !Number.isSafeInteger(row.publication_message_id))
+	) return null;
+	return {
+		collaborationId: row.collaboration_id,
+		publicToken: row.public_token as string | null,
+		authorProfileId: row.author_profile_id,
+		authorTelegramUserId: row.author_telegram_user_id,
+		authorProfileStatus: row.author_profile_status,
+		authorActorStatus: row.author_actor_status,
+		title: row.title as string | null,
+		status: parseCollaborationStatus(row.status),
+		version: row.version as number,
+		targetProfileType: row.target_profile_type === null ? null : parseTargetProfileType(row.target_profile_type),
+		slotsTotal: row.slots_total as number | null,
+		responseDeadlineAt: row.response_deadline_at as number | null,
+		publishedAt: row.published_at as number | null,
+		publicationStatus: row.publication_status as string | null,
+		publicationMessageId: row.publication_message_id as number | null,
+	};
 }
 
 function mapSession(row: BrowseSessionRow): BrowseSessionRecord {

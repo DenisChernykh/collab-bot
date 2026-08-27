@@ -94,9 +94,32 @@ function isJsonObject(value: string): boolean {
 function isProfileSessionState(value: unknown): value is ProfileSessionState {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
 	const candidate = value as Record<string, unknown>;
-	const steps = new Set(["type", "display_name", "topics", "description", "platform", "platform_url", "audience", "review"]);
-	return candidate.version === 1 && typeof candidate.generation === "string" && /^[a-f0-9]{16}$/.test(candidate.generation) && typeof candidate.step === "string" && steps.has(candidate.step) &&
+	const steps = new Set(["type", "display_name", "topics", "description", "platform", "platform_url", "audience", "review", "application_message"]);
+	if (!(candidate.version === 1 && typeof candidate.generation === "string" && /^[a-f0-9]{16}$/.test(candidate.generation) && typeof candidate.step === "string" && steps.has(candidate.step) &&
 		typeof candidate.draft === "object" && candidate.draft !== null && !Array.isArray(candidate.draft) &&
-		(candidate.requestId === undefined || (Number.isSafeInteger(candidate.requestId) && (candidate.requestId as number) >= -2147483648 && (candidate.requestId as number) <= 2147483647)) &&
-		(candidate.continuation === undefined || (typeof candidate.continuation === "object" && candidate.continuation !== null && !Array.isArray(candidate.continuation) && (candidate.continuation as { kind?: unknown }).kind === "create_collaboration"));
+		(candidate.requestId === undefined || (Number.isSafeInteger(candidate.requestId) && (candidate.requestId as number) >= -2147483648 && (candidate.requestId as number) <= 2147483647)))) return false;
+
+	const continuation = parseContinuation(candidate.continuation);
+	if (candidate.continuation !== undefined && continuation === undefined) return false;
+	if (candidate.step === "application_message") return continuation?.kind === "submit_application";
+	if (continuation?.kind !== "submit_application") return true;
+
+	return new Set(["type", "display_name", "platform", "platform_url"]).has(candidate.step);
+}
+
+function parseContinuation(value: unknown): ProfileSessionState["continuation"] | undefined {
+	if (value === undefined) return undefined;
+	if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+	const candidate = value as Record<string, unknown>;
+	if (candidate.kind === "create_collaboration") {
+		return Object.keys(candidate).length === 1 ? { kind: "create_collaboration" } : undefined;
+	}
+	if (candidate.kind !== "submit_application" || Object.keys(candidate).length !== 3) return undefined;
+	if (typeof candidate.collaborationId !== "string" || !isUuid(candidate.collaborationId)) return undefined;
+	if (candidate.source !== "feed" && candidate.source !== "deep_link") return undefined;
+	return { kind: "submit_application", collaborationId: candidate.collaborationId, source: candidate.source };
+}
+
+function isUuid(value: string): boolean {
+	return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }

@@ -27,6 +27,7 @@ import { SqliteOutboxDeliveryRepository } from "../infrastructure/database/outbo
 import { SqliteCollaborationPublicationRepository } from "../infrastructure/database/collaboration-publication-repository.js";
 import { CollaborationPublicationService } from "../application/collaborations/collaboration-publication-service.js";
 import { CollaborationBrowseService } from "../application/collaborations/collaboration-browse-service.js";
+import { ApplicationService } from "../application/applications/application-service.js";
 import { SqliteCollaborationBrowseRepository } from "../infrastructure/database/collaboration-browse-repository.js";
 import { DeliveryRunner } from "../application/outbox/delivery-runner.js";
 import { SystemProviderDeadline } from "../infrastructure/time/provider-deadline.js";
@@ -74,6 +75,11 @@ export async function createBotRuntime(options: BotRuntimeOptions): Promise<BotR
 		const userRepository = new SqliteTelegramUserRepository(boundary);
 		const transactionRunner = new DatabaseBoundaryTransactionRunner(boundary);
 		const profileSessionRepository = new SqliteProfileSessionRepository(boundary);
+		const profileService = new ProfileService(
+			new SqliteProfileRepository(boundary),
+			transactionRunner,
+			clock,
+		);
 		const collaborationDraftService = new CollaborationDraftService(
 			new SqliteCollaborationRepository(boundary),
 			new SqliteCollaborationSessionRepository(boundary),
@@ -94,10 +100,18 @@ export async function createBotRuntime(options: BotRuntimeOptions): Promise<BotR
 			options.config.showcaseChannelId,
 			options.config.expectedBotUsername,
 		);
+		const collaborationBrowseRepository = new SqliteCollaborationBrowseRepository(boundary);
 		const collaborationBrowseService = new CollaborationBrowseService(
-			new SqliteCollaborationBrowseRepository(boundary),
+			collaborationBrowseRepository,
 			transactionRunner,
 			clock,
+		);
+		const applicationService = new ApplicationService(
+			collaborationBrowseRepository,
+			outboxStore,
+			transactionRunner,
+			clock,
+			options.config.expectedBotUsername,
 		);
 		const durableCommandExecutor = new DurableCommandExecutor(transactionRunner, new SqliteDurableCommandStore(boundary), { hash: hashCanonicalInput }, clock);
 		let inFlight = 0;
@@ -112,19 +126,16 @@ export async function createBotRuntime(options: BotRuntimeOptions): Promise<BotR
 			}
 		});
 		registerProfileBot(bot, {
-			profileService: new ProfileService(
-				new SqliteProfileRepository(boundary),
-				transactionRunner,
-				clock,
-			),
-				sessionRepository: profileSessionRepository,
+			profileService,
+			sessionRepository: profileSessionRepository,
 			telegramUserRepository: userRepository,
 			durableCommandExecutor,
 			clock,
-				helpContact: options.config.helpContact,
-				collaborationDraftService,
-				collaborationPublicationService,
-				collaborationBrowseService,
+			helpContact: options.config.helpContact,
+			collaborationDraftService,
+			collaborationPublicationService,
+			collaborationBrowseService,
+			applicationService,
 		});
 		const logger = new SafeLogger((entry) => options.logSink?.(JSON.stringify(entry)), clock, "bot");
 		bot.catch((error: BotError) => {

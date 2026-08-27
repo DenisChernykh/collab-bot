@@ -150,6 +150,7 @@ export const collaborations = sqliteTable(
 		version: integer("version").notNull(),
 		projectionRevision: integer("projection_revision").notNull(),
 		publishedAt: integer("published_at"),
+		firstApplicationAt: integer("first_application_at"),
 		createdAt: integer("created_at").notNull(),
 		updatedAt: integer("updated_at").notNull(),
 	},
@@ -161,6 +162,7 @@ export const collaborations = sqliteTable(
 		check("collaborations_version_nonnegative", sql`${table.version} >= 1`),
 		check("collaborations_projection_revision_nonnegative", sql`${table.projectionRevision} >= 0`),
 		check("collaborations_published_at_nonnegative", sql`${table.publishedAt} IS NULL OR (typeof(${table.publishedAt}) = 'integer' AND ${table.publishedAt} >= 0)`),
+		check("collaborations_first_application_at_nonnegative", sql`${table.firstApplicationAt} IS NULL OR (typeof(${table.firstApplicationAt}) = 'integer' AND ${table.firstApplicationAt} >= 0)`),
 		check("collaborations_timestamp_coherence", sql`${table.updatedAt} >= ${table.createdAt}`),
 	],
 );
@@ -174,6 +176,52 @@ export const collaborationTopics = sqliteTable(
 		topic: text("topic", { enum: ["lifestyle", "food", "beauty", "travel", "city", "events", "family", "sport", "business", "other"] as const }).notNull(),
 	},
 	(table) => [primaryKey({ columns: [table.collaborationId, table.topic] })],
+);
+
+export const applications = sqliteTable(
+	"applications",
+	{
+		id: text("id").primaryKey(),
+		collaborationId: text("collaboration_id")
+			.notNull()
+			.references(() => collaborations.id),
+		applicantProfileId: text("applicant_profile_id")
+			.notNull()
+			.references(() => profiles.id),
+		message: text("message").notNull(),
+		termsVersion: integer("terms_version").notNull(),
+		collaborationVersion: integer("collaboration_version").notNull(),
+		status: text("status", { enum: ["pending", "accepted", "rejected", "withdrawn", "closed"] as const }).notNull(),
+		decidedByProfileId: text("decided_by_profile_id").references(() => profiles.id),
+		decidedAt: integer("decided_at"),
+		createdAt: integer("created_at").notNull(),
+	},
+	(table) => [
+		uniqueIndex("applications_one_per_profile").on(table.collaborationId, table.applicantProfileId),
+		index("applications_applicant_created").on(table.applicantProfileId, table.createdAt, table.id),
+		index("applications_collaboration_status_created").on(table.collaborationId, table.status, table.createdAt, table.id),
+		check(
+			"applications_id_format",
+			sql`typeof(${table.id}) = 'text' AND length(${table.id}) = 36 AND ${table.id} NOT GLOB '*[^0-9A-Fa-f-]*' AND substr(${table.id}, 9, 1) = '-' AND substr(${table.id}, 14, 1) = '-' AND substr(${table.id}, 19, 1) = '-' AND substr(${table.id}, 24, 1) = '-' AND length(replace(${table.id}, '-', '')) = 32`,
+		),
+		check(
+			"applications_message_length",
+			sql`typeof(${table.message}) = 'text' AND length(${table.message}) BETWEEN 10 AND 500 AND instr(${table.message}, char(0)) = 0`,
+		),
+		check("applications_terms_version", sql`typeof(${table.termsVersion}) = 'integer' AND ${table.termsVersion} >= 1`),
+		check("applications_collaboration_version", sql`typeof(${table.collaborationVersion}) = 'integer' AND ${table.collaborationVersion} >= 1`),
+		check("applications_status", sql`${table.status} IN ('pending', 'accepted', 'rejected', 'withdrawn', 'closed')`),
+		check(
+			"applications_decided_at_nonnegative",
+			sql`${table.decidedAt} IS NULL OR (typeof(${table.decidedAt}) = 'integer' AND ${table.decidedAt} >= 0)`,
+		),
+		check("applications_created_at_nonnegative", sql`typeof(${table.createdAt}) = 'integer' AND ${table.createdAt} >= 0`),
+		check(
+			"applications_decision_coherence",
+			sql`(${table.status} IN ('accepted', 'rejected') AND ${table.decidedByProfileId} IS NOT NULL AND ${table.decidedAt} IS NOT NULL) OR (${table.status} IN ('pending', 'withdrawn', 'closed') AND ${table.decidedByProfileId} IS NULL AND ${table.decidedAt} IS NULL)`,
+		),
+		check("applications_decision_timestamp", sql`${table.decidedAt} IS NULL OR ${table.decidedAt} >= ${table.createdAt}`),
+	],
 );
 
 export const collaborationSessions = sqliteTable(

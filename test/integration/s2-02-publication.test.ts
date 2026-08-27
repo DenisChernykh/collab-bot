@@ -54,7 +54,7 @@ describe("S2-02 showcase publication", () => {
 		const clock = new FakeClock(new Date("2023-11-14T10:00:00.000Z"));
 		try {
 			const source = await MigrationSource.fromDirectory(migrationsPath);
-			expect((await new MigrationRunner(source, clock).migrate(boundary)).applied).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+			expect((await new MigrationRunner(source, clock).migrate(boundary)).applied).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 			await seedProfile(boundary, clock);
 			const transactions = new DatabaseBoundaryTransactionRunner(boundary);
 			const collaborations = new SqliteCollaborationRepository(boundary);
@@ -139,7 +139,7 @@ describe("S2-02 showcase publication", () => {
 });
 
 async function migrateAll(boundary: DatabaseBoundary, clock: FakeClock): Promise<void> {
-	expect((await new MigrationRunner(await MigrationSource.fromDirectory(migrationsPath), clock).migrate(boundary)).applied).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+	expect((await new MigrationRunner(await MigrationSource.fromDirectory(migrationsPath), clock).migrate(boundary)).applied).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 }
 
 async function preparePublication(boundary: DatabaseBoundary, clock: FakeClock): Promise<{ service: CollaborationPublicationService; outbox: SqliteOutboxDeliveryRepository; collaborations: SqliteCollaborationRepository; collaborationId: string; deliveryId: string }> {
