@@ -2,7 +2,7 @@
 
 ## Status
 
-P0 and S0–S4 are complete, including the separately authorized real S4 journey and manual-launch handoff. FUT-01 is implemented locally as a one-time best-effort Telegram audience snapshot; its local/fake evidence does not establish live Telegram count accuracy.
+P0 and S0–S4 are complete, including the separately authorized real S4 journey and manual-launch handoff. FUT-01 is implemented locally as a one-time best-effort Telegram audience snapshot; its local/fake evidence does not establish live Telegram count accuracy. The post-launch R1 maintainability stage is also complete without changing the product boundary.
 
 The project targets a fast manual first launch by one developer. It is not a hosted, scale-ready or always-on service.
 
@@ -32,6 +32,14 @@ FUT-01 does not verify ownership, reach, authenticity or audience quality. It pe
 The approved shape is a new independent TypeScript project: one manually managed modular Node.js process with `Telegram Bot API → grammY adapter → application/domain → SQLite`. It intentionally excludes HTTP API, Mini App, web application, PostgreSQL, Redis, BullMQ, Docker, and Giveaway Bot integration.
 
 The repository contains this foreground runtime, but it contains no real credentials and does not establish a deployed Telegram identity or operational resource by itself.
+
+## Code organization
+
+The codebase remains a modular monolith. Feature-owned application boundaries and grammY composers contain profile, collaboration, marketplace and moderation behavior; the root bot layer only mounts them and owns global durable ingress. Runtime object composition, lifecycle, process signals, environment loading and private-path preparation are separate boundaries, while the delivery worker owns its own loop lifecycle.
+
+Executable dependency-graph rules enforce layer directions and reject cycles. Production-like tests reuse explicit helpers for fresh migrated SQLite databases, feature composition, prepared fake runtimes and Telegram updates without hiding start, stop or restart behavior.
+
+Immutable SQL migrations are the canonical schema and history. Production repositories use parameterized raw SQL with repository-local typed rows and mappers; the unused parallel Drizzle schema/client was removed rather than maintained as a second persistence model.
 
 ## Execution
 

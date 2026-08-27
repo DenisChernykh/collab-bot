@@ -41,7 +41,7 @@
 | S3 — Marketplace vertical | `completed` | 4 | Два пользователя проходят отклик, решение и получают Telegram action |
 | S4 — Shareable launch | `completed` | 1 | Admin hide, полный real journey и готовая к распространению ссылка |
 | FUT — Telegram audience snapshot | `completed` | 1 | Best-effort снимок аудитории Telegram после сохранения профиля |
-| R1 — Post-launch maintainability | `in_progress` | 14 | Те же пользовательские контракты с feature-owned кодом и проверяемыми границами |
+| R1 — Post-launch maintainability | `completed` | 14 | Те же пользовательские контракты с feature-owned кодом и проверяемыми границами |
 
 ```text
 P0-01 → P0-02
@@ -84,19 +84,20 @@ P0-01 → P0-02
 | S3-C2 | `SELF` | explicit personal Telegram platform opt-in |
 | S4-01 | `SELF` | allowlisted hide, complete fake/real journey and manual launch handoff |
 | FUT-01 | `SELF` | one-time Telegram audience snapshot with internal provenance |
-| R1-00 | `SELF` | decision-complete post-launch maintainability stage |
-| R1-01 | `SELF` | executable import graph and cycle enforcement |
-| R1-02 | `SELF` | consumer-oriented applications use cases and ports |
-| R1-03 | `SELF` | feature-owned applications persistence and composition |
-| R1-04 | `SELF` | single durable Telegram ingress seam |
-| R1-05A | `SELF` | feature-owned profile Telegram composer |
-| R1-05B | `SELF` | feature-owned collaboration Telegram composer |
-| R1-05C | `SELF` | feature-owned marketplace and moderation Telegram composers |
-| R1-06A | `SELF` | isolated delivery worker lifecycle |
-| R1-06B | `SELF` | separated bot composition and runtime lifecycle |
-| R1-06C | `SELF` | thin process, config and filesystem bootstrap boundaries |
-| R1-07 | `SELF` | consolidated production-like test support |
-| R1-08 | `SELF` | raw SQL as the only persistence model |
+| R1-00 | `7593f9bc127b6900bf57ca8275467ba7214bbc5a` | decision-complete post-launch maintainability stage |
+| R1-01 | `6a7bc10ed3b15f5288f746fd19a0c08424b33699` | executable import graph and cycle enforcement |
+| R1-02 | `f35741ed16c6ef102a65043c82c0ae10ae57a62d` | consumer-oriented applications use cases and ports |
+| R1-03 | `4803b0412c9cb8446ad8581cd7a90ca2169e20d9` | feature-owned applications persistence and composition |
+| R1-04 | `256caab6c3ea27328e4d1a4488fe75a337c10bd0` | single durable Telegram ingress seam |
+| R1-05A | `d31851962392747563613754a010208ad6207c8e` | feature-owned profile Telegram composer |
+| R1-05B | `38978f6172fc1e9c4f9c3c9895deaebcbf63f541` | feature-owned collaboration Telegram composer |
+| R1-05C | `564012baf8dbd30fb927e3418447987e556b4ea1` | feature-owned marketplace and moderation Telegram composers |
+| R1-06A | `5630111cda4e5e092a7c11c0a63601330d64468a` | isolated delivery worker lifecycle |
+| R1-06B | `e92d6ed2da4be12ea6fcad8c0c703eed06ecee30` | separated bot composition and runtime lifecycle |
+| R1-06C | `70b928dfb57bd98261e33c2dda369eeeda199c09` | thin process, config and filesystem bootstrap boundaries |
+| R1-07 | `c641f9440b0a386022c07d53813ed890842e9f4f` | consolidated production-like test support |
+| R1-08 | `947c304f94fd485c8b158e0af51813dd77adf4b2` | raw SQL as the only persistence model |
+| R1-09 | `SELF` | verified maintainability candidate and schema-validator decision |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -427,7 +428,7 @@ P0-01 → P0-02
 
 ### R1 — Post-launch maintainability
 
-- **Status:** `in_progress` — отдельно авторизованный post-launch stage после завершённого `FUT-01`; продуктовый scope не расширяется.
+- **Status:** `completed` — отдельно авторизованный post-launch stage завершён без расширения продуктового scope.
 - **Objective:** Сохранить доказанное внешнее поведение, но сделать ownership feature-кода, import graph, Telegram presentation, runtime lifecycle, test seams и persistence-модель явными и независимо проверяемыми.
 - **Requirements:** неизменные `LFR-01`–`LFR-11`, `LAC-01`–`LAC-12`; TD §2.1, §4, §7, §10, §13, §20.
 - **Dependencies:** `FUT-01` completed на `32441e59510a79852aceb47a73ca5338fa529e4c`.
@@ -658,7 +659,7 @@ P0-01 → P0-02
 
 #### R1-09 — Close R1 and decide runtime-schema validation
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Доказать сохранение поведения, независимо проверить candidate и решить, нужна ли следующая schema-validator карточка.
 - **Requirements:** все stage invariants; PRD §19.1/§20.1; TD self-review checklist.
 - **Dependencies:** `R1-08`.
@@ -671,7 +672,7 @@ P0-01 → P0-02
 - **Verification:** `pnpm architecture`; `pnpm check`; `pnpm test:e2e:fake`; `pnpm db:verify`; `git diff --check`; staged secret scan; independent review.
 - **Review:** один read-only critical review ограничен credential/privacy exposure, authoritative-data corruption, duplicate effects, broken core journey или unrunnable candidate.
 - **Exit criteria:** R1 `completed`; schema-validator либо получает отдельный future trigger/card, либо мотивированно отклонён; один commit `R1-09: close maintainability stage evidence`.
-- **Completion evidence:** pending.
+- **Completion evidence:** Commit SHA: `SELF`; полный диапазон `32441e59510a79852aceb47a73ca5338fa529e4c...947c304f94fd485c8b158e0af51813dd77adf4b2` содержит 13 сфокусированных implementation commits перед этой evidence-карточкой, уникальные Task-ID и 71 изменённый файл. `pnpm architecture` PASS (114 modules, 363 dependencies); `pnpm check` PASS (66 unit, 83 integration, 47 runtime tests, lint, typecheck и build); `pnpm test:e2e:fake` PASS (30 tests); `pnpm db:verify` PASS; full-range `git diff --check` PASS. PRD и все 13 immutable SQL migrations не менялись; zero-match scan не нашёл Drizzle в source, tests, package/lock, TD, architecture config или build output. Runtime schema-validator dependency мотивированно не добавлена: env config, sessions, persisted payloads и callback/deep-link values имеют разные форматы, источники доверия и failure semantics, поэтому сейчас отсутствуют минимум два live consumer с одной и той же versioned-object policy, а библиотека добавила бы adapters без измеримого сокращения дублирования. Вернуться к решению следует, когда два production consumer действительно разделят одинаковую versioned schema и замена уберёт минимум две ручные реализации без изменения публичных контрактов. Независимый read-only review полного диапазона завершился PASS без credential/privacy exposure, authoritative-data corruption, duplicated effects, broken core journey или unrunnable candidate. README и этот registry синхронизированы с новой организацией; real Telegram, credentials, remote, push, PR, deploy и production не затрагивались.
 - **Stop conditions:** confirmed blocker нельзя закрыть одной wave, aggregate gate не зелёный или нужен новый product decision.
 
 ## 7. Git и evidence
