@@ -21,6 +21,7 @@ import { createMarketplaceTelegramFeature } from "./marketplace/marketplace-comp
 import { createModerationTelegramFeature, type ModerationTelegramFeature } from "./moderation/moderation-composer.js";
 import { createProfileTelegramFeature, type ProfileTelegramFeature } from "./profile/profile-composer.js";
 import { resumeKeyboard } from "./profile/profile-presentation.js";
+import { routeTelegramText } from "../presentation/telegram/telegram-routing.js";
 
 const AUDIENCE_SNAPSHOT_UNAVAILABLE = "Аудиторию Telegram определить не удалось; профиль сохранён, число можно указать позже в «Мой профиль».";
 
@@ -103,20 +104,15 @@ export function registerProfileBot(bot: Bot, options: ProfileBotOptions): Regist
 	messageRoute.on("message:text", async (workCtx, next) => {
 		const userId = String(workCtx.from.id);
 		const text = workCtx.message.text;
-		const command = text.trim().split(/\s+/, 1)[0]?.toLowerCase();
-		if (await moderationFeature.routeCommand(workCtx, userId, command, text)) return;
-		if (command === "/start") {
-			const startParameter = text.trim().slice(command.length).trim();
-			if (await marketplaceFeature.routeStart(workCtx, userId, startParameter)) return;
-			await renderMenu(workCtx, options, profileFeature, collaborationFeature, userId);
-			return;
-		}
-		if (command === "/help") {
-			await workCtx.reply(`«Давай вместе» помогает блогерам, Telegram-каналам, заведениям и брендам находить партнёров для совместных проектов.\n\nСейчас сервис работает в Екатеринбурге. Вы можете создать и отредактировать свой профиль. По вопросам работы бота: ${options.helpContact}`);
-			return;
-		}
-		if (await collaborationFeature.routeCommand(workCtx, userId, command)) return;
-		if (await marketplaceFeature.routeCommand(workCtx, userId, command)) return;
+		const handled = await routeTelegramText(workCtx, userId, text, {
+			routeModeration: (ctx, actorId, command, commandText) => moderationFeature.routeCommand(ctx, actorId, command, commandText),
+			routeStart: (ctx, actorId, startParameter) => marketplaceFeature.routeStart(ctx, actorId, startParameter),
+			renderMenu: (ctx, actorId) => renderMenu(ctx, options, profileFeature, collaborationFeature, actorId),
+			renderHelp: (ctx) => ctx.reply(`«Давай вместе» помогает блогерам, Telegram-каналам, заведениям и брендам находить партнёров для совместных проектов.\n\nСейчас сервис работает в Екатеринбурге. Вы можете создать и отредактировать свой профиль. По вопросам работы бота: ${options.helpContact}`),
+			routeCollaboration: (ctx, actorId, command) => collaborationFeature.routeCommand(ctx, actorId, command),
+			routeMarketplace: (ctx, actorId, command) => marketplaceFeature.routeCommand(ctx, actorId, command),
+		});
+		if (handled) return;
 		await next();
 	});
 	messageRoute.use(profileFeature.composer);

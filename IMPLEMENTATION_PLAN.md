@@ -707,7 +707,7 @@ P0-01 → P0-02
 
 #### R2-01 — Enforce module public boundaries and routing contracts
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** До moves закрепить public-entrypoint policy и точный global routing/durable behavior.
 - **Dependencies:** `R2-00`.
 - **Read first:** dependency-cruiser config; Telegram root/ingress; all feature composers; runtime tests.
@@ -716,11 +716,12 @@ P0-01 → P0-02
 - **Invariants:** admin → start/deep-link → collaboration → marketplace/profile order unchanged; generic durable and opaque callback paths remain separate.
 - **Verification:** focused architecture/runtime/fake tests; `pnpm architecture`; `pnpm check`; `pnpm db:verify`.
 - **Exit criteria:** будущие moves не могут обойти public module surfaces; один commit `R2-01: enforce feature module public boundaries`.
+- **Completion evidence:** Commit SHA: `SELF`; added generated dependency-cruiser rules for the five target business modules plus passing public-entrypoint and failing internal-import fixtures. Test-first RED showed the internal import was accepted before the rule (1 failed/4 passed); focused architecture policy is now 5/5. Extracted the exact text-command precedence into `presentation/telegram/telegram-routing.ts` and made the existing root consume it without changing copy/routes: moderation → start/deep-link or menu → help → collaboration → marketplace → profile middleware. Focused routing contract and durable/opaque composer tests PASS (6 unit, 5 fake); architecture PASS (115 modules, 365 dependencies); `pnpm check` PASS (69 unit, 83 integration, 47 runtime, lint/typecheck/build); all fake E2E PASS (30); `pnpm db:verify` PASS; migrations/PRD diff and `git diff --check` PASS. Nine source/test/config files plus this plan changed; no repository, SQL, payload, credential, real Telegram, remote or production mutation.
 - **Stop conditions:** gate requires broad allowlist or current routing cannot be characterized without new policy.
 
 #### R2-02 — Move profiles domain and application ownership
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Собрать profile domain, use cases, session contract и repositories ports под `modules/profiles`.
 - **Dependencies:** `R2-01`.
 - **Read first:** profile domain/services/ports and focused unit/integration tests.

@@ -1,5 +1,16 @@
 /* global module */
 /** @type {import("dependency-cruiser").IConfiguration} */
+const FEATURE_MODULES = ["profiles", "collaborations", "marketplace", "applications", "moderation"];
+
+const crossModuleInternalRules = FEATURE_MODULES.map((moduleName) => ({
+	name: `module-internals-must-not-cross-feature-boundaries-${moduleName}`,
+	severity: "error",
+	from: { path: `(^|/)src/modules/${moduleName}(/|$)` },
+	to: {
+		path: `(^|/)src/modules/(?:${FEATURE_MODULES.filter((candidate) => candidate !== moduleName).join("|")})/(?!index\\.ts$|application/index\\.ts$).+`,
+	},
+}));
+
 module.exports = {
 	forbidden: [
 		{
@@ -14,6 +25,7 @@ module.exports = {
 			from: {},
 			to: { circular: true },
 		},
+		...crossModuleInternalRules,
 		{
 			name: "domain-must-not-import-outer-layers",
 			severity: "error",

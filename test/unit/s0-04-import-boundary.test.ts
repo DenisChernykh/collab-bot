@@ -36,4 +36,16 @@ describe("dependency-cruiser architecture policy", () => {
 		expect(`${result.stdout}${result.stderr}`).toContain("application-must-not-import-outer-layers");
 		expect(result.status).toBeGreaterThan(0);
 	});
+
+	it("accepts cross-feature imports through a public module entrypoint", () => {
+		const result = cruiseFixture("cross-module-public-entrypoint");
+		expect(`${result.stdout}${result.stderr}`).toContain("no dependency violations found");
+		expect(result.status).toBe(0);
+	});
+
+	it("rejects cross-feature imports into module internals", () => {
+		const result = cruiseFixture("cross-module-internal-import");
+		expect(`${result.stdout}${result.stderr}`).toContain("module-internals-must-not-cross-feature-boundaries");
+		expect(result.status).toBeGreaterThan(0);
+	});
 });
