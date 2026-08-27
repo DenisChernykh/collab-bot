@@ -95,6 +95,7 @@ P0-01 → P0-02
 | R1-06A | `SELF` | isolated delivery worker lifecycle |
 | R1-06B | `SELF` | separated bot composition and runtime lifecycle |
 | R1-06C | `SELF` | thin process, config and filesystem bootstrap boundaries |
+| R1-07 | `SELF` | consolidated production-like test support |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -622,7 +623,7 @@ P0-01 → P0-02
 
 #### R1-07 — Consolidate production-like test support
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Убрать повторяемую setup/teardown composition из application, runtime и fake E2E tests.
 - **Requirements:** TD §20.2–§20.5; `LAC-09`–`LAC-11`.
 - **Dependencies:** `R1-06C`.
@@ -634,12 +635,12 @@ P0-01 → P0-02
 - **Tests first:** repeated fixture run and failure-path cleanup.
 - **Verification:** migrated suites separately/together; all e2e-fake; `pnpm check`; `pnpm db:verify`; architecture; diff scan.
 - **Exit criteria:** duplicated setup заменён общими helpers с несколькими consumers; один commit `R1-07: consolidate production-like test support`.
-- **Completion evidence:** pending.
+- **Completion evidence:** Commit SHA: `SELF`; added four local test-support boundaries for fresh migrated SQLite, production `createApplicationsFeature` composition, canonical prepared/not-started fake bot runtime and explicit Telegram update/callback builders. A focused helper test proves independent repeated databases, all 13 canonical migrations and close/remove cleanup on callback failure; construction is inside the cleanup guard so constructor/migration failures also remove the temporary directory. Six real integration/runtime/fake suites now consume the helpers, each helper has at least two consumers, and explicit start/stop/restart remains visible in tests. `FakeTelegramApi` remains the grammY/Bot HTTP fake and was not merged with the port-level `FakeTelegramTransport`. Eleven source/test files plus this plan changed; production code, global setup, singleton DB, Testcontainers and test-only production hooks stayed untouched. Test-first RED was the missing migrated-database helper; focused support/application/decision tests PASS (3 files, 22 tests); focused runtime PASS (1 file, 6 tests); migrated profile/collaboration/browse fake journeys PASS together (3 files, 21 tests); all fake E2E PASS (7 files, 30 tests); architecture PASS (118 modules, 366 dependencies); `pnpm check` PASS (66 unit, 83 integration, 47 runtime tests and build); `pnpm db:verify` PASS; `git diff --check` PASS. Self-review fixed constructor-failure cleanup; two independent read-only reviews then confirmed cleanup, helper consumer counts, canonical runtime/applications composition, explicit lifecycle/restarts, unchanged assertions and distinct fake levels with no findings. No credential, real Telegram, remote or production mutation.
 - **Stop conditions:** helper имеет одного consumer, скрывает lifecycle или массовый cutover выходит за unit boundary.
 
 #### R1-08 — Make raw SQL the only persistence model
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Убрать теневой Drizzle mapping и закрепить SQL migrations + typed rows/mappers как единственную persistence-модель.
 - **Requirements:** обновлённый TD §2.2, §7; неизменные `LFR-10`–`LFR-11`, `LAC-08`–`LAC-11`.
 - **Dependencies:** `R1-07`.

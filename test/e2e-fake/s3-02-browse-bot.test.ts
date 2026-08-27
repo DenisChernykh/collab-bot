@@ -1,18 +1,22 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 
-import { Bot, type PollingOptions } from "grammy";
-import type { Update, UserFromGetMe } from "grammy/types";
 import { describe, expect, it } from "vitest";
 
-import { createBotRuntime } from "../../src/runtime/bot-runtime.js";
+import type { BotRuntime } from "../../src/runtime/bot-runtime.js";
 import type { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
-import { FakeTelegramApi } from "../../src/infrastructure/testing/fake-telegram-api.js";
+import type { FakeTelegramApi } from "../../src/infrastructure/testing/fake-telegram-api.js";
 import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
+import { createFakeBotRuntime } from "../support/fake-bot-runtime.js";
+import {
+	callbackData,
+	callbackForUser,
+	callbackValues,
+	createFakeTelegramApi,
+	privateMessageForUser,
+} from "../support/fake-telegram.js";
 
-const migrationsDirectory = fileURLToPath(new URL("../../migrations/", import.meta.url));
 const NOW = 1_700_000_000_000;
 const FIRST_ID = "ffffffff-0000-4000-8000-000000000003";
 const SECOND_ID = "eeeeeeee-0000-4000-8000-000000000003";
@@ -31,11 +35,8 @@ describe("S3-02 fake Telegram browse journey", () => {
 		const directory = await mkdtemp(join(tmpdir(), "collaboration-s3-02-browse-e2e-"));
 		const databasePath = join(directory, "app.sqlite");
 		const clock = new FakeClock(NOW);
-		const fake = new FakeTelegramApi({
-			token: "fake-token",
-			botInfo: { id: 777, is_bot: true, first_name: "Collab", username: "collab_bot" } as unknown as UserFromGetMe,
-		});
-		let runtime: Awaited<ReturnType<typeof createBotRuntime>> | undefined;
+		const fake = createFakeTelegramApi();
+		let runtime: BotRuntime | undefined;
 		try {
 			runtime = await createRuntime(databasePath, fake, clock);
 			await seedCards(runtime.boundary);
@@ -287,13 +288,11 @@ describe("S3-02 fake Telegram browse journey", () => {
 		const directory = await mkdtemp(join(tmpdir(), "collaboration-s3-checkpoint-e2e-"));
 		const databasePath = join(directory, "app.sqlite");
 		const clock = new FakeClock(NOW);
-		const fake = new FakeTelegramApi({
-			token: "fake-token",
-			botInfo: { id: 777, is_bot: true, first_name: "Collab", username: "collab_bot" } as unknown as UserFromGetMe,
-		});
-		let runtime: Awaited<ReturnType<typeof createBotRuntime>> | undefined;
+		const fake = createFakeTelegramApi();
+		let runtime: BotRuntime | undefined;
 		try {
-			runtime = await createRuntime(databasePath, fake, clock, { startDelivery: true, adminTelegramIds: ["900"] });
+			runtime = await createRuntime(databasePath, fake, clock, { adminTelegramIds: ["900"] });
+			await runtime.start();
 
 			await runtime.bot.handleUpdate({ update_id: 1001, message: privateMessageForUser(1001, 600, "/start", "full_author") });
 			await runtime.bot.handleUpdate({ update_id: 1002, callback_query: callbackForUser(1002, 600, callbackData(fake, "collaboration:start"), "full_author") });
@@ -666,13 +665,11 @@ describe("S4-01 fake Telegram admin hide journey", () => {
 		const directory = await mkdtemp(join(tmpdir(), "collaboration-s4-admin-hide-e2e-"));
 		const databasePath = join(directory, "app.sqlite");
 		const clock = new FakeClock(NOW);
-		const fake = new FakeTelegramApi({
-			token: "fake-token",
-			botInfo: { id: 777, is_bot: true, first_name: "Collab", username: "collab_bot" } as unknown as UserFromGetMe,
-		});
-		let runtime: Awaited<ReturnType<typeof createBotRuntime>> | undefined;
+		const fake = createFakeTelegramApi();
+		let runtime: BotRuntime | undefined;
 		try {
-			runtime = await createRuntime(databasePath, fake, clock, { startDelivery: true, adminTelegramIds: ["900"] });
+			runtime = await createRuntime(databasePath, fake, clock, { adminTelegramIds: ["900"] });
+			await runtime.start();
 			await seedCards(runtime.boundary);
 			await seedApplicantProfile(runtime.boundary, "300", "30000000-0000-4000-8000-000000000001", "Accepted applicant");
 			await seedApplicantProfile(runtime.boundary, "301", "30100000-0000-4000-8000-000000000001", "Pending applicant");
@@ -774,24 +771,14 @@ async function createRuntime(
 	databasePath: string,
 	fake: FakeTelegramApi,
 	clock: FakeClock,
-	options: { readonly startDelivery?: boolean; readonly adminTelegramIds?: readonly string[] } = {},
-) {
-	const bot = new Bot("fake-token", { client: { fetch: fake.fetch } });
-	if (options.startDelivery === true) {
-		bot.start = async (pollingOptions?: PollingOptions) => { (pollingOptions?.onStart as (() => void) | undefined)?.(); };
-		bot.stop = async () => {};
-	}
-	const runtime = await createBotRuntime({
-		bot,
-		config: {
-			botToken: "fake-token", expectedBotId: "777", expectedBotUsername: "collab_bot", adminTelegramIds: options.adminTelegramIds ?? [],
-			showcaseChannelId: "-1001", showcaseChannelUsername: "showcase", databasePath,
-			logLevel: "info", timeZone: "Asia/Yekaterinburg", helpContact: "@helpdesk",
-		},
-		migrationsDirectory,
+	options: { readonly adminTelegramIds?: readonly string[] } = {},
+): Promise<BotRuntime> {
+	const { runtime } = await createFakeBotRuntime({
+		databasePath,
+		fake,
 		clock,
+		adminTelegramIds: options.adminTelegramIds ?? [],
 	});
-	if (options.startDelivery === true) await runtime.start();
 	return runtime;
 }
 
@@ -799,10 +786,7 @@ async function createSeededFixture(prefix: string) {
 	const directory = await mkdtemp(join(tmpdir(), prefix));
 	const databasePath = join(directory, "app.sqlite");
 	const clock = new FakeClock(NOW);
-	const fake = new FakeTelegramApi({
-		token: "fake-token",
-		botInfo: { id: 777, is_bot: true, first_name: "Collab", username: "collab_bot" } as unknown as UserFromGetMe,
-	});
+	const fake = createFakeTelegramApi();
 	const runtime = await createRuntime(databasePath, fake, clock);
 	await seedCards(runtime.boundary);
 	return { directory, databasePath, clock, fake, runtime };
@@ -862,7 +846,7 @@ async function profileSessionState(boundary: DatabaseBoundary, userId: string): 
 }
 
 async function startQuickProfile(
-	runtime: Awaited<ReturnType<typeof createBotRuntime>>,
+	runtime: BotRuntime,
 	fake: FakeTelegramApi,
 	userId: number,
 	firstUpdateId: number,
@@ -874,7 +858,7 @@ async function startQuickProfile(
 }
 
 async function startQuickProfileUntilPlatformUrl(
-	runtime: Awaited<ReturnType<typeof createBotRuntime>>,
+	runtime: BotRuntime,
 	fake: FakeTelegramApi,
 	userId: number,
 	firstUpdateId: number,
@@ -888,7 +872,7 @@ async function startQuickProfileUntilPlatformUrl(
 }
 
 async function submitQuickApplication(
-	runtime: Awaited<ReturnType<typeof createBotRuntime>>,
+	runtime: BotRuntime,
 	fake: FakeTelegramApi,
 	input: {
 		readonly userId: number;
@@ -943,34 +927,8 @@ async function insertCard(boundary: DatabaseBoundary, id: string, token: string,
 	}
 }
 
-function privateMessage(messageId: number, text: string): NonNullable<Update["message"]> { return privateMessageForUser(messageId, 200, text); }
-function privateMessageForUser(messageId: number, userId: number, text: string, username?: string): NonNullable<Update["message"]> {
-	return {
-		message_id: messageId,
-		date: 1_700_000_000,
-		chat: { id: userId, type: "private" },
-		from: { id: userId, is_bot: false, first_name: `User ${userId}`, ...(username === undefined ? {} : { username }) },
-		text,
-	} as NonNullable<Update["message"]>;
-}
-function callback(id: number, data: string): NonNullable<Update["callback_query"]> { return callbackForUser(id, 200, data); }
-function callbackForUser(id: number, userId: number, data: string, username?: string): NonNullable<Update["callback_query"]> {
-	return {
-		id: `callback-${id}`,
-		from: { id: userId, is_bot: false, first_name: `User ${userId}`, ...(username === undefined ? {} : { username }) },
-		message: { ...privateMessageForUser(id, userId, "", username) },
-		chat_instance: "instance",
-		data,
-	} as NonNullable<Update["callback_query"]>;
-}
-function callbackValues(fake: FakeTelegramApi): string[] {
-	return fake.lastMessage()?.reply_markup?.inline_keyboard?.flat().flatMap((button) => typeof (button as { callback_data?: unknown }).callback_data === "string" ? [(button as { callback_data: string }).callback_data] : []) ?? [];
-}
-function callbackData(fake: FakeTelegramApi, prefix: string): string {
-	const value = callbackValues(fake).find((candidate) => candidate.startsWith(prefix));
-	if (value === undefined) throw new Error(`callback ${prefix} was not rendered`);
-	return value;
-}
+function privateMessage(messageId: number, text: string) { return privateMessageForUser(messageId, 200, text); }
+function callback(id: number, data: string) { return callbackForUser(id, 200, data); }
 
 function callbackDataForButtonSince(fake: FakeTelegramApi, label: string, fromCall: number): string {
 	for (const call of fake.calls.slice(fromCall).reverse()) {

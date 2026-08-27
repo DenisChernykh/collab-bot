@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { Bot } from "grammy";
-import type { UserFromGetMe, Update } from "grammy/types";
 import { describe, expect, it } from "vitest";
 
 import { ProfileService } from "../../src/application/profiles/profile-service.js";
@@ -22,8 +21,13 @@ import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/data
 import { SqliteTelegramUserRepository } from "../../src/infrastructure/database/telegram-user-repository.js";
 import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
 import { SystemProviderDeadline } from "../../src/infrastructure/time/provider-deadline.js";
-import { FakeTelegramApi } from "../../src/infrastructure/testing/fake-telegram-api.js";
 import { registerProfileBot } from "../../src/bot/profile-bot.js";
+import {
+	callbackData,
+	callbackForUser,
+	createFakeTelegramApi,
+	privateMessageForUser,
+} from "../support/fake-telegram.js";
 
 const migrationsPath = fileURLToPath(new URL("../../migrations/", import.meta.url));
 
@@ -37,10 +41,7 @@ describe("S1-02 fake Telegram profile journey", () => {
 		let resolveAudience: ((value: number) => void) | undefined;
 		let lookupStartedResolve: (() => void) | undefined;
 		const lookupStarted = new Promise<void>((resolve) => { lookupStartedResolve = resolve; });
-		const fake = new FakeTelegramApi({
-			token: "fake-token",
-			botInfo: { id: 777, is_bot: true, first_name: "Collab", username: "collab_bot" } as unknown as UserFromGetMe,
-		});
+		const fake = createFakeTelegramApi();
 		let boundary = new DatabaseBoundary(databasePath);
 		try {
 			const source = await MigrationSource.fromDirectory(migrationsPath);
@@ -74,7 +75,10 @@ describe("S1-02 fake Telegram profile journey", () => {
 			await bot.handleUpdate({ update_id: 4, message: privateMessage(4, "Блогер") });
 			const currentCancelCallback = callbackData(fake, "profile:cancel");
 			await bot.handleUpdate({ update_id: 5, callback_query: callback(5, initialTypeCallback) });
-			await bot.handleUpdate({ update_id: 6, callback_query: callbackForUser(6, 101, currentCancelCallback) });
+			await bot.handleUpdate({
+				update_id: 6,
+				callback_query: callbackForUser(6, 101, currentCancelCallback, "alice", "Alice"),
+			});
 			expect(await new SqliteProfileSessionRepository(boundary).findActive("100", clock.now().getTime())).toMatchObject({ revision: 2, state: { step: "display_name" } });
 			await bot.handleUpdate({ update_id: 7, message: privateMessage(7, "Alice Creator") });
 			await bot.handleUpdate({ update_id: 8, message: privateMessage(8, "Город, Еда и рестораны") });
@@ -243,10 +247,7 @@ describe("S1-02 fake Telegram profile journey", () => {
 		const directory = await mkdtemp(join(tmpdir(), "collaboration-s1-02-direct-url-"));
 		const databasePath = join(directory, "app.sqlite");
 		const clock = new FakeClock(1_700_000_000_000);
-		const fake = new FakeTelegramApi({
-			token: "fake-token",
-			botInfo: { id: 777, is_bot: true, first_name: "Collab", username: "collab_bot" } as unknown as UserFromGetMe,
-		});
+		const fake = createFakeTelegramApi();
 		const boundary = new DatabaseBoundary(databasePath);
 		try {
 			const source = await MigrationSource.fromDirectory(migrationsPath);
@@ -315,10 +316,7 @@ describe("S1-02 fake Telegram profile journey", () => {
 		const directory = await mkdtemp(join(tmpdir(), "collaboration-fut-01-clear-retry-"));
 		const databasePath = join(directory, "app.sqlite");
 		const clock = new FakeClock(1_700_000_000_000);
-		const fake = new FakeTelegramApi({
-			token: "fake-token",
-			botInfo: { id: 777, is_bot: true, first_name: "Collab", username: "collab_bot" } as unknown as UserFromGetMe,
-		});
+		const fake = createFakeTelegramApi();
 		const audienceTargets: TelegramAudienceTarget[] = [];
 		const boundary = new DatabaseBoundary(databasePath);
 		try {
@@ -439,10 +437,7 @@ describe("S1-02 fake Telegram profile journey", () => {
 		const directory = await mkdtemp(join(tmpdir(), "collaboration-fut-01-quick-profile-"));
 		const databasePath = join(directory, "app.sqlite");
 		const clock = new FakeClock(1_700_000_000_000);
-		const fake = new FakeTelegramApi({
-			token: "fake-token",
-			botInfo: { id: 777, is_bot: true, first_name: "Collab", username: "collab_bot" } as unknown as UserFromGetMe,
-		});
+		const fake = createFakeTelegramApi();
 		const targets: TelegramAudienceTarget[] = [];
 		const boundary = new DatabaseBoundary(databasePath);
 		try {
@@ -519,10 +514,7 @@ describe("S1-02 fake Telegram profile journey", () => {
 		const directory = await mkdtemp(join(tmpdir(), "collaboration-s1-02-generic-url-"));
 		const databasePath = join(directory, "app.sqlite");
 		const clock = new FakeClock(1_700_000_000_000);
-		const fake = new FakeTelegramApi({
-			token: "fake-token",
-			botInfo: { id: 777, is_bot: true, first_name: "Collab", username: "collab_bot" } as unknown as UserFromGetMe,
-		});
+		const fake = createFakeTelegramApi();
 		const boundary = new DatabaseBoundary(databasePath);
 		try {
 			const source = await MigrationSource.fromDirectory(migrationsPath);
@@ -563,10 +555,7 @@ describe("S1-02 fake Telegram profile journey", () => {
 		const directory = await mkdtemp(join(tmpdir(), "collaboration-s1-02-personal-telegram-"));
 		const databasePath = join(directory, "app.sqlite");
 		const clock = new FakeClock(1_700_000_000_000);
-		const fake = new FakeTelegramApi({
-			token: "fake-token",
-			botInfo: { id: 777, is_bot: true, first_name: "Collab", username: "collab_bot" } as unknown as UserFromGetMe,
-		});
+		const fake = createFakeTelegramApi();
 		const boundary = new DatabaseBoundary(databasePath);
 		try {
 			const source = await MigrationSource.fromDirectory(migrationsPath);
@@ -604,23 +593,12 @@ describe("S1-02 fake Telegram profile journey", () => {
 	});
 });
 
-function privateMessage(messageId: number, text?: string): NonNullable<Update["message"]> {
-	return { message_id: messageId, date: 1_700_000_000, chat: { id: 100, type: "private" }, from: { id: 100, is_bot: false, first_name: "Alice", username: "alice" }, ...(text === undefined ? {} : { text }) } as NonNullable<Update["message"]>;
+function privateMessage(messageId: number, text?: string) {
+	return privateMessageForUser(messageId, 100, text, "alice", "Alice");
 }
 
-function callback(id: number, data: string): NonNullable<Update["callback_query"]> {
-	return callbackForUser(id, 100, data);
-}
-
-function callbackForUser(id: number, userId: number, data: string): NonNullable<Update["callback_query"]> {
-	return { id: `callback-${id}`, from: { id: userId, is_bot: false, first_name: "Alice", username: "alice" }, message: { ...privateMessage(id), chat: { id: userId, type: "private" } }, chat_instance: "instance", data } as NonNullable<Update["callback_query"]>;
-}
-
-function callbackData(fake: FakeTelegramApi, prefix: string): string {
-	const button = fake.lastMessage()?.reply_markup?.inline_keyboard?.flat().find((candidate) => String((candidate as { callback_data?: unknown }).callback_data).startsWith(prefix));
-	const data = (button as { callback_data?: unknown } | undefined)?.callback_data;
-	if (typeof data !== "string") throw new Error(`callback ${prefix} was not rendered`);
-	return data;
+function callback(id: number, data: string) {
+	return callbackForUser(id, 100, data, "alice", "Alice");
 }
 
 function sessionRepositoryWithFailure(repository: ProfileSessionRepository, shouldFail: () => boolean): ProfileSessionRepository {

@@ -15,8 +15,9 @@ import { MigrationRunner, MigrationSource } from "../../src/infrastructure/datab
 import { SqliteOutboxDeliveryRepository } from "../../src/infrastructure/database/outbox-delivery-repository.js";
 import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/database/transaction-runner.js";
 import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
-import { createApplicationsFeature } from "../../src/modules/applications/index.js";
 import { SqliteApplicationsRepository } from "../../src/modules/applications/infrastructure/sqlite-applications-repository.js";
+import { createTestApplicationsFeature } from "../support/applications-feature.js";
+import { withFreshMigratedDatabase } from "../support/migrated-database.js";
 
 const migrationsPath = fileURLToPath(new URL("../../migrations/", import.meta.url));
 const NOW = 1_700_000_000_000;
@@ -299,7 +300,12 @@ describe("S3-04 serialized application decisions", () => {
 				},
 			}) as OutboxDeliveryStore;
 
-			await expect(createApplicationService(fixture.boundary, fixture.clock, failingOutbox).decide({
+			await expect(createTestApplicationsFeature({
+				boundary: fixture.boundary,
+				clock: fixture.clock,
+				outboxStore: failingOutbox,
+				botUsername: BOT_USERNAME,
+			}).applicationService.decide({
 				telegramUserId: USERS.author,
 				applicationId: applicationId(14),
 				decision: "accept",
@@ -455,7 +461,12 @@ describe("S3-04 serialized application decisions", () => {
 					return typeof value === "function" ? value.bind(target) : value;
 				},
 			}) as OutboxDeliveryStore;
-			const service = createApplicationService(fixture.boundary, fixture.clock, failingOutbox);
+			const service = createTestApplicationsFeature({
+				boundary: fixture.boundary,
+				clock: fixture.clock,
+				outboxStore: failingOutbox,
+				botUsername: BOT_USERNAME,
+			}).applicationService;
 			const durable = createDurableExecutor(fixture);
 
 			await expect(durable.execute({
@@ -551,31 +562,19 @@ interface DecisionFixture {
 }
 
 async function withDecisionDatabase(work: (fixture: DecisionFixture) => Promise<void>): Promise<void> {
-	const directory = await mkdtemp(join(tmpdir(), "collaboration-s3-04-service-"));
-	const boundary = new DatabaseBoundary(join(directory, "app.sqlite"));
 	const clock = new FakeClock(NOW);
-	try {
-		expect((await new MigrationRunner(await MigrationSource.fromDirectory(migrationsPath), clock).migrate(boundary)).applied).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
-		await seedDecisionFixture(boundary);
-		await work({ boundary, clock, service: createApplicationService(boundary, clock) });
-	} finally {
-		await boundary.close();
-		await rm(directory, { recursive: true, force: true });
-	}
-}
-
-function createApplicationService(
-	boundary: DatabaseBoundary,
-	clock: FakeClock,
-	outbox: OutboxDeliveryStore = new SqliteOutboxDeliveryRepository(boundary),
-): ApplicationService {
-	return createApplicationsFeature({
-		boundary,
-		outboxStore: outbox,
-		transactions: new DatabaseBoundaryTransactionRunner(boundary),
+	await withFreshMigratedDatabase({
+		prefix: "collaboration-s3-04-service-",
 		clock,
-		botUsername: BOT_USERNAME,
-	}).applicationService;
+	}, async ({ boundary, appliedMigrations }) => {
+		expect(appliedMigrations).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
+		await seedDecisionFixture(boundary);
+		await work({
+			boundary,
+			clock,
+			service: createTestApplicationsFeature({ boundary, clock, botUsername: BOT_USERNAME }).applicationService,
+		});
+	});
 }
 
 function createDurableExecutor(fixture: Pick<DecisionFixture, "boundary" | "clock">): DurableCommandExecutor {

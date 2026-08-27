@@ -22,7 +22,8 @@ import { SqliteOutboxDeliveryRepository } from "../../src/infrastructure/databas
 import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/database/transaction-runner.js";
 import { FakeTelegramTransport } from "../../src/infrastructure/testing/fake-telegram-transport.js";
 import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
-import { createApplicationsFeature } from "../../src/modules/applications/index.js";
+import { createTestApplicationsFeature } from "../support/applications-feature.js";
+import { withFreshMigratedDatabase } from "../support/migrated-database.js";
 
 const migrationsPath = fileURLToPath(new URL("../../migrations/", import.meta.url));
 const NOW = 1_700_000_000_000;
@@ -320,7 +321,12 @@ describe("S3-03 application submission", () => {
 					return typeof value === "function" ? value.bind(target) : value;
 				},
 			}) as OutboxDeliveryStore;
-			const service = createApplicationService(fixture.boundary, fixture.clock, failingOutbox);
+			const service = createTestApplicationsFeature({
+				boundary: fixture.boundary,
+				clock: fixture.clock,
+				outboxStore: failingOutbox,
+				botUsername: BOT_USERNAME,
+			}).applicationService;
 			const durable = new DurableCommandExecutor(
 				new DatabaseBoundaryTransactionRunner(fixture.boundary),
 				new SqliteDurableCommandStore(fixture.boundary),
@@ -421,31 +427,19 @@ interface ApplicationFixture {
 }
 
 async function withApplicationDatabase(work: (fixture: ApplicationFixture) => Promise<void>): Promise<void> {
-	const directory = await mkdtemp(join(tmpdir(), "collaboration-s3-03-service-"));
-	const boundary = new DatabaseBoundary(join(directory, "app.sqlite"));
 	const clock = new FakeClock(NOW);
-	try {
-		expect((await new MigrationRunner(await MigrationSource.fromDirectory(migrationsPath), clock).migrate(boundary)).applied).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
-		await seedApplicationFixture(boundary);
-		await work({ boundary, clock, service: createApplicationService(boundary, clock) });
-	} finally {
-		await boundary.close();
-		await rm(directory, { recursive: true, force: true });
-	}
-}
-
-function createApplicationService(
-	boundary: DatabaseBoundary,
-	clock: FakeClock,
-	outbox: OutboxDeliveryStore = new SqliteOutboxDeliveryRepository(boundary),
-): ApplicationService {
-	return createApplicationsFeature({
-		boundary,
-		outboxStore: outbox,
-		transactions: new DatabaseBoundaryTransactionRunner(boundary),
+	await withFreshMigratedDatabase({
+		prefix: "collaboration-s3-03-service-",
 		clock,
-		botUsername: BOT_USERNAME,
-	}).applicationService;
+	}, async ({ boundary, appliedMigrations }) => {
+		expect(appliedMigrations).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
+		await seedApplicationFixture(boundary);
+		await work({
+			boundary,
+			clock,
+			service: createTestApplicationsFeature({ boundary, clock, botUsername: BOT_USERNAME }).applicationService,
+		});
+	});
 }
 
 async function seedApplicationFixture(boundary: DatabaseBoundary): Promise<void> {

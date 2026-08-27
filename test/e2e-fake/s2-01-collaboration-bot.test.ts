@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { Bot } from "grammy";
-import type { Update, UserFromGetMe } from "grammy/types";
 import { describe, expect, it } from "vitest";
 
 import { CollaborationDraftService } from "../../src/application/collaborations/collaboration-draft-service.js";
@@ -21,8 +20,14 @@ import { SqliteProfileSessionRepository } from "../../src/infrastructure/databas
 import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/database/transaction-runner.js";
 import { SqliteTelegramUserRepository } from "../../src/infrastructure/database/telegram-user-repository.js";
 import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
-import { FakeTelegramApi } from "../../src/infrastructure/testing/fake-telegram-api.js";
+import type { FakeTelegramApi } from "../../src/infrastructure/testing/fake-telegram-api.js";
 import { registerProfileBot } from "../../src/bot/profile-bot.js";
+import {
+	callbackData,
+	callbackForUser,
+	createFakeTelegramApi,
+	privateMessageForUser,
+} from "../support/fake-telegram.js";
 
 const migrationsPath = fileURLToPath(new URL("../../migrations/", import.meta.url));
 
@@ -31,7 +36,7 @@ describe("S2-01 fake collaboration wizard", () => {
 		const directory = await mkdtemp(join(tmpdir(), "collaboration-s2-01-stale-cancel-"));
 		const boundary = new DatabaseBoundary(join(directory, "app.sqlite"));
 		const clock = new FakeClock(new Date("2023-11-14T10:00:00.000Z"));
-		const fake = new FakeTelegramApi({ token: "fake-token", botInfo: { id: 777, is_bot: true, first_name: "Collab", username: "collab_bot" } as unknown as UserFromGetMe });
+		const fake = createFakeTelegramApi();
 		try {
 			await new MigrationRunner(await MigrationSource.fromDirectory(migrationsPath), clock).migrate(boundary);
 			await seedProfile(boundary, clock);
@@ -58,7 +63,7 @@ describe("S2-01 fake collaboration wizard", () => {
 		const directory = await mkdtemp(join(tmpdir(), "collaboration-s2-01-e2e-"));
 		const databasePath = join(directory, "app.sqlite");
 		const clock = new FakeClock(new Date("2023-11-14T10:00:00.000Z"));
-		const fake = new FakeTelegramApi({ token: "fake-token", botInfo: { id: 777, is_bot: true, first_name: "Collab", username: "collab_bot" } as unknown as UserFromGetMe });
+		const fake = createFakeTelegramApi();
 		let boundary = new DatabaseBoundary(databasePath);
 		try {
 			const source = await MigrationSource.fromDirectory(migrationsPath);
@@ -105,7 +110,7 @@ describe("S2-01 fake collaboration wizard", () => {
 		const directory = await mkdtemp(join(tmpdir(), "collaboration-s2-01-deferred-"));
 		const boundary = new DatabaseBoundary(join(directory, "app.sqlite"));
 		const clock = new FakeClock(new Date("2023-11-14T10:00:00.000Z"));
-		const fake = new FakeTelegramApi({ token: "fake-token", botInfo: { id: 777, is_bot: true, first_name: "Collab", username: "collab_bot" } as unknown as UserFromGetMe });
+		const fake = createFakeTelegramApi();
 		try {
 			await new MigrationRunner(await MigrationSource.fromDirectory(migrationsPath), clock).migrate(boundary);
 			const bot = buildBot(boundary, clock, fake);
@@ -150,11 +155,10 @@ async function seedProfile(boundary: DatabaseBoundary, clock: FakeClock): Promis
 	await new ProfileService(new SqliteProfileRepository(boundary), new DatabaseBoundaryTransactionRunner(boundary), clock).create("100", { type: "blogger", displayName: "Alice", description: "A useful local profile.", topics: ["city"], platforms: [{ platformType: "website", url: "https://example.com/alice" }] });
 }
 
-function privateMessage(messageId: number, text: string): NonNullable<Update["message"]> { return { message_id: messageId, date: 1_700_000_000, chat: { id: 100, type: "private" }, from: { id: 100, is_bot: false, first_name: "Alice", username: "alice" }, text } as NonNullable<Update["message"]>; }
-function callback(id: number, data: string): NonNullable<Update["callback_query"]> { return { id: `callback-${id}`, from: { id: 100, is_bot: false, first_name: "Alice", username: "alice" }, message: { ...privateMessage(id, "") }, chat_instance: "instance", data } as NonNullable<Update["callback_query"]>; }
-function callbackData(fake: FakeTelegramApi, prefix: string): string {
-	const button = fake.lastMessage()?.reply_markup?.inline_keyboard?.flat().find((candidate) => String((candidate as { callback_data?: unknown }).callback_data).startsWith(prefix));
-	const data = (button as { callback_data?: unknown } | undefined)?.callback_data;
-	if (typeof data !== "string") throw new Error(`callback ${prefix} was not rendered`);
-	return data;
+function privateMessage(messageId: number, text: string) {
+	return privateMessageForUser(messageId, 100, text, "alice", "Alice");
+}
+
+function callback(id: number, data: string) {
+	return callbackForUser(id, 100, data, "alice", "Alice");
 }

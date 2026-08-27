@@ -1,15 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { fileURLToPath } from "node:url";
 import { chmod, mkdtemp, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Bot, type PollingOptions } from "grammy";
-import type { UserFromGetMe } from "grammy/types";
 
-import { assertBotIdentity, assertPrivateEnvFile, ALLOWED_UPDATES, createBotRuntime, ensurePrivateDatabasePath } from "../../src/runtime/bot-runtime.js";
-import { FakeTelegramApi } from "../../src/infrastructure/testing/fake-telegram-api.js";
-
-const migrationsDirectory = fileURLToPath(new URL("../../migrations/", import.meta.url));
+import { assertBotIdentity, assertPrivateEnvFile, ALLOWED_UPDATES, ensurePrivateDatabasePath } from "../../src/runtime/bot-runtime.js";
+import { createFakeBotRuntime } from "../support/fake-bot-runtime.js";
+import { createFakeTelegramApi } from "../support/fake-telegram.js";
 
 describe("S1-02 runtime invariants", () => {
 	it("keeps the polling allowlist and exact identity comparison", () => {
@@ -21,21 +18,17 @@ describe("S1-02 runtime invariants", () => {
 
 	it("migrates before getMe, starts with the allowlist, and drains one-shot shutdown", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "collaboration-s1-02-runtime-"));
-		const fake = new FakeTelegramApi({ token: "fake-token", botInfo: { id: 777, is_bot: true, first_name: "Collab", username: "collab_bot" } as unknown as UserFromGetMe });
+		const fake = createFakeTelegramApi();
 		const bot = new Bot("fake-token", { client: { fetch: fake.fetch } });
 		let startOptions: PollingOptions | undefined;
 		let stopCalls = 0;
 		bot.start = async (options?: PollingOptions) => { startOptions = options; (options?.onStart as (() => void) | undefined)?.(); };
 		bot.stop = async () => { stopCalls += 1; };
 		try {
-			const runtime = await createBotRuntime({
+			const { runtime } = await createFakeBotRuntime({
 				bot,
-				config: {
-					botToken: "fake-token", expectedBotId: "777", expectedBotUsername: "collab_bot", adminTelegramIds: [],
-					showcaseChannelId: "-1001", showcaseChannelUsername: "showcase", databasePath: join(directory, "app.sqlite"),
-					logLevel: "info", timeZone: "Asia/Yekaterinburg", helpContact: "@helpdesk",
-				},
-				migrationsDirectory,
+				fake,
+				databasePath: join(directory, "app.sqlite"),
 			});
 			expect(fake.calls.map((call) => call.method)).toEqual(["getMe"]);
 				await runtime.start();
@@ -73,9 +66,13 @@ describe("S1-02 runtime invariants", () => {
 
 	it("forbids polling after signal-before-start and drains a blocking update", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "collaboration-s1-02-lifecycle-"));
-		const fake = new FakeTelegramApi({ token: "fake-token", botInfo: { id: 777, is_bot: true, first_name: "Collab", username: "collab_bot" } as unknown as UserFromGetMe });
+		const fake = createFakeTelegramApi();
 		try {
-			const beforeStart = await createBotRuntime({ bot: new Bot("fake-token", { client: { fetch: fake.fetch } }), config: runtimeConfig(join(directory, "before.sqlite")), migrationsDirectory });
+			const { runtime: beforeStart } = await createFakeBotRuntime({
+				bot: new Bot("fake-token", { client: { fetch: fake.fetch } }),
+				fake,
+				databasePath: join(directory, "before.sqlite"),
+			});
 			await beforeStart.shutdown();
 			await expect(beforeStart.start()).rejects.toThrow(/cannot start/);
 
@@ -87,7 +84,11 @@ describe("S1-02 runtime invariants", () => {
 				await new Promise<void>((resolve) => { startResolve = resolve; });
 			};
 			pollingBot.stop = async () => { stopCalls += 1; startResolve?.(); };
-			const pollingRuntime = await createBotRuntime({ bot: pollingBot, config: runtimeConfig(join(directory, "polling.sqlite")), migrationsDirectory });
+			const { runtime: pollingRuntime } = await createFakeBotRuntime({
+				bot: pollingBot,
+				fake,
+				databasePath: join(directory, "polling.sqlite"),
+			});
 			const started = pollingRuntime.start();
 			await new Promise<void>((resolve) => setTimeout(resolve, 0));
 			await pollingRuntime.shutdown();
@@ -100,7 +101,11 @@ describe("S1-02 runtime invariants", () => {
 			let entered!: () => void;
 			const enteredPromise = new Promise<void>((resolve) => { entered = resolve; });
 			const updateGate = new Promise<void>((resolve) => { releaseUpdate = resolve; });
-			const secondRuntime = await createBotRuntime({ bot: secondBot, config: runtimeConfig(join(directory, "second.sqlite")), migrationsDirectory });
+			const { runtime: secondRuntime } = await createFakeBotRuntime({
+				bot: secondBot,
+				fake,
+				databasePath: join(directory, "second.sqlite"),
+			});
 			const originalQuery = secondRuntime.boundary.query.bind(secondRuntime.boundary) as (sql: string, parameters?: readonly (null | number | bigint | string | NodeJS.ArrayBufferView)[]) => Promise<readonly unknown[]>;
 			(secondRuntime.boundary as unknown as { query: (sql: string, parameters?: readonly (null | number | bigint | string | NodeJS.ArrayBufferView)[]) => Promise<readonly unknown[]> }).query = async (sql, parameters) => {
 				entered();
@@ -140,10 +145,15 @@ describe("S1-02 runtime invariants", () => {
 
 	it("closes safely when polling fails", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "collaboration-s1-02-poll-failure-"));
-		const bot = new Bot("fake-token", { client: { fetch: new FakeTelegramApi({ token: "fake-token", botInfo: { id: 777, is_bot: true, first_name: "Collab", username: "collab_bot" } as unknown as UserFromGetMe }).fetch } });
+		const fake = createFakeTelegramApi();
+		const bot = new Bot("fake-token", { client: { fetch: fake.fetch } });
 		bot.start = async () => { throw new Error("polling failed"); };
 		try {
-			const runtime = await createBotRuntime({ bot, config: runtimeConfig(join(directory, "app.sqlite")), migrationsDirectory });
+			const { runtime } = await createFakeBotRuntime({
+				bot,
+				fake,
+				databasePath: join(directory, "app.sqlite"),
+			});
 			await expect(runtime.start()).rejects.toThrow("polling failed");
 			await expect(runtime.shutdown()).resolves.toBeUndefined();
 			await expect(runtime.start()).rejects.toThrow(/cannot start/);
@@ -152,11 +162,3 @@ describe("S1-02 runtime invariants", () => {
 		}
 	});
 });
-
-function runtimeConfig(databasePath: string) {
-	return {
-		botToken: "fake-token", expectedBotId: "777", expectedBotUsername: "collab_bot", adminTelegramIds: [],
-		showcaseChannelId: "-1001", showcaseChannelUsername: "showcase", databasePath,
-		logLevel: "info" as const, timeZone: "Asia/Yekaterinburg", helpContact: "@helpdesk",
-	} as const;
-}
