@@ -126,6 +126,7 @@ P0-01 → P0-02
 | R2-12 | `59f70493ce162ab00ae640a69eec3479cd8d9227` | runtime composition through feature public factories |
 | R2-13A | `03f74a2b90b11bb5d0115a187c099b2e3f83bb6c` | profile consumer cutover to module ownership |
 | R2-13B | `f97d771f32d0dd33382bdfa98cdafaebfbf2ce05` | removed profile compatibility paths |
+| R2-13C | `383ea3d26ac1aa1d0886f4c1f8580337ce2dd30e` | collaboration consumer cutover to module ownership |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -1024,7 +1025,7 @@ P0-01 → P0-02
 
 #### R2-13D — Delete collaboration compatibility paths
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Удалить одиннадцать collaboration compatibility files из shared layers.
 - **Dependencies:** `R2-13C`.
 - **Read first:** exact collaboration zero-consumer scan and module replacements.
@@ -1033,11 +1034,12 @@ P0-01 → P0-02
 - **Invariants:** every removed path is a passive re-export; module imports remain internal or public-root imports.
 - **Verification:** exact collaboration old-path scan; architecture; `pnpm check`; all fake E2E; `pnpm db:verify`.
 - **Exit criteria:** shared layers contain no collaboration-core implementation or bridge; один commit `R2-13D: remove collaboration compatibility paths`.
+- **Completion evidence:** Commit SHA: `SELF`; deleted all eleven passive collaboration-core compatibility files: domain, draft/publication/renderer services, repository/session/publication/capability ports and three SQLite adapters. The collaboration module is now the sole owner, while marketplace browse remains intentionally separate for its later cutover. Dependency-cruiser rejects future imports of the removed paths. Eleven deleted source paths, the architecture config and this plan changed; no executable implementation or test changed. Exact path checks PASS; architecture PASS (137 modules, 430 dependencies); `pnpm check` PASS (69 unit, 88 integration, 47 runtime, lint/typecheck/build); all fake E2E PASS (33); `pnpm db:verify` PASS. No credential, real Telegram, remote or production mutation.
 - **Stop conditions:** any active import remains.
 
 #### R2-13E — Cut remaining feature consumers to module owners
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Перевести marketplace, applications и moderation consumers со shared compatibility paths.
 - **Dependencies:** `R2-13D`.
 - **Read first:** neutral Telegram router and S3/S4 focused tests; three module entrypoints and owned adapters.

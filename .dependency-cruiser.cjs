@@ -35,6 +35,14 @@ module.exports = {
 			},
 		},
 		{
+			name: "no-legacy-collaboration-feature-imports",
+			severity: "error",
+			from: { path: "(^|/)src/" },
+			to: {
+				path: "(^|/)src/(domain/collaborations/|application/(collaborations/collaboration-(draft-service|publication-service|renderer)\\.ts$|ports/(collaboration-(repository|session-repository|publication-repository)|showcase-capability)\\.ts$)|infrastructure/database/collaboration-(repository|session-repository|publication-repository)\\.ts$)",
+			},
+		},
+		{
 			name: "bot-application-must-compose-features-through-public-entrypoints",
 			severity: "error",
 			from: { path: "(^|/)src/runtime/bot-application\\.ts$" },
