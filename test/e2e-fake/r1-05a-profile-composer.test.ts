@@ -11,7 +11,7 @@ import {
 	type ProfileSessionRecord,
 	type ProfileSessionRepository,
 } from "../../src/modules/profiles/index.js";
-import { FakeTelegramApi } from "../../src/infrastructure/testing/fake-telegram-api.js";
+import { FakeTelegramApi } from "../support/fake-telegram-api.js";
 
 const NOW = 1_700_000_000_000;
 

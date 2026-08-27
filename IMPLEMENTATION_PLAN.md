@@ -129,6 +129,7 @@ P0-01 → P0-02
 | R2-13C | `383ea3d26ac1aa1d0886f4c1f8580337ce2dd30e` | collaboration consumer cutover to module ownership |
 | R2-13D | `49f05d81dcb7c1a3e0c7b53d996e20de20ff3b0a` | removed collaboration compatibility paths |
 | R2-13E | `f97f32d1edaa0807d2f6ca563cb92b5e3357d0dd` | remaining feature consumer cutover to module ownership |
+| R2-13F | `9215d9d2c9f4ee5f03afa21a4138db4e8168c062` | removed remaining feature bridges and owned deadline policy |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -1069,7 +1070,7 @@ P0-01 → P0-02
 
 #### R2-14A — Move the grammY API fake to test support
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Убрать `FakeTelegramApi` из production source.
 - **Dependencies:** `R2-13F`.
 - **Read first:** fake implementation and its ten sorted consumers.
@@ -1078,11 +1079,12 @@ P0-01 → P0-02
 - **Invariants:** grammY HTTP fake remains distinct from the application transport fake.
 - **Verification:** affected fake/runtime tests; all suites; architecture; `pnpm check`; `pnpm test:e2e:fake`; `pnpm db:verify`.
 - **Exit criteria:** old API-fake path is absent; один commit `R2-14A: move Telegram API fake to test support`.
+- **Completion evidence:** Commit SHA: `SELF`; moved the unchanged local grammY Bot API fake from production infrastructure to `test/support/fake-telegram-api.ts` and switched its ten support/runtime/E2E consumers. The fake remains the same networkless `fetch` surface and stays distinct from the port-level delivery transport fake. Exactly twelve source/test paths plus this plan changed; fake responses/call recording, test assertions and production code stayed unchanged. Old source/import scan PASS; affected support/runtime/E2E tests PASS (9 files, 34 tests); architecture PASS (129 modules, 419 dependencies); `pnpm check` PASS (69 unit, 88 integration, 47 runtime, lint/typecheck/build); all fake E2E PASS (33); `pnpm db:verify` PASS. No credential, real Telegram, remote or production mutation.
 - **Stop conditions:** any production code consumes the fake.
 
 #### R2-14B — Move the Telegram transport fake to test support
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Убрать port-level `FakeTelegramTransport` из production source.
 - **Dependencies:** `R2-14A`.
 - **Read first:** transport fake and its four integration/runtime consumers.

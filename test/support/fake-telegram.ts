@@ -3,7 +3,7 @@ import type { UserFromGetMe, Update } from "grammy/types";
 import {
 	FakeTelegramApi,
 	type FakeTelegramApiOptions,
-} from "../../src/infrastructure/testing/fake-telegram-api.js";
+} from "./fake-telegram-api.js";
 
 export const FAKE_BOT_TOKEN = "fake-token";
 export const FAKE_BOT_INFO = {

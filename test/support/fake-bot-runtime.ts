@@ -4,7 +4,7 @@ import { Bot, type PollingOptions } from "grammy";
 
 import type { Clock } from "../../src/application/ports/clock.js";
 import type { AppConfig } from "../../src/config/parse-config.js";
-import type { FakeTelegramApi } from "../../src/infrastructure/testing/fake-telegram-api.js";
+import type { FakeTelegramApi } from "./fake-telegram-api.js";
 import {
 	createBotRuntime,
 	type BotRuntime,

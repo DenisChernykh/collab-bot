@@ -7,7 +7,7 @@ import {
 	registerDurableTelegramIngress,
 	type ExecuteDurableTelegramRoute,
 } from "../../src/presentation/telegram/durable-telegram-ingress.js";
-import { FakeTelegramApi } from "../../src/infrastructure/testing/fake-telegram-api.js";
+import { FakeTelegramApi } from "../support/fake-telegram-api.js";
 
 const DURABLE_PROXY = Symbol("durable-proxy");
 type MarkedContext = Context & { readonly [DURABLE_PROXY]?: true };

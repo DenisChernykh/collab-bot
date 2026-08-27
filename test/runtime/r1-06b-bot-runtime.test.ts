@@ -8,7 +8,7 @@ import {
 	type BotRuntimeLifecycleOperations,
 } from "../../src/runtime/bot-lifecycle.js";
 import type { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
-import { FakeTelegramApi } from "../../src/infrastructure/testing/fake-telegram-api.js";
+import { FakeTelegramApi } from "../support/fake-telegram-api.js";
 import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
 
 describe("R1-06B bot composition and lifecycle", () => {
