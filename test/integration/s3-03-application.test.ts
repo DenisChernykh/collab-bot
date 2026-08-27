@@ -17,7 +17,7 @@ import { SqliteDurableCommandStore } from "../../src/infrastructure/database/dur
 import { MigrationRunner, MigrationSource } from "../../src/infrastructure/database/migrations.js";
 import { SqliteOutboxDeliveryRepository } from "../../src/infrastructure/database/outbox-delivery-repository.js";
 import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/database/transaction-runner.js";
-import { FakeTelegramTransport } from "../../src/infrastructure/testing/fake-telegram-transport.js";
+import { FakeTelegramTransport } from "../support/fake-telegram-transport.js";
 import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
 import { ApplicationService } from "../../src/modules/applications/application/application-feature.js";
 import { CollaborationBrowseService } from "../../src/modules/marketplace/index.js";

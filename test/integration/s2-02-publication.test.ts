@@ -12,7 +12,7 @@ import { MigrationRunner, MigrationSource } from "../../src/infrastructure/datab
 import { SqliteOutboxDeliveryRepository } from "../../src/infrastructure/database/outbox-delivery-repository.js";
 import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/database/transaction-runner.js";
 import { SqliteTelegramUserRepository } from "../../src/infrastructure/database/telegram-user-repository.js";
-import { FakeTelegramTransport } from "../../src/infrastructure/testing/fake-telegram-transport.js";
+import { FakeTelegramTransport } from "../support/fake-telegram-transport.js";
 import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
 import {
 	CollaborationDraftService,

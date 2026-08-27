@@ -4,8 +4,8 @@ import type {
 	TelegramTransport,
 	TelegramTransportRequest,
 	TelegramTransportResponse,
-} from "../../application/ports/telegram-transport.js";
-import { TelegramTransportError } from "../../application/ports/telegram-transport.js";
+} from "../../src/application/ports/telegram-transport.js";
+import { TelegramTransportError } from "../../src/application/ports/telegram-transport.js";
 
 export interface FakeTelegramCall {
 	readonly method: TelegramTransportRequest["method"];
