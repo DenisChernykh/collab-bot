@@ -93,6 +93,7 @@ P0-01 → P0-02
 | R1-05B | `SELF` | feature-owned collaboration Telegram composer |
 | R1-05C | `SELF` | feature-owned marketplace and moderation Telegram composers |
 | R1-06A | `SELF` | isolated delivery worker lifecycle |
+| R1-06B | `SELF` | separated bot composition and runtime lifecycle |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -586,7 +587,7 @@ P0-01 → P0-02
 
 #### R1-06B — Separate object graph from BotRuntime lifecycle
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Сделать composition side-effect free и сузить runtime до start/stop orchestration.
 - **Requirements:** TD §3.2, §4.1, §13.4, §20.4.
 - **Dependencies:** `R1-06A`.
@@ -598,12 +599,12 @@ P0-01 → P0-02
 - **Tests first:** configure-without-start, start failure cleanup and idempotent stop.
 - **Verification:** runtime/preflight tests; all e2e-fake; architecture; `pnpm check`; `pnpm db:verify`; diff scan.
 - **Exit criteria:** object graph and lifecycle are independent; one commit `R1-06B: separate bot composition and runtime`.
-- **Completion evidence:** pending.
+- **Completion evidence:** Commit SHA: `SELF`; extracted synchronous `composeBotApplication` object wiring, a framework-neutral `configure/start/stop` lifecycle and the grammY audience adapter from the compatibility runtime facade. Composition registers the in-memory graph without migration, SQLite/Telegram calls, worker/polling start or resource close. `createBotRuntime` preserves its prepared/not-started contract by awaiting private-path preparation, canonical migrations and exact bot identity before return; it now exposes canonical `stop` while retaining `shutdown` as the same memoized operation. Startup remains migration → identity → showcase preflight → delivery worker invocation → polling; stop remains abort worker → polling stop → worker join → update drain → one SQLite close. Five source/test files plus this plan changed; CLI/process signals, env/filesystem policy, config, product behavior and runtime topology stayed untouched. Test-first RED was the missing composition/lifecycle modules; focused R1-06A/B and existing runtime/preflight tests PASS (4 files, 18 tests); audience adapter tests PASS (1 file, 18 tests); all fake E2E PASS (7 files, 30 tests); architecture PASS (114 modules, 358 dependencies); `pnpm check` PASS (66 unit, 81 integration, 39 runtime tests and build); `pnpm db:verify` PASS; `git diff --check` PASS. Critical self-review and independent read-only review matched middleware/capability/logging wiring, compatibility exports, lifecycle order, failure cleanup, stop/shutdown identity and close-after-drain behavior with no findings. No credential, real Telegram, remote or production mutation.
 - **Stop conditions:** lifecycle order/drain cannot be proven or requires Later hardening.
 
 #### R1-06C — Make process/config/filesystem bootstrap thin
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Оставить CLI только владельцем process signals и запуска готового runtime.
 - **Requirements:** TD §3.2, §13.4, §16, §20.4.
 - **Dependencies:** `R1-06B`.
