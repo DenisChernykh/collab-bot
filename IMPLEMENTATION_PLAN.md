@@ -124,6 +124,7 @@ P0-01 → P0-02
 | R2-11B | `3c12fbab1e91b2e55d92c488c3a8e41a6a7bfe3f` | neutral Telegram router ownership |
 | R2-11C | `fa5859801398d3ce85c731f9ce163825da21535c` | removed legacy bot presentation paths |
 | R2-12 | `59f70493ce162ab00ae640a69eec3479cd8d9227` | runtime composition through feature public factories |
+| R2-13A | `03f74a2b90b11bb5d0115a187c099b2e3f83bb6c` | profile consumer cutover to module ownership |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -994,7 +995,7 @@ P0-01 → P0-02
 
 #### R2-13B — Delete profile compatibility paths
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Удалить восемь profile compatibility files из shared domain/application/infrastructure.
 - **Dependencies:** `R2-13A`.
 - **Read first:** exact profile zero-consumer scan and module replacements.
@@ -1003,11 +1004,12 @@ P0-01 → P0-02
 - **Invariants:** every deleted file is a passive re-export with zero consumer.
 - **Verification:** exact profile old-path scan; architecture; `pnpm check`; all fake E2E; `pnpm db:verify`.
 - **Exit criteria:** shared layers contain no profile implementation or bridge; один commit `R2-13B: remove profile compatibility paths`.
+- **Completion evidence:** Commit SHA: `SELF`; deleted all eight passive profile compatibility files from shared domain, application ports/services and infrastructure database/Telegram paths. The feature-owned domain, services, ports and adapters are now the only source implementations, and dependency-cruiser rejects future imports of the removed profile locations. Eight deleted source paths, the architecture config and this plan changed; no executable implementation or test body changed. Exact path checks PASS; architecture PASS (148 modules, 441 dependencies); `pnpm check` PASS (69 unit, 88 integration, 47 runtime, lint/typecheck/build); all fake E2E PASS (33); `pnpm db:verify` PASS. No credential, real Telegram, remote or production mutation.
 - **Stop conditions:** any active import remains.
 
 #### R2-13C — Cut collaboration consumers to the module owner
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Перевести showcase preflight и collaboration-focused tests на module-owned contracts/adapters.
 - **Dependencies:** `R2-13B`.
 - **Read first:** remaining collaboration bridge consumers, public API, module internals under focused test and preflight capability port.

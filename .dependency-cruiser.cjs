@@ -27,6 +27,14 @@ module.exports = {
 		},
 		...crossModuleInternalRules,
 		{
+			name: "no-legacy-profile-feature-imports",
+			severity: "error",
+			from: { path: "(^|/)src/" },
+			to: {
+				path: "(^|/)src/(domain/profiles/|application/(profiles/|ports/profile-(repository|session-repository)\\.ts$)|infrastructure/(database/profile-(repository|session-repository)\\.ts$|telegram/grammy-telegram-audience-reader\\.ts$))",
+			},
+		},
+		{
 			name: "bot-application-must-compose-features-through-public-entrypoints",
 			severity: "error",
 			from: { path: "(^|/)src/runtime/bot-application\\.ts$" },
