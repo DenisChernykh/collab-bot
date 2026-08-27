@@ -131,7 +131,7 @@ function readBase(row: ProfileRow): ProfileRecord {
 	if (
 		typeof row.id !== "string" || typeof row.telegram_user_id !== "string" ||
 		typeof row.type !== "string" || typeof row.display_name !== "string" ||
-		typeof row.description !== "string" || row.city_code !== "ekaterinburg" ||
+		(row.description !== null && typeof row.description !== "string") || row.city_code !== "ekaterinburg" ||
 		(row.status !== "active" && row.status !== "archived") ||
 		!Number.isSafeInteger(row.created_at) || !Number.isSafeInteger(row.updated_at)
 	) {
@@ -143,7 +143,7 @@ function readBase(row: ProfileRow): ProfileRecord {
 		telegramUserId: row.telegram_user_id,
 		type,
 		displayName: row.display_name,
-		description: row.description,
+		description: row.description as string | null,
 		cityCode: "ekaterinburg",
 		status: row.status,
 		createdAt: row.created_at as number,

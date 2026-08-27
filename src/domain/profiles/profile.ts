@@ -22,7 +22,7 @@ export interface ProfilePlatformInput {
 export interface ProfileInput {
 	readonly type: ProfileType;
 	readonly displayName: string;
-	readonly description: string;
+	readonly description: string | null;
 	readonly topics: readonly Topic[];
 	readonly platforms: readonly ProfilePlatformInput[];
 }
@@ -36,7 +36,7 @@ export interface ProfileRecord {
 	readonly telegramUserId: string;
 	readonly type: ProfileType;
 	readonly displayName: string;
-	readonly description: string;
+	readonly description: string | null;
 	readonly cityCode: typeof PROFILE_CITY;
 	readonly status: "active" | "archived";
 	readonly createdAt: number;
@@ -50,9 +50,9 @@ export type PublicProfileRecord = Omit<ProfileRecord, "telegramUserId">;
 export function validateProfileInput(input: ProfileInput): ProfileInput {
 	const type = parseProfileType(input.type);
 	const displayName = requiredText(input.displayName, 2, 100, "display name");
-	const description = requiredText(input.description, 10, 500, "description");
-	if (!Array.isArray(input.topics) || input.topics.length < 1 || input.topics.length > 3) {
-		throw new DomainValidationError("profile topics must contain between one and three values");
+	const description = input.description === null ? null : requiredText(input.description, 10, 500, "description");
+	if (!Array.isArray(input.topics) || input.topics.length > 3) {
+		throw new DomainValidationError("profile topics must contain between zero and three values");
 	}
 	const topics = input.topics.map((topic) => parseTopic(topic));
 	if (new Set(topics).size !== topics.length) {

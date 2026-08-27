@@ -136,6 +136,8 @@ describe("S1-02 fake Telegram profile journey", () => {
 			expect(String(fake.lastMessage()?.text)).toContain("Alice Creator");
 			expect(String(fake.lastMessage()?.text)).toContain("Кто вы: Блогер");
 			expect(String(fake.lastMessage()?.text)).toContain("Темы: Город, Еда и рестораны");
+			expect(String(fake.lastMessage()?.text)).toContain("Описание: Ищу партнёров");
+			expect(String(fake.lastMessage()?.text)).not.toContain("Аудитория:");
 			expect(String(fake.lastMessage()?.text)).toContain("https://t.me/alice_channel");
 			expect(String(fake.lastMessage()?.text)).not.toContain("Контакт для связи");
 			const mainMenuCallback = fake.lastMessage()?.reply_markup?.inline_keyboard?.flat().find((button) => (button as { callback_data?: string }).callback_data === "menu:home");
@@ -149,11 +151,14 @@ describe("S1-02 fake Telegram profile journey", () => {
 			await restartedBot.handleUpdate({ update_id: 23, callback_query: callback(23, "profile:edit") });
 			await restartedBot.handleUpdate({ update_id: 24, message: privateMessage(24, "Блогер") });
 			await restartedBot.handleUpdate({ update_id: 25, message: privateMessage(25, "Alice Studio") });
-			await restartedBot.handleUpdate({ update_id: 26, message: privateMessage(26, "Город") });
-			await restartedBot.handleUpdate({ update_id: 27, message: privateMessage(27, "Ищу партнёров для обновлённого городского проекта.") });
+			expect(fake.lastMessage()?.reply_markup?.inline_keyboard?.flat()).toContainEqual(expect.objectContaining({ text: "Очистить" }));
+			await restartedBot.handleUpdate({ update_id: 26, message: privateMessage(26, "-") });
+			expect(String(fake.lastMessage()?.text)).toContain("Опишите профиль");
+			expect(fake.lastMessage()?.reply_markup?.inline_keyboard?.flat()).toContainEqual(expect.objectContaining({ text: "Очистить" }));
+			await restartedBot.handleUpdate({ update_id: 27, message: privateMessage(27, "-") });
 			await restartedBot.handleUpdate({ update_id: 28, callback_query: callback(28, callbackData(fake, "profile:platform:other")) });
 			await restartedBot.handleUpdate({ update_id: 29, message: privateMessage(29, "https://example.com/alice") });
-			await restartedBot.handleUpdate({ update_id: 30, message: privateMessage(30, "100") });
+			await restartedBot.handleUpdate({ update_id: 30, message: privateMessage(30, "-") });
 			const secondApplyCallback = callbackData(fake, "profile:apply");
 			failSessionDelete = true;
 			await expect(restartedBot.handleUpdate({ update_id: 31, callback_query: callback(31, secondApplyCallback) })).rejects.toThrow("session cleanup failed");
@@ -161,7 +166,11 @@ describe("S1-02 fake Telegram profile journey", () => {
 			expect(await new SqliteProfileSessionRepository(boundary).findActive("100", clock.now().getTime())).toMatchObject({ state: { step: "review" } });
 			failSessionDelete = false;
 			await restartedBot.handleUpdate({ update_id: 31, callback_query: callback(31, secondApplyCallback) });
-			expect(await profileServiceForAssertions.getOwn("100")).toMatchObject({ displayName: "Alice Studio", platforms: [{ url: "https://example.com/alice" }] });
+			expect(await profileServiceForAssertions.getOwn("100")).toMatchObject({ displayName: "Alice Studio", description: null, topics: [], platforms: [{ url: "https://example.com/alice" }] });
+			expect((await profileServiceForAssertions.getOwn("100"))?.platforms[0]).not.toHaveProperty("audienceSize");
+			await restartedBot.handleUpdate({ update_id: 32, message: privateMessage(32, "/profile") });
+			expect(String(fake.lastMessage()?.text)).not.toContain("Темы:");
+			expect(String(fake.lastMessage()?.text)).not.toContain("Описание:");
 			expect(await boundary.query<{ count: number }>("SELECT count(*) AS count FROM profiles WHERE status = 'active'")).toEqual([{ count: 1 }]);
 			const callsBeforeGroupUpdate = fake.calls.length;
 			await restartedBot.handleUpdate({ update_id: 33, message: { ...privateMessage(33, "/start"), chat: { id: -100, type: "group", title: "Group" } } });
@@ -172,7 +181,7 @@ describe("S1-02 fake Telegram profile journey", () => {
 		}
 	});
 
-	it("accepts a direct public Telegram URL after channel selection", async () => {
+	it("creates a minimal profile with skip buttons and accepts a direct public Telegram URL", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "collaboration-s1-02-direct-url-"));
 		const databasePath = join(directory, "app.sqlite");
 		const clock = new FakeClock(1_700_000_000_000);
@@ -200,13 +209,26 @@ describe("S1-02 fake Telegram profile journey", () => {
 			await bot.handleUpdate({ update_id: 2, callback_query: callback(2, "profile:create") });
 			await bot.handleUpdate({ update_id: 3, message: privateMessage(3, "Блогер") });
 			await bot.handleUpdate({ update_id: 4, message: privateMessage(4, "Direct Creator") });
-			await bot.handleUpdate({ update_id: 5, message: privateMessage(5, "Город") });
-			await bot.handleUpdate({ update_id: 6, message: privateMessage(6, "Ищу партнёров для прямой ссылки.") });
-			await bot.handleUpdate({ update_id: 7, callback_query: callback(7, callbackData(fake, "profile:platform:telegram")) });
-			await bot.handleUpdate({ update_id: 8, message: privateMessage(8, "https://t.me/direct_channel") });
+			expect(fake.lastMessage()?.reply_markup?.inline_keyboard?.flat()).toContainEqual(expect.objectContaining({ text: "Пропустить" }));
+			const topicsSkipCallback = callbackData(fake, "profile:omit");
+			await bot.handleUpdate({ update_id: 5, callback_query: callback(5, topicsSkipCallback) });
+			expect(String(fake.lastMessage()?.text)).toContain("Опишите профиль");
+			const descriptionSkipCallback = callbackData(fake, "profile:omit");
+			await bot.handleUpdate({ update_id: 6, callback_query: callback(6, topicsSkipCallback) });
+			expect(String(fake.lastMessage()?.text)).toContain("неактуальна");
+			expect(await new SqliteProfileSessionRepository(boundary).findActive("100", clock.now().getTime())).toMatchObject({ state: { step: "description", draft: { topics: [] } } });
+			await bot.handleUpdate({ update_id: 7, callback_query: callback(7, descriptionSkipCallback) });
+			await bot.handleUpdate({ update_id: 8, callback_query: callback(8, callbackData(fake, "profile:platform:telegram")) });
+			await bot.handleUpdate({ update_id: 9, message: privateMessage(9, "https://t.me/direct_channel") });
 			expect(String(fake.lastMessage()?.text)).toContain("Укажите размер аудитории");
 			expect(String(fake.lastMessage()?.text)).not.toContain("предложенную площадку");
 			expect(await new SqliteProfileSessionRepository(boundary).findActive("100", clock.now().getTime())).toMatchObject({ state: { step: "audience", draft: { platform: { url: "https://t.me/direct_channel", username: "direct_channel" } } } });
+			await bot.handleUpdate({ update_id: 10, callback_query: callback(10, callbackData(fake, "profile:omit")) });
+			expect(String(fake.lastMessage()?.text)).not.toContain("Описание:");
+			expect(String(fake.lastMessage()?.text)).not.toContain("Темы:");
+			expect(String(fake.lastMessage()?.text)).not.toContain("Аудитория:");
+			await bot.handleUpdate({ update_id: 11, callback_query: callback(11, callbackData(fake, "profile:apply")) });
+			expect(await profileService.getOwn("100")).toMatchObject({ description: null, topics: [], platforms: [{ url: "https://t.me/direct_channel" }] });
 		} finally {
 			await boundary.close();
 			await rm(directory, { recursive: true, force: true });

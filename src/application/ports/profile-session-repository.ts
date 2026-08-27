@@ -17,7 +17,7 @@ export interface ProfileDraft {
 	readonly type?: ProfileInput["type"];
 	readonly displayName?: string;
 	readonly topics?: ProfileInput["topics"];
-	readonly description?: string;
+	readonly description?: ProfileInput["description"];
 	readonly platform?: ProfileInput["platforms"][number];
 }
 

@@ -30,13 +30,29 @@ describe("S1-01 profile domain validation", () => {
 		for (const input of [
 			{ ...valid, displayName: "A" },
 			{ ...valid, description: "коротко" },
-			{ ...valid, topics: [] },
 			{ ...valid, topics: ["city", "city"] },
 			{ ...valid, topics: ["city", "food", "beauty", "travel"] },
 			{ ...valid, platforms: [] },
 		]) {
 			expect(() => validateProfileInput(input as ProfileInput)).toThrow();
 		}
+	});
+
+	it("accepts a minimal profile without description, topics, or audience", () => {
+		const result = validateProfileInput({
+			...valid,
+			description: null,
+			topics: [],
+			platforms: [{ platformType: "website", url: "https://example.com/minimal" }],
+		});
+
+		expect(result).toEqual({
+			type: "blogger",
+			displayName: "Alice Creator",
+			description: null,
+			topics: [],
+			platforms: [{ platformType: "website", url: "https://example.com/minimal" }],
+		});
 	});
 
 	it("rejects unsafe public URLs and audience values", () => {

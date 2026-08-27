@@ -50,7 +50,7 @@ export const profiles = sqliteTable(
 			.references(() => telegramUsers.telegramUserId),
 		type: text("type", { enum: ["blogger", "telegram_channel", "venue_or_brand"] as const }).notNull(),
 		displayName: text("display_name").notNull(),
-		description: text("description").notNull(),
+		description: text("description"),
 		cityCode: text("city_code").notNull(),
 		status: text("status", { enum: ["active", "archived"] as const }).notNull(),
 		createdAt: integer("created_at").notNull(),
@@ -63,7 +63,10 @@ export const profiles = sqliteTable(
 		index("profiles_telegram_user_status").on(table.telegramUserId, table.status),
 		check("profiles_city_code", sql`${table.cityCode} = 'ekaterinburg'`),
 		check("profiles_display_name_nonempty", sql`length(${table.displayName}) > 0`),
-		check("profiles_description_nonempty", sql`length(${table.description}) > 0`),
+		check(
+			"profiles_description_length",
+			sql`${table.description} IS NULL OR (typeof(${table.description}) = 'text' AND length(${table.description}) BETWEEN 10 AND 500)`,
+		),
 		check("profiles_timestamp_coherence", sql`${table.updatedAt} >= ${table.createdAt}`),
 	],
 );

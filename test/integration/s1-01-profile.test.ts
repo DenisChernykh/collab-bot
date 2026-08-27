@@ -113,6 +113,37 @@ describe("S1-01 profile state and privacy boundary", () => {
 		});
 	});
 
+	it("creates and persists a minimal profile and clears optional enrichment on update", async () => {
+		await withDatabase(async (boundary, databasePath) => {
+			await seedUser(boundary, "100");
+			const service = createService(boundary);
+			const minimal: ProfileInput = {
+				type: "blogger",
+				displayName: "Minimal Creator",
+				description: null,
+				topics: [],
+				platforms: [{ platformType: "website", url: "https://example.com/minimal" }],
+			};
+
+			const created = await service.create("100", minimal);
+			expect(created).toMatchObject({ description: null, topics: [], platforms: [{ url: "https://example.com/minimal" }] });
+			expect(await service.getPublic(created.id)).toMatchObject({ description: null, topics: [] });
+
+			await service.update("100", profileInput);
+			const cleared = await service.update("100", minimal);
+			expect(cleared).toMatchObject({ description: null, topics: [] });
+			expect(await boundary.query("SELECT description FROM profiles WHERE id = ?", [created.id])).toEqual([{ description: null }]);
+			expect(await boundary.query("SELECT topic FROM profile_topics WHERE profile_id = ?", [created.id])).toEqual([]);
+			await boundary.close();
+			const reopened = new DatabaseBoundary(databasePath);
+			try {
+				expect(await new SqliteProfileRepository(reopened).findActiveByTelegramUserId("100")).toMatchObject({ id: created.id, description: null, topics: [] });
+			} finally {
+				await reopened.close();
+			}
+		});
+	});
+
 	it("replays a duplicate Telegram command without creating a second profile", async () => {
 		await withDatabase(async (boundary) => {
 			await seedUser(boundary, "100");
@@ -333,6 +364,65 @@ describe("S1-01 profile state and privacy boundary", () => {
 			const upgradedSource = await MigrationSource.fromDirectory(migrationsPath);
 			expect((await new MigrationRunner(upgradedSource).migrate(boundary)).applied).toEqual([3]);
 			await expect(new MigrationRunner(upgradedSource).verify(boundary)).resolves.toBeUndefined();
+		} finally {
+			await boundary.close();
+			await rm(directory, { recursive: true, force: true });
+		}
+	});
+
+	it("upgrades 0007 to nullable description without changing dependent profile data", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "collaboration-s3-01-minimal-profile-upgrade-"));
+		const migrationsPath = join(directory, "migrations");
+		const databasePath = join(directory, "app.sqlite");
+		await mkdir(migrationsPath);
+		let boundary = new DatabaseBoundary(databasePath);
+		try {
+			for (const filename of [
+				"0001_s0-04-ingress-foundation.sql",
+				"0002_s0-05-outbox-events.sql",
+				"0003_s1-01-profile-state.sql",
+				"0004_s1-02-profile-sessions.sql",
+				"0005_s1-03-telegram-first-contact.sql",
+				"0006_s2-01-collaboration-drafts.sql",
+				"0007_s2-02-channel-publications.sql",
+			]) await copyFile(join(canonicalMigrationsPath, filename), join(migrationsPath, filename));
+			const previousSource = await MigrationSource.fromDirectory(migrationsPath);
+			expect((await new MigrationRunner(previousSource).migrate(boundary)).applied).toEqual([1, 2, 3, 4, 5, 6, 7]);
+			await seedUser(boundary, "100");
+			await boundary.execute(
+				"INSERT INTO profiles (id, telegram_user_id, type, display_name, description, city_code, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+				["11111111-1111-4111-8111-111111111111", "100", "blogger", "Existing Creator", "Existing profile description", "ekaterinburg", "active", 1, 1],
+			);
+			await boundary.execute(
+				"INSERT INTO profile_platforms (id, profile_id, platform_type, url, title, username, telegram_chat_id, audience_size) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+				["22222222-2222-4222-8222-222222222222", "11111111-1111-4111-8111-111111111111", "telegram", "https://t.me/existing_channel", "Existing", "existing_channel", "-100123", 42],
+			);
+			await boundary.execute("INSERT INTO profile_topics (profile_id, topic) VALUES (?, ?)", ["11111111-1111-4111-8111-111111111111", "city"]);
+			await boundary.execute(
+				"INSERT INTO collaborations (id, public_token, author_profile_id, format, target_profile_type, title, offer_text, expectation_text, slots_total, response_deadline_at, event_date_local, city_code, status, version, projection_revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+				["33333333-3333-4333-8333-333333333333", "abcdefghijklmnopqrstuv", "11111111-1111-4111-8111-111111111111", "joint_content", "any", "Existing card", "Existing collaboration offer", "Existing partner expectation", 1, 1_800_000_000_000, null, "ekaterinburg", "published", 1, 0, 1, 1],
+			);
+			await boundary.execute("INSERT INTO collaboration_topics (collaboration_id, topic) VALUES (?, ?)", ["33333333-3333-4333-8333-333333333333", "city"]);
+			await boundary.execute(
+				"INSERT INTO channel_publications (collaboration_id, channel_chat_id, message_id, status, rendered_terms_version, rendered_projection_revision, rendered_hash, current_attempt_no, last_delivery_id, last_error_kind, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?)",
+				["33333333-3333-4333-8333-333333333333", "-1001", 10, "published", 1, 0, "a".repeat(64), 1, 1],
+			);
+
+			await copyFile(join(canonicalMigrationsPath, "0008_s3-01-minimal-profiles.sql"), join(migrationsPath, "0008_s3-01-minimal-profiles.sql"));
+			const upgradedSource = await MigrationSource.fromDirectory(migrationsPath);
+			expect((await new MigrationRunner(upgradedSource).migrate(boundary)).applied).toEqual([8]);
+			await expect(new MigrationRunner(upgradedSource).verify(boundary)).resolves.toBeUndefined();
+			expect(await boundary.query("SELECT id, description FROM profiles")).toEqual([{ id: "11111111-1111-4111-8111-111111111111", description: "Existing profile description" }]);
+			expect(await boundary.query("SELECT id, profile_id, audience_size FROM profile_platforms")).toEqual([{ id: "22222222-2222-4222-8222-222222222222", profile_id: "11111111-1111-4111-8111-111111111111", audience_size: 42 }]);
+			expect(await boundary.query("SELECT profile_id, topic FROM profile_topics")).toEqual([{ profile_id: "11111111-1111-4111-8111-111111111111", topic: "city" }]);
+			expect(await boundary.query("SELECT id, author_profile_id FROM collaborations")).toEqual([{ id: "33333333-3333-4333-8333-333333333333", author_profile_id: "11111111-1111-4111-8111-111111111111" }]);
+			expect(await boundary.query("PRAGMA foreign_key_check")).toEqual([]);
+			expect(await boundary.query<{ notnull: number }>("PRAGMA table_info(profiles)")).toContainEqual(expect.objectContaining({ name: "description", notnull: 0 }));
+			expect(await boundary.query("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'profiles_one_active_per_user'")).toEqual([{ name: "profiles_one_active_per_user" }]);
+			await boundary.close();
+			boundary = new DatabaseBoundary(databasePath);
+			await expect(new MigrationRunner(upgradedSource).migrate(boundary)).resolves.toMatchObject({ noOp: true });
+			expect(await new SqliteProfileRepository(boundary).findActiveByTelegramUserId("100")).toMatchObject({ description: "Existing profile description", topics: ["city"] });
 		} finally {
 			await boundary.close();
 			await rm(directory, { recursive: true, force: true });
