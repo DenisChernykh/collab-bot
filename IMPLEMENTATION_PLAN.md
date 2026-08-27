@@ -782,7 +782,7 @@ P0-01 → P0-02
 
 #### R2-05B — Move collaborations application services
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Перенести draft/publication services и pure renderer за application public entrypoint.
 - **Dependencies:** `R2-05A`.
 - **Read first:** collaboration services/renderer, applications decision consumer and focused tests.
@@ -791,11 +791,12 @@ P0-01 → P0-02
 - **Invariants:** render output, errors, transaction/outbox/publication semantics unchanged.
 - **Verification:** collaboration unit/publication integration; application decision tests; architecture; `pnpm check`; `pnpm db:verify`.
 - **Exit criteria:** collaboration application core has one owner; один commit `R2-05B: move collaboration application services`.
+- **Completion evidence:** Commit SHA: `SELF`; moved draft/publication services and pure Telegram-safe renderer under `modules/collaborations/application`, added its narrow application entrypoint and retained three exact temporary compatibility exports. Applications decisions now consume the collaboration renderer through that public application surface, so the executable cross-module rule protects the edge without a broad root barrel or ESM cycle. Nine source paths plus this plan changed; service bodies, render output, errors, transactions, outbox/publication behavior, repositories and SQL are unchanged. Focused domain PASS (4), draft/publication/application-decision integration PASS (19); architecture PASS (137 modules, 406 dependencies); `pnpm check` PASS (69 unit, 84 integration, 47 runtime, lint/typecheck/build); all fake E2E PASS (30); `pnpm db:verify`, migrations/PRD diff and `git diff --check` PASS. No credential, real Telegram, remote or production mutation.
 - **Stop conditions:** applications must deep-import collaboration internals or a runtime barrel cycle appears.
 
 #### R2-06 — Extract shared wizard admission
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Явно владеть атомарным правилом «один active wizard» вместо cross-table SQL двух feature adapters.
 - **Dependencies:** `R2-05B`.
 - **Read first:** both session repositories, collaboration draft conflict path and migration constraints.

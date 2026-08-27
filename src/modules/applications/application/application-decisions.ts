@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { assertTelegramTextFits, escapeHtml, renderCollaborationCard } from "../../../application/collaborations/collaboration-renderer.js";
+import { assertTelegramTextFits, escapeHtml, renderCollaborationCard } from "../../collaborations/application/index.js";
 import type { DeliveryEditPayload, DeliverySendPayload } from "../../../application/outbox/delivery-payload.js";
 import { OutboxDeliveryService } from "../../../application/outbox/outbox-service.js";
 import type { Clock } from "../../../application/ports/clock.js";
