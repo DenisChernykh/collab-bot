@@ -42,6 +42,7 @@
 | S4 — Shareable launch | `completed` | 1 | Admin hide, полный real journey и готовая к распространению ссылка |
 | FUT — Telegram audience snapshot | `completed` | 1 | Best-effort снимок аудитории Telegram после сохранения профиля |
 | R1 — Post-launch maintainability | `completed` | 14 | Те же пользовательские контракты с feature-owned кодом и проверяемыми границами |
+| R2 — Complete feature-first layout | `in_progress` | 16 | Весь бизнес-код принадлежит явным модулям; legacy feature paths отсутствуют |
 
 ```text
 P0-01 → P0-02
@@ -54,6 +55,9 @@ P0-01 → P0-02
   → R1-00 → R1-01 → R1-02 → R1-03 → R1-04
   → R1-05A → R1-05B → R1-05C
   → R1-06A → R1-06B → R1-06C → R1-07 → R1-08 → R1-09
+  → R2-00 → R2-01 → R2-02 → R2-03 → R2-04
+  → R2-05 → R2-06 → R2-07 → R2-08 → R2-09
+  → R2-10 → R2-11 → R2-12 → R2-13 → R2-14 → R2-15
 ```
 
 ## 4. Завершённый ledger
@@ -97,7 +101,8 @@ P0-01 → P0-02
 | R1-06C | `70b928dfb57bd98261e33c2dda369eeeda199c09` | thin process, config and filesystem bootstrap boundaries |
 | R1-07 | `c641f9440b0a386022c07d53813ed890842e9f4f` | consolidated production-like test support |
 | R1-08 | `947c304f94fd485c8b158e0af51813dd77adf4b2` | raw SQL as the only persistence model |
-| R1-09 | `SELF` | verified maintainability candidate and schema-validator decision |
+| R1-09 | `411383eb96edcca3f8cef2a1b13409eac2c1d4b8` | verified maintainability candidate and schema-validator decision |
+| R2-00 | `SELF` | decision-complete feature-first completion stage |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -674,6 +679,227 @@ P0-01 → P0-02
 - **Exit criteria:** R1 `completed`; schema-validator либо получает отдельный future trigger/card, либо мотивированно отклонён; один commit `R1-09: close maintainability stage evidence`.
 - **Completion evidence:** Commit SHA: `SELF`; полный диапазон `32441e59510a79852aceb47a73ca5338fa529e4c...947c304f94fd485c8b158e0af51813dd77adf4b2` содержит 13 сфокусированных implementation commits перед этой evidence-карточкой, уникальные Task-ID и 71 изменённый файл. `pnpm architecture` PASS (114 modules, 363 dependencies); `pnpm check` PASS (66 unit, 83 integration, 47 runtime tests, lint, typecheck и build); `pnpm test:e2e:fake` PASS (30 tests); `pnpm db:verify` PASS; full-range `git diff --check` PASS. PRD и все 13 immutable SQL migrations не менялись; zero-match scan не нашёл Drizzle в source, tests, package/lock, TD, architecture config или build output. Runtime schema-validator dependency мотивированно не добавлена: env config, sessions, persisted payloads и callback/deep-link values имеют разные форматы, источники доверия и failure semantics, поэтому сейчас отсутствуют минимум два live consumer с одной и той же versioned-object policy, а библиотека добавила бы adapters без измеримого сокращения дублирования. Вернуться к решению следует, когда два production consumer действительно разделят одинаковую versioned schema и замена уберёт минимум две ручные реализации без изменения публичных контрактов. Независимый read-only review полного диапазона завершился PASS без credential/privacy exposure, authoritative-data corruption, duplicated effects, broken core journey или unrunnable candidate. README и этот registry синхронизированы с новой организацией; real Telegram, credentials, remote, push, PR, deploy и production не затрагивались.
 - **Stop conditions:** confirmed blocker нельзя закрыть одной wave, aggregate gate не зелёный или нужен новый product decision.
+
+### R2 — Complete feature-first layout
+
+- **Status:** `in_progress` — пользователь уточнил, что ожидает не переходный hybrid, а завершённую feature-first организацию.
+- **Objective:** Убрать физическое смешение layer-first и feature-first: весь business-specific domain/application/infrastructure/Telegram presentation принадлежит модулям, а корневые слои содержат только shared kernel/platform и composition.
+- **Requirements:** неизменные `LFR-01`–`LFR-11`, `LAC-01`–`LAC-12`; TD §4; R1 behavioral evidence.
+- **Dependencies:** `R1-09` completed на `411383eb96edcca3f8cef2a1b13409eac2c1d4b8`.
+- **Target tree:** `src/modules/{profiles,collaborations,marketplace,applications,moderation}/{domain,application,infrastructure,presentation,composition}` по фактической необходимости; `src/presentation/telegram` для global routing/durable orchestration; shared `domain`, `application` и `infrastructure` только для genuinely cross-feature contracts/adapters; `runtime`, `config`, `cli` сохраняют текущие роли.
+- **Stage invariants:** неизменные команды, routing precedence, callback/deep-link bytes, session JSON/version/TTL, тексты, SQL/schema/migrations, transaction/outbox/receipt semantics, post-commit audience lookup, actor/admin/blocked gates и lifecycle order.
+- **Stage exclusions:** NestJS/DI container, generic shared package, новая product capability, dependency addition, schema/data migration, credentials, real Telegram, remote/push/PR/merge/deploy.
+- **Completion definition:** нет business-specific code в legacy `src/domain/{profiles,collaborations}`, `src/application/{profiles,collaborations,applications,moderation}`, shared `application/ports`, shared database adapters или `src/bot`; runtime использует module factories/public APIs; cross-module deep imports запрещены executable graph gate; docs показывают фактическое дерево.
+- **Stage gate:** `pnpm architecture`, `pnpm check`, `pnpm test:e2e:fake`, `pnpm db:verify`, unchanged PRD/migrations/SQL behavior, no legacy-path scan, `git diff --check`, staged secret scan и один независимый blocker-limited review.
+
+#### R2-00 — Define the completed feature-first target
+
+- **Status:** `completed`
+- **Objective:** Исправить преждевременную closure-формулировку и зафиксировать полный физический transition до source moves.
+- **Dependencies:** `R1-09`.
+- **Read first:** `AGENTS.md`; PRD §19.1/§20.1; TD §4; R1 diff/evidence; live source/import tree.
+- **Scope:** только этот plan: target tree, completion definition, bounded unit order, invariants и gates.
+- **Do not touch:** source/tests/dependencies/PRD/TD/runtime/Telegram/data.
+- **Verification:** `pnpm check`; `pnpm db:verify`; `git diff --check`; exact changed-file check.
+- **Exit criteria:** decision-complete R2 cards; один commit `R2-00: define complete feature-first transition`.
+- **Completion evidence:** Commit SHA: `SELF`; live audit на clean `main`/`411383eb96edcca3f8cef2a1b13409eac2c1d4b8` подтвердил незавершённый hybrid: только applications физически находился под `src/modules`, feature ports/adapters оставались в shared layers, root `profile-bot.ts` владел всеми Telegram routes, а marketplace composer смешивал browse и application workflows. Зафиксированы complete target tree, public-module boundary, 16 bounded units и exact completion scan; изменён только этот plan. Node `v24.18.0`, pnpm `11.15.1`; `pnpm check` PASS (66 unit, 83 integration, 47 runtime tests, lint, architecture 114/363, typecheck/build); `pnpm db:verify` PASS; `git diff --check` PASS. No source, test, dependency, PRD/TD, migration, credential, Telegram, remote or production mutation.
+- **Stop conditions:** полное разделение требует product-policy решения либо невозможно сохранить текущие payload/session/SQL contracts.
+
+#### R2-01 — Enforce module public boundaries and routing contracts
+
+- **Status:** `in_progress`
+- **Objective:** До moves закрепить public-entrypoint policy и точный global routing/durable behavior.
+- **Dependencies:** `R2-00`.
+- **Read first:** dependency-cruiser config; Telegram root/ingress; all feature composers; runtime tests.
+- **Scope:** graph fixtures/rules для запрета cross-module internal imports; characterization route-order, `cb_*`, replay и post-commit audience tests; narrow public contract entrypoints where required by the gate.
+- **Do not touch:** user copy, payload codecs, repositories, SQL or runtime topology.
+- **Invariants:** admin → start/deep-link → collaboration → marketplace/profile order unchanged; generic durable and opaque callback paths remain separate.
+- **Verification:** focused architecture/runtime/fake tests; `pnpm architecture`; `pnpm check`; `pnpm db:verify`.
+- **Exit criteria:** будущие moves не могут обойти public module surfaces; один commit `R2-01: enforce feature module public boundaries`.
+- **Stop conditions:** gate requires broad allowlist or current routing cannot be characterized without new policy.
+
+#### R2-02 — Move profiles domain and application ownership
+
+- **Status:** `pending`
+- **Objective:** Собрать profile domain, use cases, session contract и repositories ports под `modules/profiles`.
+- **Dependencies:** `R2-01`.
+- **Read first:** profile domain/services/ports and focused unit/integration tests.
+- **Scope:** profile domain/application paths, pure application public entrypoint and temporary exact re-export compatibility paths where needed for green intermediate HEAD.
+- **Do not touch:** SQLite implementation, grammY presentation, session JSON or profile policy.
+- **Invariants:** exported types/errors and runtime semantics byte-for-byte equivalent.
+- **Verification:** profile unit/session integration; architecture; `pnpm check`; `pnpm db:verify`.
+- **Exit criteria:** profile core has one feature owner; one commit `R2-02: move profiles core into feature module`.
+- **Stop conditions:** runtime cycle through public barrel or consumer-visible contract drift.
+
+#### R2-03 — Move profiles adapters and composition
+
+- **Status:** `pending`
+- **Objective:** Дать profiles собственные SQLite/audience adapters и factory.
+- **Dependencies:** `R2-02`.
+- **Read first:** profile repositories, audience reader, runtime composition and restart tests.
+- **Scope:** profile/session SQLite adapters, grammY audience reader, `createProfilesFeature`, root module exports; temporary compatibility exports only for not-yet-moved tests.
+- **Do not touch:** SQL text/schema, Telegram call timing or session validation.
+- **Invariants:** один shared DatabaseBoundary/transaction context; audience lookup remains post-commit best effort.
+- **Verification:** profile repository/session/audience tests; runtime; architecture; `pnpm check`; `pnpm db:verify`.
+- **Exit criteria:** runtime can consume profiles factory; one commit `R2-03: own profiles adapters and composition`.
+- **Stop conditions:** factory creates a second DB boundary or changes lookup/delivery ordering.
+
+#### R2-04 — Move profiles Telegram presentation
+
+- **Status:** `pending`
+- **Objective:** Разместить profile composer/rendering внутри profiles без владения соседними workflows.
+- **Dependencies:** `R2-03`.
+- **Read first:** profile composer/presentation, continuation tests and root orchestration.
+- **Scope:** `modules/profiles/presentation/telegram`; narrow injected continuation/application ports; production consumers switch to public profile surfaces.
+- **Do not touch:** callback strings, session continuation encoding, copy or route priority.
+- **Invariants:** profile module exposes wizard operations; cross-feature journey continuation остаётся в global router.
+- **Verification:** focused profile composer/fake E2E; architecture; `pnpm check`; `pnpm db:verify`.
+- **Exit criteria:** нет active profile presentation под `src/bot/profile`; один commit `R2-04: move profile Telegram presentation`.
+- **Stop conditions:** move требует дублировать replies/effects или меняет continuation payload.
+
+#### R2-05 — Move collaborations domain and application ownership
+
+- **Status:** `pending`
+- **Objective:** Собрать collaboration domain, draft/publication services, render contract and feature ports под модулем.
+- **Dependencies:** `R2-04`.
+- **Read first:** collaboration domain/services/ports, publication and applications decision consumers.
+- **Scope:** collaboration domain/application/ports, pure application public entrypoint and temporary compatibility exports.
+- **Do not touch:** repositories, grammY presentation, SQL or lifecycle transitions.
+- **Invariants:** renderer output, validation, versions, errors and publication semantics unchanged.
+- **Verification:** collaboration unit/publication integration; application decision tests; architecture; `pnpm check`; `pnpm db:verify`.
+- **Exit criteria:** collaboration core has one owner; один commit `R2-05: move collaborations core into feature module`.
+- **Stop conditions:** applications must deep-import collaboration internals or a runtime barrel cycle appears.
+
+#### R2-06 — Extract shared wizard admission
+
+- **Status:** `pending`
+- **Objective:** Явно владеть атомарным правилом «один active wizard» вместо cross-table SQL двух feature adapters.
+- **Dependencies:** `R2-05`.
+- **Read first:** both session repositories, collaboration draft conflict path and migration constraints.
+- **Scope:** consumer-neutral wizard-admission contract with one SQLite implementation and two real session-repository consumers; preserve transaction/error mapping.
+- **Do not touch:** tables/migrations/session shapes/TTL or wizard product policy.
+- **Invariants:** concurrent/conflicting saves fail exactly as before inside one transaction.
+- **Verification:** adversarial profile/collaboration session tests; architecture; `pnpm check`; `pnpm db:verify`.
+- **Exit criteria:** no feature repository directly queries the other feature session table; один commit `R2-06: centralize wizard admission invariant`.
+- **Stop conditions:** atomicity cannot be preserved without schema/data change.
+
+#### R2-07 — Move collaborations adapters and Telegram presentation
+
+- **Status:** `pending`
+- **Objective:** Завершить collaboration vertical slice и factory.
+- **Dependencies:** `R2-06`.
+- **Read first:** collaboration repositories/composer/presentation, runtime and S2 tests.
+- **Scope:** feature SQLite adapters, composition factory, collaboration composer/presentation, public exports; production consumers switch.
+- **Do not touch:** browse projection, application decisions, SQL or callbacks.
+- **Invariants:** publication/draft transactions, render and wizard flow unchanged.
+- **Verification:** S2 integration/fake E2E; runtime; architecture; `pnpm check`; `pnpm db:verify`.
+- **Exit criteria:** collaboration business code absent from shared legacy paths; один commit `R2-07: complete collaborations feature module`.
+- **Stop conditions:** unit exceeds boundary with non-mechanical behavior changes; split before continuing.
+
+#### R2-08 — Create the marketplace read module
+
+- **Status:** `pending`
+- **Objective:** Дать feed/deep-link/browse projection отдельного владельца вместо размытого marketplace composer.
+- **Dependencies:** `R2-07`.
+- **Read first:** browse service/port/repository, feed/deep-link tests and TD CQRS rules.
+- **Scope:** `modules/marketplace` application/infrastructure/composition for read-only cross-feature projection and browse-session writes; explicit documented CQRS exception.
+- **Do not touch:** application submission/decisions or browse SQL/pagination.
+- **Invariants:** same filters, keyset order, visibility and revalidation.
+- **Verification:** browse integration/fake E2E; architecture; `pnpm check`; `pnpm db:verify`.
+- **Exit criteria:** browse ownership no longer sits in collaborations/shared DB; один commit `R2-08: establish marketplace read module`.
+- **Stop conditions:** projection write expands beyond browse sessions or SQL behavior changes.
+
+#### R2-09 — Split marketplace and applications Telegram presentation
+
+- **Status:** `pending`
+- **Objective:** Разделить смешанный composer по реальному business ownership.
+- **Dependencies:** `R2-08`.
+- **Read first:** marketplace composer/codec, applications APIs and all S3 fake journeys.
+- **Scope:** browse/deep-link rendering под marketplace; submit/own/author decision/opaque `cb_*` под applications; injected public ports; удалить legacy marketplace composer after cutover.
+- **Do not touch:** callback/deep-link bytes, command names, copy or route priority.
+- **Invariants:** `cb_*` не проходит generic durable envelope; no duplicated Telegram/business effect.
+- **Verification:** R1-05C/S3 focused tests; all fake E2E; architecture; `pnpm check`; `pnpm db:verify`.
+- **Exit criteria:** applications и marketplace имеют отдельные presentation owners; один commit `R2-09: split marketplace Telegram ownership`.
+- **Stop conditions:** exact routing/effect parity cannot be proven in one wave.
+
+#### R2-10 — Complete the moderation feature module
+
+- **Status:** `pending`
+- **Objective:** Собрать moderation service/ports/adapter/presentation и узко оформить её cross-feature orchestration.
+- **Dependencies:** `R2-09`.
+- **Read first:** moderation service/repository/composer and hide audit/outbox tests.
+- **Scope:** moderation vertical module/factory/public API; remove internal presentation import; preserve current atomic repository behavior unless a narrow port split is behavior-neutral and fully characterized.
+- **Do not touch:** hide policy, audit schema, restore/block Later scope or delivery semantics.
+- **Invariants:** hide + audit + channel-delete intent остаются одной authoritative transaction.
+- **Verification:** S4 moderation integration/fake E2E; architecture; `pnpm check`; `pnpm db:verify`.
+- **Exit criteria:** moderation business code absent from shared legacy paths; один commit `R2-10: complete moderation feature module`.
+- **Stop conditions:** ownership split would weaken atomicity or require new product policy.
+
+#### R2-11 — Replace the profile-named root with a neutral Telegram router
+
+- **Status:** `pending`
+- **Objective:** Убрать вводящий в заблуждение `profile-bot.ts` и оставить global routing/durable orchestration в `presentation/telegram`.
+- **Dependencies:** `R2-10`.
+- **Read first:** root bot, durable ingress, feature composer APIs and runtime drain tests.
+- **Scope:** neutral `telegram-router`, durable ingress/executor, menu/update metadata; mount module presentations through narrow ports; delete `src/bot` after consumers switch.
+- **Do not touch:** route/callback priority, reply buffering, replay, audience post-commit action or in-flight middleware ownership.
+- **Invariants:** exact external Telegram behavior and one durable envelope per generic update.
+- **Verification:** routing characterization/runtime/all fake E2E; architecture; `pnpm check`; `pnpm db:verify`.
+- **Exit criteria:** `src/bot` absent; root name/ownership truthful; один commit `R2-11: establish neutral Telegram router`.
+- **Stop conditions:** ESM cycle or changed effect/reply order.
+
+#### R2-12 — Compose runtime through feature factories
+
+- **Status:** `pending`
+- **Objective:** Убрать ручное создание feature internals из runtime composition.
+- **Dependencies:** `R2-11`.
+- **Read first:** bot application, all module factories/public APIs and lifecycle tests.
+- **Scope:** runtime creates shared platform primitives, calls feature factories and mounts neutral router; narrow cross-feature ports wired only here.
+- **Do not touch:** bootstrap/preflight/polling/worker/shutdown order.
+- **Invariants:** one DB boundary, one transaction runner, one bot, one worker and one close.
+- **Verification:** composition/lifecycle/runtime tests; all fake E2E; architecture; `pnpm check`; `pnpm db:verify`.
+- **Exit criteria:** runtime imports no feature internal file; один commit `R2-12: compose runtime from feature APIs`.
+- **Stop conditions:** factory duplication changes instance/transaction identity.
+
+#### R2-13 — Remove legacy production feature paths
+
+- **Status:** `pending`
+- **Objective:** Удалить temporary barrels и feature-specific code из shared layers.
+- **Dependencies:** `R2-12`.
+- **Read first:** all source imports, module entrypoints and architecture graph.
+- **Scope:** cut remaining production consumers to module public paths; delete legacy domain/application/port/infrastructure feature files and compatibility barrels.
+- **Do not touch:** shared commands/outbox/platform adapters or tests beyond import fixes required for build.
+- **Invariants:** no code duplication; every surviving shared contract has at least two cross-feature consumers or explicit platform ownership.
+- **Verification:** zero legacy production scan; architecture; `pnpm check`; all fake E2E; `pnpm db:verify`.
+- **Exit criteria:** completion definition holds for `src`; один commit `R2-13: remove legacy feature paths`.
+- **Stop conditions:** a surviving consumer lacks a stable public module contract.
+
+#### R2-14 — Align test support with module APIs
+
+- **Status:** `pending`
+- **Objective:** Убрать зависимость tests от удалённых внутренних путей и test-only adapters из production source.
+- **Dependencies:** `R2-13`.
+- **Read first:** direct test imports, `test/support`, fake clocks/Telegram adapters and module factories.
+- **Scope:** module-focused fixtures/public APIs; relocate genuine test-only fakes under `test/support`; retain direct platform internals only in platform tests.
+- **Do not touch:** assertions, lifecycle visibility, DB isolation or fake/real evidence boundary.
+- **Invariants:** tests continue using real migrations and explicit start/stop/restart; FakeTelegramApi and port transport remain distinct.
+- **Verification:** support tests, all suites together, architecture, `pnpm check`, `pnpm test:e2e:fake`, `pnpm db:verify`.
+- **Exit criteria:** production `src` has no test-only adapter; один commit `R2-14: align tests with feature modules`.
+- **Stop conditions:** helper hides lifecycle or weakens behavioral assertions.
+
+#### R2-15 — Close the physical transition
+
+- **Status:** `pending`
+- **Objective:** Синхронизировать TD/README, доказать completed tree и независимо проверить весь R2 candidate.
+- **Dependencies:** `R2-14`.
+- **Read first:** full R2 diff/log, actual tree/import graph, all unit evidence and docs.
+- **Scope:** docs/status/ledger; full stage gates; one blocker-limited independent review; at most one consolidated fix wave.
+- **Do not touch:** new behavior/dependency/refactor, real Telegram, production or remote.
+- **Invariants:** local/fake evidence не выдаётся за real smoke; PRD/migrations/contracts unchanged.
+- **Verification:** complete stage gate plus exact old-path/empty-dir/source-tree audit.
+- **Exit criteria:** R2 `completed`, docs match source, clean local commit `R2-15: close feature-first transition evidence`.
+- **Completion evidence:** pending.
+- **Stop conditions:** confirmed blocker, non-green aggregate gate or incomplete physical transition.
 
 ## 7. Git и evidence
 
