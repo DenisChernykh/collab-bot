@@ -2,7 +2,7 @@
 
 ## Status
 
-P0 and S0–S4 are complete, including the separately authorized real S4 journey and manual-launch handoff. FUT-01 is implemented locally as a one-time best-effort Telegram audience snapshot; its local/fake evidence does not establish live Telegram count accuracy. The post-launch R1 maintainability stage is also complete without changing the product boundary.
+P0 and S0–S4 are complete, including the separately authorized real S4 journey and manual-launch handoff. FUT-01 is implemented locally as a one-time best-effort Telegram audience snapshot; its local/fake evidence does not establish live Telegram count accuracy. The post-launch R1 maintainability stage and R2 feature-first physical transition are complete without changing the product boundary.
 
 The project targets a fast manual first launch by one developer. It is not a hosted, scale-ready or always-on service.
 
@@ -35,11 +35,36 @@ The repository contains this foreground runtime, but it contains no real credent
 
 ## Code organization
 
-The codebase remains a modular monolith. Feature-owned application boundaries and grammY composers contain profile, collaboration, marketplace and moderation behavior; the root bot layer only mounts them and owns global durable ingress. Runtime object composition, lifecycle, process signals, environment loading and private-path preparation are separate boundaries, while the delivery worker owns its own loop lifecycle.
+The codebase is a feature-first modular monolith. Business behavior belongs to one of five vertical slices under `src/modules`: `profiles`, `collaborations`, `marketplace`, `applications`, or `moderation`. Each feature exposes its runtime and Telegram composition surface through its root `index.ts`. A narrow `application/index.ts` may expose application contracts to another feature; all other cross-feature internal imports are rejected by the dependency graph.
+
+```text
+src/
+  modules/<feature>/
+    domain/                 pure feature rules, when the feature owns them
+    application/            use cases, contracts and owned ports
+    infrastructure/         SQLite or provider adapters owned by the feature
+    presentation/telegram/  grammY handlers, codecs and rendering
+    composition/            one factory that wires the feature
+    index.ts                public runtime/presentation feature API
+    application/index.ts    narrow cross-feature application API, when needed
+  application/              shared command, outbox and platform-port contracts
+  domain/                   only genuinely shared value objects
+  infrastructure/           shared SQLite, crypto, logging, time and Telegram adapters
+  presentation/telegram/    cross-feature durable ingress and routing
+  runtime/                  process composition and lifecycle
+  config/                   environment parsing and validation
+  cli/                      executable entrypoints
+```
+
+Not every feature must have every subdirectory. For example, `marketplace` is a read model and `applications` primarily coordinates existing profile and collaboration state, so neither gets a decorative `domain/` layer without rules it actually owns. Test doubles live under `test/support`, outside production source.
+
+The root Telegram presentation layer owns cross-feature orchestration: global route precedence, private-chat and actor-snapshot guards, callback acknowledgement, one durable envelope for ordinary updates, reply buffering, and the post-commit audience action. Product decisions and feature rendering stay in the mounted feature composers. The former `src/bot` tree and parallel legacy feature paths no longer exist.
+
+Runtime object composition, lifecycle, process signals, environment loading and private-path preparation are separate boundaries, while the delivery worker owns its own loop lifecycle.
 
 Executable dependency-graph rules enforce layer directions and reject cycles. Production-like tests reuse explicit helpers for fresh migrated SQLite databases, feature composition, prepared fake runtimes and Telegram updates without hiding start, stop or restart behavior.
 
-Immutable SQL migrations are the canonical schema and history. Production repositories use parameterized raw SQL with repository-local typed rows and mappers; the unused parallel Drizzle schema/client was removed rather than maintained as a second persistence model.
+Immutable SQL migrations are the canonical schema and history. Production repositories use parameterized raw SQL with repository-local typed rows and mappers. This project keeps raw SQL because its persistence work is dominated by explicit transactions, lifecycle guards and cross-table projections already expressed and tested in SQL. The unused Drizzle schema/client did not replace those responsibilities; it duplicated schema ownership and mapping, so it was removed instead of retaining two persistence models. An ORM should be reconsidered only if it becomes the single canonical model and measurably simplifies current repository work.
 
 ## Execution
 

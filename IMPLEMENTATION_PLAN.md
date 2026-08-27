@@ -42,7 +42,7 @@
 | S4 — Shareable launch | `completed` | 1 | Admin hide, полный real journey и готовая к распространению ссылка |
 | FUT — Telegram audience snapshot | `completed` | 1 | Best-effort снимок аудитории Telegram после сохранения профиля |
 | R1 — Post-launch maintainability | `completed` | 14 | Те же пользовательские контракты с feature-owned кодом и проверяемыми границами |
-| R2 — Complete feature-first layout | `in_progress` | 31 | Весь бизнес-код принадлежит явным модулям; legacy feature paths отсутствуют |
+| R2 — Complete feature-first layout | `completed` | 31 | Активные feature implementations принадлежат пяти модулям; shared cross-feature/platform code отделён, legacy paths отсутствуют |
 
 ```text
 P0-01 → P0-02
@@ -88,9 +88,9 @@ P0-01 → P0-02
 | S3-03 | `b514e69383d479855c96380cfca34b676335acfc` | resumable quick-profile applications |
 | S3-04 | `65890ffcdbb4c00813e1542d1e6bc37c94ed583f` | serialized decisions and pairwise contacts |
 | S3-C1 | `bf9407f63398576bd8fa7dd13bcd2f209304e15e` | real-checkpoint collaboration card rendering correction |
-| S3-C2 | `SELF` | explicit personal Telegram platform opt-in |
-| S4-01 | `SELF` | allowlisted hide, complete fake/real journey and manual launch handoff |
-| FUT-01 | `SELF` | one-time Telegram audience snapshot with internal provenance |
+| S3-C2 | `29d057db9b43958c7b35b7a6a94a3d5dae8a18d8` | explicit personal Telegram platform opt-in |
+| S4-01 | `ab09e70f94455ed6b1342dcc8b31958614076f16` | allowlisted hide, complete fake/real journey and manual launch handoff |
+| FUT-01 | `32441e59510a79852aceb47a73ca5338fa529e4c` | one-time Telegram audience snapshot with internal provenance |
 | R1-00 | `7593f9bc127b6900bf57ca8275467ba7214bbc5a` | decision-complete post-launch maintainability stage |
 | R1-01 | `6a7bc10ed3b15f5288f746fd19a0c08424b33699` | executable import graph and cycle enforcement |
 | R1-02 | `f35741ed16c6ef102a65043c82c0ae10ae57a62d` | consumer-oriented applications use cases and ports |
@@ -118,9 +118,9 @@ P0-01 → P0-02
 | R2-08 | `730f8790a11082974dc2ee6d0e28990d487c1ba1` | marketplace CQRS read-model ownership |
 | R2-09A | `fd38d23335f8cb190b12cff9db226ac9a8a6cef6` | marketplace Telegram presentation and split routing seam |
 | R2-09B | `d5f61074bba13c29e7b967a5c638d7e6278a80e1` | applications Telegram presentation ownership |
-| R2-10A | `18c313942400369924169f48c66d9d6462bdfb9c` | moderation core, persistence and composition ownership |
+| R2-10A | `18c3139aa4798440347a592a688c516ba2c78374` | moderation core, persistence and composition ownership |
 | R2-10B | `2c4523bb334983292be0c971806bee926319c036` | moderation Telegram presentation ownership |
-| R2-11A | `f4383a79e9784c42be4fa2d77d5357a2df47f8aa` | neutral durable Telegram ingress ownership |
+| R2-11A | `f4383a791d2a95c21ae04c543c17a448c74c63fe` | neutral durable Telegram ingress ownership |
 | R2-11B | `3c12fbab1e91b2e55d92c488c3a8e41a6a7bfe3f` | neutral Telegram router ownership |
 | R2-11C | `fa5859801398d3ce85c731f9ce163825da21535c` | removed legacy bot presentation paths |
 | R2-12 | `59f70493ce162ab00ae640a69eec3479cd8d9227` | runtime composition through feature public factories |
@@ -131,9 +131,10 @@ P0-01 → P0-02
 | R2-13E | `f97f32d1edaa0807d2f6ca563cb92b5e3357d0dd` | remaining feature consumer cutover to module ownership |
 | R2-13F | `9215d9d2c9f4ee5f03afa21a4138db4e8168c062` | removed remaining feature bridges and owned deadline policy |
 | R2-14A | `a12e7e275db5cc4b562be044668cc59b00fbee89` | test-owned grammY API fake |
-| R2-14B | `0889b71bb810033bca3fcd6b35130255a79d9300` | test-owned Telegram transport fake |
+| R2-14B | `0889b71023843ee36db8b399313f70abd21ff2d9` | test-owned Telegram transport fake |
 | R2-14C | `c349454d191cf78ecf3bfde2efa82b07a32c9636` | test-support FakeClock facade and first consumer cohort |
 | R2-14D | `e1f3ae7f0f1c500d6c0371bfc0f5b99044235551` | second FakeClock consumer cohort |
+| R2-14E | `ccdc3a6c57e2464b6543e22ef90a3d22c9bc2bce` | removed final test-only production path |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -1144,7 +1145,7 @@ P0-01 → P0-02
 
 #### R2-15 — Close the physical transition
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Синхронизировать TD/README, доказать completed tree и независимо проверить весь R2 candidate.
 - **Dependencies:** `R2-14E`.
 - **Read first:** full R2 diff/log, actual tree/import graph, all unit evidence and docs.
@@ -1153,7 +1154,7 @@ P0-01 → P0-02
 - **Invariants:** local/fake evidence не выдаётся за real smoke; PRD/migrations/contracts unchanged.
 - **Verification:** complete stage gate plus exact old-path/empty-dir/source-tree audit.
 - **Exit criteria:** R2 `completed`, docs match source, clean local commit `R2-15: close feature-first transition evidence`.
-- **Completion evidence:** pending.
+- **Completion evidence:** Commit SHA: `SELF`; синхронизированы README и TD 0.7 с фактическими пятью feature modules, двумя допустимыми public surfaces (`index.ts` и узкий `application/index.ts`), cross-feature Telegram orchestration, applications/moderation transaction ownership, raw-SQL решением, реальным startup/shutdown и test-support ownership. Ledger дополнен R2-14E и исправлен по authoritative Task-ID commits. Безопасно удалён только ignored/untracked/non-symlink generated `dist`, после чего fresh build содержит 460 файлов вместо 700 stale artifacts; exact scans не находят `src/bot`, legacy feature paths/imports, empty `src` directories, test-only production adapters, source-to-test edges, shared-to-feature edges или runtime deep feature imports. R2 pre-closure range содержит 30 уникальных Task-ID commits и 107 changed paths; PRD, migrations, package и lock contracts не менялись. `pnpm check` PASS (architecture 127 modules/415 dependencies, 69 unit, 88 integration, 47 runtime, lint/typecheck/build); `pnpm test:e2e:fake` PASS (33); `pnpm db:verify` PASS; `git diff --check` PASS. Единственный независимый blocker-limited review полного candidate: PASS — нет credential/private-contact exposure, authoritative-data corruption, duplicated business/Telegram effects, broken core journey или unrunnable candidate. Real Telegram, credentials, production, remote, push, PR и deploy не затрагивались.
 - **Stop conditions:** confirmed blocker, non-green aggregate gate or incomplete physical transition.
 
 ## 7. Git и evidence
@@ -1176,4 +1177,4 @@ Push, remote, PR, merge, deploy, credentials и real Telegram не следую�
 - **Manual first launch:** `S4`, отдельно авторизованный `LAC-12` и exact bot/channel checkpoint пройдены; ссылку можно отправлять людям.
 - **Production ready / 24/7 / scalable:** не является целью этого плана и не заявляется.
 
-После `FUT-01` в реестре нет следующего авторизованного pending unit. Новая работа начинается только с отдельной decision-complete карточки и пользовательской авторизации.
+После `R2-15` в реестре нет следующего авторизованного pending unit. Новая работа начинается только с отдельной decision-complete карточки и пользовательской авторизации.

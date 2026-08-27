@@ -1,8 +1,8 @@
 # Collaboration Bot — Technical Design
 
 - Статус: `Approved for solo-launch implementation`
-- Версия: `0.6`
-- Дата: `2026-08-27`
+- Версия: `0.7`
+- Дата: `2026-08-28`
 - Product source of truth: `docs/PRD.md`
 
 ## 1. Назначение и границы
@@ -113,40 +113,41 @@ Heartbeat/status storage, scheduled cleanup/retention, exact Unix-socket admissi
 
 ```text
 Telegram Bot API
-  │
-  │ getUpdates / sendMessage / editMessage / deleteMessage
+  │ getUpdates
   ▼
-Collaboration Bot — один Node.js process
-  ├── Telegram ingress adapter
-  ├── application use cases
-  ├── domain policies
-  ├── SQLite repositories
-  ├── delivery runner
-  ├── deadline/completion runner (Later)
-  └── JSON logs
+src/cli/bot.ts
+  → runtime/bot-bootstrap
+  → runtime/bot-application
+      ├── пять feature factories через modules/<feature>/index.ts
+      ├── presentation/telegram router + durable ingress
+      ├── shared SQLite/crypto/time/logging adapters
+      └── bot-lifecycle + delivery worker
   │
-  ▼
-отдельный collaboration-bot.sqlite
-
-Showcase Telegram Channel
-  ▲
-  └── channel publication adapter
+  ├── отдельный collaboration-bot.sqlite
+  └── shared outbox/delivery runner
+          │ sendMessage / editMessage / deleteMessage
+          ▼
+      Telegram users + Showcase channel
 ```
+
+Публикация канала начинается в `collaborations`, сохраняет intent в общем outbox и после commit выполняется delivery runner через grammY transport. Всё работает в одном Node.js process; отдельного HTTP/backend process нет.
 
 Long polling не требует публичного HTTPS, домена или reverse proxy и подходит для одного малонагруженного instance: [grammY — long polling](https://grammy.dev/guide/deployment-types#long-polling-vs-webhooks).
 
 ### 3.2. Process roles
 
-В MVP существует один process role `app`. Он последовательно:
+В MVP существует один process role `app`. Bootstrap и lifecycle выполняют:
 
 1. загружает и валидирует конфигурацию;
-2. открывает SQLite и применяет миграции;
-3. проверяет production bot identity через `getMe`;
-4. проверяет showcase channel и права;
-5. восстанавливает уже реализованную durable delivery work;
-6. запускает delivery runner;
-7. запускает long polling;
-8. при SIGINT/SIGTERM прекращает polling и новую delivery work, затем закрывает SQLite.
+2. проверяет private DB path, открывает SQLite и собирает один object graph;
+3. применяет миграции;
+4. проверяет production bot identity через `getMe`;
+5. пишет `runtime_ready` и ожидает showcase preflight;
+6. запускает delivery worker: сначала recovery/terminal projection, затем его цикл;
+7. запускает long polling; после старта worker и polling работают параллельно;
+8. при SIGINT/SIGTERM abort-ит worker, останавливает polling, ожидает worker и in-flight updates, затем один раз закрывает SQLite.
+
+`process-runner` возвращает один и тот же stop flow для SIGINT/SIGTERM и не запускает повторное закрытие ресурсов. Configure выполняет migrations → `getMe`; showcase preflight относится к `start`, а не к configure.
 
 Отдельный migrator process и worker в MVP отсутствуют. Миграции также доступны явной командой для update-flow.
 
@@ -183,48 +184,88 @@ SLA и high availability не заявляются.
 ### 4.1. Слои
 
 ```text
-bootstrap/runtime
-       │
-       ├── adapters/telegram
-       ├── infrastructure/sqlite
-       └── application
-                │
-                ▼
-              domain
+cli/config
+    │
+    ▼
+runtime composition ───────────────┐
+    │                              │
+    ├── modules/<feature>/index.ts │
+    ├── presentation/telegram      │
+    └── shared application ports   │
+                                   ▼
+modules/<feature>              infrastructure
+    presentation/telegram      shared platform adapters
+    composition
+    infrastructure
+    application
+    domain (when owned)
 ```
+
+Физическая структура следует business ownership, а слои повторяются внутри feature только тогда, когда у него есть соответствующая ответственность:
+
+```text
+src/
+  modules/<feature>/
+    domain/                 pure feature policies/types, если они есть
+    application/            use cases, contracts и owned ports
+    infrastructure/         owned SQLite/provider adapters
+    presentation/telegram/  grammY handlers, callback codecs и rendering
+    composition/            factory полного feature slice
+    index.ts                public runtime/presentation feature API
+    application/index.ts    узкий cross-feature application API, если нужен
+  application/              общие command/outbox/platform contracts
+  domain/                   только общие value objects
+  infrastructure/           общие DB/crypto/logging/time/Telegram adapters
+  presentation/telegram/    cross-feature durable ingress и routing
+  runtime/                  object graph, lifecycle и workers
+  config/                   env parsing/validation
+  cli/                      executable entrypoints
+```
+
+Это не требование механически создавать одинаковые папки. `marketplace` является CQRS read model, а `applications` оркестрирует уже существующие profile/collaboration concepts, поэтому отдельный `domain/` без собственных pure rules им не нужен. Test doubles находятся в `test/support`, а не в production `src`.
 
 Правила:
 
 - `domain` не импортирует grammY, SQLite, process/env или Telegram types;
 - `application` импортирует domain и объявляет порты;
-- adapters/infrastructure реализуют порты;
-- bootstrap создаёт зависимости и владеет lifecycle;
-- модуль не изменяет таблицы другого модуля в обход его application port/use case; специально объявленный CQRS read adapter может читать чужие authoritative tables, не становясь владельцем их commands или data;
+- feature `infrastructure` реализует owned ports, а верхнеуровневый `infrastructure` — только общие platform ports;
+- feature Telegram presentation вызывает application API, но не импортирует SQLite adapters;
+- runtime и root presentation импортируют feature только через `src/modules/<feature>/index.ts`; межмодульный application-код может использовать также узкий `application/index.ts`, но не остальные internal files;
+- runtime создаёт каждую feature factory один раз и владеет lifecycle;
+- верхнеуровневый Telegram router монтирует feature composers и владеет global route order, actor snapshot/private-chat guards, callback ack, durable reply buffering и post-commit audience action, но не принимает продуктовых решений;
+- `src/bot` и параллельные legacy feature paths отсутствуют;
+- произвольная запись в таблицы другого модуля запрещена; исключения ниже явно назначают transaction owner для двух cross-aggregate command workflows;
+- специально объявленный CQRS read adapter может читать чужие authoritative tables, не становясь владельцем их commands или data;
 - Telegram handlers не принимают продуктовые решения.
 
 ### 4.2. Модули
 
 | Модуль | Ответственность |
 |---|---|
-| `profiles` | профиль, темы и публичные площадки; pairwise Telegram identity action вычисляется отдельно из `telegram_users` |
-| `collaborations` | draft, публикация, версия условий, slots и lifecycle |
-| `marketplace` | read-only browse/deep-link projection, filters, keyset cursor и `browse_sessions` |
-| `applications` | отклик, решение, атомарное заполнение slots |
-| `moderation` | hide/restore, block/unblock и audit |
-| `showcase-publication` | render, send/edit/delete и reconciliation |
-| `notifications` | durable direct-message delivery |
-| `analytics` | идемпотентные product events и read-only funnel |
-| `telegram-runtime` | polling, sessions, callbacks, menus и graceful shutdown |
+| `profiles` | профиль, topics/platforms, wizard session и best-effort Telegram audience snapshot |
+| `collaborations` | draft/session, render, publication, terms revision и lifecycle |
+| `marketplace` | browse/deep-link CQRS projection, filters, keyset cursor и `browse_sessions` |
+| `applications` | eligibility/submit, own/author queries, decisions, recruitment completion, pair contact и projection maintenance |
+| `moderation` | solo-launch lookup/hide, audit и channel-delete intent; restore/block/unblock остаются Later |
+
+Остальные владельцы являются общими слоями, а не каталогами feature-модулей:
+
+- root `application` содержит durable commands, outbox/delivery и shared platform ports;
+- root `infrastructure` реализует общие DB/crypto/time/logging/Telegram adapters;
+- root `presentation/telegram` отвечает за cross-feature ingress/routing;
+- `runtime` собирает object graph, lifecycle и delivery worker;
+- channel publication принадлежит `collaborations` вместе с shared outbox/delivery, direct notifications — shared outbox/delivery;
+- `product_events` пока существует только как deferred foundation primitive; production analytics module/funnel не собран.
 
 ### 4.3. Межмодульные зависимости
 
-- `applications` читает profile visibility и collaboration state через порты.
-- `collaborations` не знает grammY и не вызывает Bot API.
+- runtime и root Telegram presentation используют только root `modules/<feature>/index.ts`; framework-free межмодульные contracts доступны через узкие `application/index.ts`.
+- части `domain` и `application` модуля `collaborations` не знают grammY и не вызывают Bot API; grammY принадлежит presentation/composition этого же feature.
 - `marketplace` — явное CQRS-исключение: его read adapter может одним SQL-query соединять profiles, collaborations, applications и actor visibility для актуальной выборки. Модуль не изменяет чужие aggregates и записывает только свою `browse_sessions` projection state.
-- Application transaction создаёт бизнес-изменение, delivery intents и product events.
-- `showcase-publication` проецирует collaboration read model в Telegram-канал.
-- `moderation` оркестрирует profiles, collaborations, applications и publication через application ports.
-- `analytics` принимает только безопасные структурированные события.
+- `applications` — command-side transaction owner отклика и решения автора: его repository атомарно изменяет application и связанные collaboration/projection/outbox states, требуемые этим workflow. Остальные модули не получают общего права писать в эти таблицы.
+- `collaborations` владеет publication state/rendering; shared outbox/delivery runner выполняет send/edit/delete вне SQLite transaction.
+- `moderation` — узкое command-side cross-aggregate исключение: один `AdminModerationRepository` внутри общей transaction может обновить требуемые collaboration/application/publication states, outbox и audit. Эта граница владеет атомарностью admin-команды и не является разрешением произвольно писать в чужие таблицы из других модулей.
+- ни один feature не импортирует `runtime`/`cli`; dependency graph запрещает cycles, deep cross-feature imports и нарушение направлений слоёв.
 
 ## 5. Application interfaces
 
@@ -349,6 +390,8 @@ PRAGMA busy_timeout = 5000;
 Один `DatabaseBoundary` сериализует операции и транзакции внутри process. Вложенные repositories используют текущий transaction context, а не открывают новую транзакцию.
 
 `DatabaseBoundary` напрямую владеет `DatabaseSync`. Infrastructure repositories выполняют параметризованный raw SQL через `execute`/`query` или текущий transaction `client`; отдельного ORM client и параллельного schema mapping нет.
+
+Raw SQL оставлен сознательно. Каноническая schema уже задаётся immutable migrations, а основные repository operations содержат явные transaction boundaries, lifecycle predicates и cross-table projections, которые всё равно пришлось бы описывать SQL или ORM-specific escape hatches. Ранее присутствовавшие Drizzle schema/client не заменяли этот путь и создавали второй источник schema/mapping. ORM имеет смысл вводить только отдельным решением, если он станет единственной канонической persistence-моделью и уменьшит сложность реальных запросов, а не просто добавит абстракцию поверх них.
 
 ### 7.2. Transaction rules
 
@@ -789,6 +832,14 @@ Read query формирует один SQL predicate из каноничной p
 
 ## 10. Telegram ingress
 
+Root presentation остаётся после удаления `src/bot`, потому что это владелец cross-feature orchestration, а не ещё один бизнес-модуль:
+
+- `telegram-router.ts` создаёт и монтирует пять feature composers, задаёт global text/callback order, private-chat/actor-snapshot guards, callback acknowledgement, reply buffering и post-commit audience action;
+- `telegram-routing.ts` фиксирует text precedence: moderation → start/deep link → help → collaboration → applications/marketplace → profile/unknown fallbacks;
+- `durable-telegram-ingress.ts` классифицирует message, обычный callback и opaque `cb_*` callback;
+- message и обычный callback проходят `DurableCommandExecutor`; opaque `cb_*` направляется в applications `CallbackActionService` с собственной durable one-shot семантикой;
+- feature composers отвечают за свои команды, callbacks, rendering и continuation, а root router не принимает product decisions.
+
 ### 10.1. Long polling
 
 Используется grammY `bot.start()` либо эквивалентный контролируемый runner с одним instance на token.
@@ -1008,22 +1059,19 @@ Telegram Bot API не предоставляет application idempotency key д�
 
 При `completed` создаётся первый prompt всем сторонам. `Ответить позже` одной transaction завершает command receipt и создаёт ровно один scheduled outbox intent не ранее чем через 72 часа с key `completion-reminder:<application_id>:<reporter_profile_id>`. Повтор callback возвращает receipt result, а UNIQUE semantic key запрещает второй reminder. Если сторона сохраняет итоговый report до claim, ещё не отправленный reminder становится `superseded`; после первой reminder delivery новая не создаётся. Внешний cron не нужен.
 
-### 13.4. Basic shutdown и Later hardening
+### 13.4. Реализованный shutdown и Later hardening
 
-Для первого запуска достаточно один раз обработать SIGINT/SIGTERM: прекратить polling, не брать новую работу и закрыть SQLite после уже выполняющейся операции. Persisted heartbeat, in-flight registry, 20-секундный watchdog и доказательство всех repeated-signal races относятся к Later.
+Текущий foreground runtime выполняет один idempotent stop flow:
 
-Возможный Later hardening flow:
+1. abort signal останавливает delivery worker и не даёт ему взять следующий цикл;
+2. `bot.stop()` прекращает long polling;
+3. runtime ожидает завершение delivery worker;
+4. application in-flight tracker ожидает уже вошедшие Telegram updates;
+5. SQLite закрывается один раз.
 
-SIGINT/SIGTERM однократно переводит runtime в `draining`:
+Повторные вызовы `stop`/`shutdown` получают тот же promise. `process-runner` также разделяет один stop flow между SIGINT и SIGTERM и снимает signal listeners после завершения. Реализованный вариант не имеет 20-секундного watchdog и не заявляет bounded shutdown time.
 
-1. новые callbacks/commands не допускаются;
-2. `bot.stop()` прекращает long polling, runners не берут новые claims;
-3. все active provider calls получают abort signal;
-4. application in-flight tracker ждётся до 20 секунд;
-5. при успешном drain пишется runtime health, SQLite закрывается и process выходит с code 0;
-6. при timeout пишется fatal safe event и process выходит с non-zero code без новых DB-операций; durable receipts/deliveries определяют recovery на следующем startup.
-
-Повторный signal не запускает второй shutdown flow. Single-instance socket и LaunchAgent ThrottleInterval не дают новому process открыть DB до выхода старого.
+Persisted heartbeat/runtime health, watchdog с controlled non-zero exit, запрет новых commands отдельным draining guard, single-instance socket и LaunchAgent coordination относятся к Later.
 
 ### 13.5. Later: cleanup runner
 
@@ -1292,6 +1340,14 @@ JSON event содержит:
 
 ## 20. Testing strategy
 
+Физическая карта test code:
+
+- `test/unit` — pure policies, codecs и validators;
+- `test/integration` — реальные migrations/SQLite repositories и feature composition;
+- `test/runtime` — bootstrap, lifecycle, delivery worker и process signals;
+- `test/e2e-fake` — полные Telegram journeys через локальный grammY API fake;
+- `test/support` — migrated DB/runtime builders, `FakeClock`, `FakeTelegramApi` и `FakeTelegramTransport`; test doubles отсутствуют в production `src`.
+
 ### 20.1. Unit
 
 - validators и canonical enums;
@@ -1353,12 +1409,12 @@ First-launch/runtime foundation checks:
 - showcase degraded mode;
 - recovery of prepared/retryable/dispatching work;
 - provider-call timeout, stale claim fencing и superseded projection edits;
+- graceful shutdown with in-flight update and delivery;
+- repeated stop/SIGINT/SIGTERM use one shutdown flow;
 
 Later runtime checks:
 
 - catch-up deadlines;
-- graceful shutdown with in-flight update and delivery;
-- repeated SIGTERM;
 - no second polling instance in operations preflight.
 
 ### 20.5. End-to-end fake journey
@@ -1489,7 +1545,7 @@ S3 checkpoint выполняет steps 1–6 и restart-проверку: это
 - command receipts/processed updates;
 - существующий outbox/delivery ledger с claim fencing/provider deadline;
 - принятый в `S0-05` schema-only `product_events` primitive без обязательной записи событий или funnel query;
-- fake clock/token generator;
+- production clock/token generators в root infrastructure; `FakeClock` только в `test/support`;
 - базовые architecture tests.
 
 Не добавлять в S0 новую product-event policy/emission, runtime health singleton/heartbeat, cleanup scheduler, Unix socket, LaunchAgent или backup tooling. Уже принятый `product_events` schema primitive не делает product analytics обязательной. Базовый shutdown создаётся только вместе с первым реальным bot runtime, когда у него появляется текущий consumer.
