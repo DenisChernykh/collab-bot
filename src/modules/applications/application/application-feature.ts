@@ -41,13 +41,13 @@ import {
 	type CheckApplicationEligibilityReader,
 } from "./application-submission.js";
 
-/** Compatibility aggregate for the current shared SQLite adapter. New workflows consume the narrower ports above. */
+/** Composition aggregate implemented by the feature-owned SQLite adapter; workflows consume the narrower ports above. */
 export interface ApplicationSubmissionStore extends CheckApplicationEligibilityReader {
 	insertPending(record: ApplicationRecord): Promise<void>;
 	setFirstApplicationAt(collaborationId: string, firstApplicationAt: number): Promise<boolean>;
 }
 
-/** Compatibility aggregate retained until R1-03 gives applications a feature-owned SQLite adapter. */
+/** Composition aggregate for the feature-owned applications adapter. */
 export interface ApplicationDecisionStore extends
 	ApplicationSubmissionStore,
 	DecideApplicationStore,

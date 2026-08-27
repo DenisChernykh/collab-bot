@@ -22,6 +22,7 @@ import { SqliteOutboxDeliveryRepository } from "../../src/infrastructure/databas
 import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/database/transaction-runner.js";
 import { FakeTelegramTransport } from "../../src/infrastructure/testing/fake-telegram-transport.js";
 import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
+import { createApplicationsFeature } from "../../src/modules/applications/index.js";
 
 const migrationsPath = fileURLToPath(new URL("../../migrations/", import.meta.url));
 const NOW = 1_700_000_000_000;
@@ -438,13 +439,13 @@ function createApplicationService(
 	clock: FakeClock,
 	outbox: OutboxDeliveryStore = new SqliteOutboxDeliveryRepository(boundary),
 ): ApplicationService {
-	return new ApplicationService(
-		new SqliteCollaborationBrowseRepository(boundary),
-		outbox,
-		new DatabaseBoundaryTransactionRunner(boundary),
+	return createApplicationsFeature({
+		boundary,
+		outboxStore: outbox,
+		transactions: new DatabaseBoundaryTransactionRunner(boundary),
 		clock,
-		BOT_USERNAME,
-	);
+		botUsername: BOT_USERNAME,
+	}).applicationService;
 }
 
 async function seedApplicationFixture(boundary: DatabaseBoundary): Promise<void> {

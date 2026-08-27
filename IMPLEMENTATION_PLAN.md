@@ -87,6 +87,7 @@ P0-01 → P0-02
 | R1-00 | `SELF` | decision-complete post-launch maintainability stage |
 | R1-01 | `SELF` | executable import graph and cycle enforcement |
 | R1-02 | `SELF` | consumer-oriented applications use cases and ports |
+| R1-03 | `SELF` | feature-owned applications persistence and composition |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -478,7 +479,7 @@ P0-01 → P0-02
 
 #### R1-03 — Give applications feature-owned SQLite composition
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Отделить application persistence/read models от browse adapter и подключить feature через одну composition factory.
 - **Requirements:** TD §4.2–§4.3, §7, §9.2–§9.6.
 - **Dependencies:** `R1-02`.
@@ -490,12 +491,12 @@ P0-01 → P0-02
 - **Tests first:** characterize browse/application ownership and concurrent last-slot behavior before cutover.
 - **Verification:** S3-02/S3-03/S3-04 integration; architecture; `pnpm check`; fake journey; `pnpm db:verify`; diff/secret scans.
 - **Exit criteria:** browse adapter больше не реализует applications store; runtime получает feature composition; один commit `R1-03: own application persistence by feature`.
-- **Completion evidence:** pending.
+- **Completion evidence:** Commit SHA: `SELF`; extracted all applications store/read-model methods and mappers into feature-owned `SqliteApplicationsRepository`, reduced `SqliteCollaborationBrowseRepository` to browse session/query/filter responsibilities, added the public `ApplicationsFeatureApi` entrypoint and `createApplicationsFeature`, and changed runtime/test composition to use the factory. Nine source/test files plus this plan changed; migrations/schema, product policy, Telegram routing/copy/encoding and runtime lifecycle logic stayed untouched. Pre-cutover concurrent last-slot characterization PASS; focused R1-03/S3-02/S3-03/S3-04 integration PASS (4 files, 27 tests); architecture PASS (102 modules, 300 dependencies); `pnpm check` PASS (66 unit, 81 integration, 30 runtime tests and build); `pnpm test:e2e:fake` PASS (21); `pnpm db:verify` PASS; `git diff --check` PASS. Independent read-only review verified the moved 33 repository method bodies and nine mapper/helper bodies against predecessor `f35741e`, confirmed unchanged SQL predicates/parameters/order/affected-row guards, one shared `DatabaseBoundary`/transaction runner, the same stale-projection position in the delivery cycle and legacy import compatibility, and returned PASS with no findings. No credential, Telegram, remote or production mutation.
 - **Stop conditions:** нужна migration, query ownership неоднозначен или перенос меняет SQL semantics.
 
 #### R1-04 — Establish a single durable grammY ingress seam
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Сохранить один receipt/transaction envelope и дать feature composers безопасную точку подключения.
 - **Requirements:** TD §4.1, §10.1–§10.4; `LFR-10`, `LAC-08`.
 - **Dependencies:** `R1-03`.

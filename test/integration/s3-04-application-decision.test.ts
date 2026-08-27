@@ -10,12 +10,13 @@ import { DurableCommandExecutor } from "../../src/application/commands/command-e
 import type { OutboxDeliveryStore } from "../../src/application/ports/outbox-delivery-store.js";
 import { hashCanonicalInput } from "../../src/infrastructure/crypto/canonical-input-hash.js";
 import { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
-import { SqliteCollaborationBrowseRepository } from "../../src/infrastructure/database/collaboration-browse-repository.js";
 import { SqliteDurableCommandStore } from "../../src/infrastructure/database/durable-command-repository.js";
 import { MigrationRunner, MigrationSource } from "../../src/infrastructure/database/migrations.js";
 import { SqliteOutboxDeliveryRepository } from "../../src/infrastructure/database/outbox-delivery-repository.js";
 import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/database/transaction-runner.js";
 import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
+import { createApplicationsFeature } from "../../src/modules/applications/index.js";
+import { SqliteApplicationsRepository } from "../../src/modules/applications/infrastructure/sqlite-applications-repository.js";
 
 const migrationsPath = fileURLToPath(new URL("../../migrations/", import.meta.url));
 const NOW = 1_700_000_000_000;
@@ -340,7 +341,7 @@ describe("S3-04 serialized application decisions", () => {
 			})).toMatchObject({ ok: true, collaborationStatus: "matched", projectionRevision: 2 });
 			expect(await outbox.markRetryable(inFlight.id, "in-flight-projection", NOW + 2, NOW + 1_002, "network", null)).toBe(true);
 
-			expect(await new SqliteCollaborationBrowseRepository(fixture.boundary).supersedeStaleProjectionDeliveries(NOW + 3)).toBe(1);
+			expect(await new SqliteApplicationsRepository(fixture.boundary).supersedeStaleProjectionDeliveries(NOW + 3)).toBe(1);
 			expect(await projectionDeliveries(fixture.boundary, CARDS.twoSlots)).toEqual([
 				{ idempotency_key: `channel:${CARDS.twoSlots}:projection:1`, status: "superseded", attempt_count: 1 },
 				{ idempotency_key: `channel:${CARDS.twoSlots}:projection:2`, status: "prepared", attempt_count: 0 },
@@ -568,13 +569,13 @@ function createApplicationService(
 	clock: FakeClock,
 	outbox: OutboxDeliveryStore = new SqliteOutboxDeliveryRepository(boundary),
 ): ApplicationService {
-	return new ApplicationService(
-		new SqliteCollaborationBrowseRepository(boundary),
-		outbox,
-		new DatabaseBoundaryTransactionRunner(boundary),
+	return createApplicationsFeature({
+		boundary,
+		outboxStore: outbox,
+		transactions: new DatabaseBoundaryTransactionRunner(boundary),
 		clock,
-		BOT_USERNAME,
-	);
+		botUsername: BOT_USERNAME,
+	}).applicationService;
 }
 
 function createDurableExecutor(fixture: Pick<DecisionFixture, "boundary" | "clock">): DurableCommandExecutor {

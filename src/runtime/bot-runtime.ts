@@ -36,8 +36,8 @@ import { SqliteOutboxDeliveryRepository } from "../infrastructure/database/outbo
 import { SqliteCollaborationPublicationRepository } from "../infrastructure/database/collaboration-publication-repository.js";
 import { CollaborationPublicationService } from "../application/collaborations/collaboration-publication-service.js";
 import { CollaborationBrowseService } from "../application/collaborations/collaboration-browse-service.js";
-import { ApplicationService } from "../application/applications/application-service.js";
 import { SqliteCollaborationBrowseRepository } from "../infrastructure/database/collaboration-browse-repository.js";
+import { createApplicationsFeature } from "../modules/applications/index.js";
 import { DeliveryRunner } from "../application/outbox/delivery-runner.js";
 import { SystemProviderDeadline } from "../infrastructure/time/provider-deadline.js";
 import { RandomClaimTokenGenerator } from "../infrastructure/crypto/claim-token.js";
@@ -156,13 +156,14 @@ export async function createBotRuntime(options: BotRuntimeOptions): Promise<BotR
 			transactionRunner,
 			clock,
 		);
-		const applicationService = new ApplicationService(
-			collaborationBrowseRepository,
+		const applicationsFeature = createApplicationsFeature({
+			boundary,
 			outboxStore,
-			transactionRunner,
+			transactions: transactionRunner,
 			clock,
-			options.config.expectedBotUsername,
-		);
+			botUsername: options.config.expectedBotUsername,
+		});
+		const applicationService = applicationsFeature.applicationService;
 		const durableCommandExecutor = new DurableCommandExecutor(transactionRunner, new SqliteDurableCommandStore(boundary), { hash: hashCanonicalInput }, clock);
 		const callbackActionService = new CallbackActionService({
 			transactionRunner,
@@ -221,7 +222,7 @@ export async function createBotRuntime(options: BotRuntimeOptions): Promise<BotR
 				await collaborationPublicationService.projectTerminalOutcomes(outboxStore);
 				while (!deliveryLoopStop) {
 					if (capability.canPublish) await collaborationPublicationService.cancelExpiredPrepared();
-					await collaborationBrowseRepository.supersedeStaleProjectionDeliveries(clock.now().getTime());
+					await applicationsFeature.projectionMaintenance.supersedeStaleProjectionDeliveries(clock.now().getTime());
 					await deliveryRunner.runOnce();
 					await new Promise<void>((resolve) => { const timer = setTimeout(resolve, 250); timer.unref?.(); });
 				}
