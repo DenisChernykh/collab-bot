@@ -92,6 +92,7 @@ P0-01 → P0-02
 | R1-05A | `SELF` | feature-owned profile Telegram composer |
 | R1-05B | `SELF` | feature-owned collaboration Telegram composer |
 | R1-05C | `SELF` | feature-owned marketplace and moderation Telegram composers |
+| R1-06A | `SELF` | isolated delivery worker lifecycle |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -568,7 +569,7 @@ P0-01 → P0-02
 
 #### R1-06A — Extract the delivery worker lifecycle
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Изолировать ordered delivery cycle, wakeable delay и stop-new-work behavior от bot runtime.
 - **Requirements:** TD §13.1, §13.4, §20.4; `LFR-11`.
 - **Dependencies:** `R1-05C`.
@@ -580,12 +581,12 @@ P0-01 → P0-02
 - **Tests first:** stop during delay, no overlapping cycles, in-flight completion.
 - **Verification:** focused runtime/delivery tests; architecture; `pnpm check`; fake journey; diff scan.
 - **Exit criteria:** runtime no longer owns timer loop; one commit `R1-06A: isolate delivery worker lifecycle`.
-- **Completion evidence:** pending.
+- **Completion evidence:** Commit SHA: `SELF`; extracted the exact ordered delivery startup/cycle into `DeliveryWorker.run(signal)`: stale recovery, terminal projection, capability-gated expiration, stale application projection supersede, one delivery attempt and a wakeable 250 ms delay. Abort stops only new steps and wakes the delay; an already-started step completes, the signal is deliberately not passed into `DeliveryRunner.runOnce`, and a concurrent second run is rejected. Runtime now performs abort → polling stop → worker join → in-flight update drain → SQLite close. Three source/test files plus this plan changed; `DeliveryRunner`, retry/provider policy, persistence, scheduler, product behavior and configuration stayed untouched. Test-first RED was the missing worker module; focused worker/runtime/delivery tests PASS (3 files, 31 tests); all fake E2E PASS (7 files, 30 tests); architecture PASS (111 modules, 347 dependencies); `pnpm check` PASS (66 unit, 81 integration, 34 runtime tests and build); `pnpm db:verify` PASS; `git diff --check` PASS. Critical self-review and independent read-only review both confirmed exact cycle order, degraded-capability skip, between-step abort checks, in-flight completion, non-overlap and shutdown ordering with no findings. No credential, real Telegram, remote or production mutation.
 - **Stop conditions:** implementation requires new scheduler/state or changes delivery semantics.
 
 #### R1-06B — Separate object graph from BotRuntime lifecycle
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Сделать composition side-effect free и сузить runtime до start/stop orchestration.
 - **Requirements:** TD §3.2, §4.1, §13.4, §20.4.
 - **Dependencies:** `R1-06A`.

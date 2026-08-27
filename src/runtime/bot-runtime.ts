@@ -47,6 +47,7 @@ import { OUTBOX_DELIVERY_KINDS } from "../application/ports/outbox-delivery-stor
 import { OutboxDeliveryService } from "../application/outbox/outbox-service.js";
 import { AdminModerationService } from "../application/moderation/admin-moderation-service.js";
 import { SqliteAdminModerationRepository } from "../infrastructure/database/admin-moderation-repository.js";
+import { DeliveryWorker } from "./delivery-worker.js";
 import { preflightShowcase } from "./showcase-preflight.js";
 
 export const ALLOWED_UPDATES = ["message", "callback_query"] as const;
@@ -213,20 +214,18 @@ export async function createBotRuntime(options: BotRuntimeOptions): Promise<BotR
 		const deliveryRunner = new DeliveryRunner(outboxStore, new GrammyTelegramTransport(bot), new SystemProviderDeadline(), new RandomClaimTokenGenerator(), clock, async (result) => {
 			if (result.deliveryId !== undefined) await collaborationPublicationService.projectDelivery(result.deliveryId, outboxStore);
 		}, () => capability.canPublish ? OUTBOX_DELIVERY_KINDS : ["dm_send"]);
-		let deliveryLoopStop = false;
-		let deliveryLoopPromise: Promise<void> | undefined;
-		const startDeliveryLoop = (): void => {
-			deliveryLoopStop = false;
-			deliveryLoopPromise = (async () => {
-				await deliveryRunner.recoverStale();
-				await collaborationPublicationService.projectTerminalOutcomes(outboxStore);
-				while (!deliveryLoopStop) {
-					if (capability.canPublish) await collaborationPublicationService.cancelExpiredPrepared();
-					await applicationsFeature.projectionMaintenance.supersedeStaleProjectionDeliveries(clock.now().getTime());
-					await deliveryRunner.runOnce();
-					await new Promise<void>((resolve) => { const timer = setTimeout(resolve, 250); timer.unref?.(); });
-				}
-			})();
+		const deliveryWorker = new DeliveryWorker({
+			canPublish: () => capability.canPublish,
+			recoverStale: () => deliveryRunner.recoverStale(),
+			projectTerminalOutcomes: () => collaborationPublicationService.projectTerminalOutcomes(outboxStore),
+			cancelExpiredPrepared: () => collaborationPublicationService.cancelExpiredPrepared(),
+			supersedeStaleProjections: () => applicationsFeature.projectionMaintenance.supersedeStaleProjectionDeliveries(clock.now().getTime()),
+			runOnce: () => deliveryRunner.runOnce(),
+		});
+		const deliveryAbortController = new AbortController();
+		let deliveryWorkerPromise: Promise<void> | undefined;
+		const startDeliveryWorker = (): void => {
+			deliveryWorkerPromise = deliveryWorker.run(deliveryAbortController.signal);
 		};
 		let shutdownPromise: Promise<void> | undefined;
 		const shutdown = async (): Promise<void> => {
@@ -235,7 +234,7 @@ export async function createBotRuntime(options: BotRuntimeOptions): Promise<BotR
 			const shouldStopPolling = lifecycle === "starting" || lifecycle === "running";
 			lifecycle = "stopping";
 			shutdownPromise = (async () => {
-				deliveryLoopStop = true;
+				deliveryAbortController.abort();
 				if (shouldStopPolling) {
 					try {
 						await bot.stop();
@@ -243,7 +242,7 @@ export async function createBotRuntime(options: BotRuntimeOptions): Promise<BotR
 						logger.error("poll_stop_failed", error);
 					}
 				}
-				if (deliveryLoopPromise !== undefined) await deliveryLoopPromise;
+				if (deliveryWorkerPromise !== undefined) await deliveryWorkerPromise;
 				if (inFlight > 0) await new Promise<void>((resolveDrain) => { drainResolve = resolveDrain; });
 				await boundary.close();
 				lifecycle = "stopped";
@@ -260,7 +259,7 @@ export async function createBotRuntime(options: BotRuntimeOptions): Promise<BotR
 				const preflight = await preflightShowcase(bot, options.config);
 				capability.canPublish = preflight.canPublish;
 				capability.reason = preflight.reason;
-				startDeliveryLoop();
+				startDeliveryWorker();
 				await bot.start({
 					allowed_updates: ALLOWED_UPDATES,
 					onStart: () => {
