@@ -573,7 +573,7 @@ async function renderCollaborationStep(ctx: Context, options: ProfileBotOptions,
 	const prompts: Record<Exclude<CollaborationWizardStep, "preview">, string> = {
 		format: "Выберите формат коллаборации:",
 		target_profile_type: "Кого вы ищете в партнёры?",
-		topics: "Укажите от 1 до 3 тематик через запятую.",
+		topics: "Выберите от 1 до 3 тем для этой коллаборации. Они могут отличаться от тем вашего профиля.\n\nДоступные темы: Lifestyle, Еда и рестораны, Красота, Путешествия, Город, События, Семья, Спорт, Бизнес, Другое.\n\nОтправьте названия через запятую. Например: Бизнес, Город.",
 		title: "Придумайте название коллаборации (5–100 символов).",
 		offer: "Что вы предлагаете партнёру? (10–1000 символов)",
 		expectation: "Что вы ожидаете от партнёра? (10–1000 символов)",
@@ -831,7 +831,8 @@ function parseCollaborationMutationCallback(data: string): CollaborationMutation
 
 function collaborationCallbackInput(mutation: CollaborationMutation): { readonly input: CollaborationDraftInput; readonly step: CollaborationWizardStep } | undefined {
 	if (mutation.kind === "format" && mutation.value !== undefined) {
-		try { return { input: { format: parseCollaborationFormat(mutation.value) }, step: "target_profile_type" }; } catch { return undefined; }
+		const value = mutation.value === "ad" ? "advertising_integration" : mutation.value;
+		try { return { input: { format: parseCollaborationFormat(value) }, step: "target_profile_type" }; } catch { return undefined; }
 	}
 	if (mutation.kind === "target" && mutation.value !== undefined) {
 		try { return { input: { targetProfileType: parseTargetProfileType(mutation.value) }, step: "topics" }; } catch { return undefined; }
@@ -865,7 +866,10 @@ function collaborationCallback(action: string, state: CollaborationDraftState, r
 function collaborationKeyboard(state: CollaborationDraftState, revision: number, options?: ProfileBotOptions): InlineKeyboard {
 	const keyboard = new InlineKeyboard();
 	if (state.step === "format") {
-		for (const [value, label] of [["advertising_integration", "Рекламная интеграция"], ["barter", "Бартер"], ["joint_giveaway", "Совместный розыгрыш"], ["joint_content", "Совместный контент"], ["mutual_pr", "Взаимопиар"], ["event", "Мероприятие"], ["other", "Другое"]] as const) keyboard.text(label, collaborationCallback(`collaboration:format:${value}`, state, revision)).row();
+		for (const [value, label] of [["advertising_integration", "Рекламная интеграция"], ["barter", "Бартер"], ["joint_giveaway", "Совместный розыгрыш"], ["joint_content", "Совместный контент"], ["mutual_pr", "Взаимопиар"], ["event", "Мероприятие"], ["other", "Другое"]] as const) {
+			const callbackValue = value === "advertising_integration" ? "ad" : value;
+			keyboard.text(label, collaborationCallback(`collaboration:format:${callbackValue}`, state, revision)).row();
+		}
 		keyboard.text("← В главное меню", collaborationCallback("collaboration:back", state, revision)).row();
 	} else if (state.step === "target_profile_type") {
 		for (const [value, label] of [["blogger", "Блогер"], ["telegram_channel", "Telegram-канал"], ["venue_or_brand", "Заведение или бренд"], ["any", "Любой партнёр"]] as const) keyboard.text(label, collaborationCallback(`collaboration:target:${value}`, state, revision)).row();

@@ -20,6 +20,7 @@ backups/
 *.db-*
 
 # Runtime, build, test, and package-manager artifacts
+.runtime/
 logs/
 *.log
 dist/

@@ -15,6 +15,7 @@ import {
 	type CollaborationWizardStep,
 } from "../../domain/collaborations/collaboration.js";
 import type { Clock } from "../ports/clock.js";
+import { DomainValidationError } from "../../domain/value-objects/enums.js";
 
 export class CollaborationProfileRequiredError extends Error {
 	constructor() { super("active profile is required before creating a collaboration"); this.name = "CollaborationProfileRequiredError"; }
@@ -67,18 +68,26 @@ export class CollaborationDraftService {
 
 	async saveStep(telegramUserId: string, expected: Pick<CollaborationSessionRecord, "collaborationId" | "revision" | "state">, input: CollaborationDraftInput, nextStep: CollaborationWizardStep): Promise<CollaborationDraftStartResult> {
 		const now = clockMilliseconds(this.clock);
-		return this.transactionRunner.withTransaction(async () => {
+		const outcome = await this.transactionRunner.withTransaction(async (): Promise<{ readonly result: CollaborationDraftStartResult } | { readonly error: DomainValidationError | CollaborationDraftStaleError }> => {
 			const current = await this.sessions.findActive(telegramUserId, now);
-			if (current === undefined || current.collaborationId !== expected.collaborationId || current.revision !== expected.revision || current.state.generation !== expected.state.generation) throw new CollaborationDraftStaleError();
+			if (current === undefined || current.collaborationId !== expected.collaborationId || current.revision !== expected.revision || current.state.generation !== expected.state.generation) return { error: new CollaborationDraftStaleError() };
 			const merged = { ...stateToInput(current.state), ...input };
 			if (input.eventDateLocal === null) delete (merged as { eventDateLocal?: unknown }).eventDateLocal;
 			const validationOptions = { allowPersistedDeadline: input.responseDeadlineDate === undefined };
-			const normalized = nextStep === "preview" ? validateCompleteCollaborationDraft(merged, now, validationOptions) : validateCollaborationDraftInput(merged, now, validationOptions);
+			let normalized: CollaborationDraftInput;
+			try {
+				normalized = nextStep === "preview" ? validateCompleteCollaborationDraft(merged, now, validationOptions) : validateCollaborationDraftInput(merged, now, validationOptions);
+			} catch (error) {
+				if (error instanceof DomainValidationError) return { error };
+				throw error;
+			}
 			const draft = await this.repository.replaceDraft(telegramUserId, current.collaborationId, normalized, now);
 			const state: CollaborationDraftState = { version: COLLABORATION_SESSION_VERSION, generation: current.state.generation, step: nextStep, ...sessionInput(normalized) };
 			const session = await this.saveSession({ telegramUserId, collaborationId: draft.id, state, revision: current.revision + 1, expiresAt: now + COLLABORATION_SESSION_TTL_MS, updatedAt: now });
-			return { draft, session, resumed: true };
+			return { result: { draft, session, resumed: true } };
 		});
+		if ("error" in outcome) throw outcome.error;
+		return outcome.result;
 	}
 
 	async cancel(telegramUserId: string, expected?: Pick<CollaborationSessionRecord, "collaborationId" | "revision" | "state">): Promise<boolean> {
