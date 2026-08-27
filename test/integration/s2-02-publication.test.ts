@@ -13,7 +13,7 @@ import { SqliteOutboxDeliveryRepository } from "../../src/infrastructure/databas
 import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/database/transaction-runner.js";
 import { SqliteTelegramUserRepository } from "../../src/infrastructure/database/telegram-user-repository.js";
 import { FakeTelegramTransport } from "../support/fake-telegram-transport.js";
-import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
+import { FakeClock } from "../support/fake-clock.js";
 import {
 	CollaborationDraftService,
 	CollaborationPublicationService,

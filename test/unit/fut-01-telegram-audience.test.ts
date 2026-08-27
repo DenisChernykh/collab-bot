@@ -7,7 +7,7 @@ import type {
 	TelegramAudienceTarget,
 } from "../../src/modules/profiles/index.js";
 import { PROVIDER_DEADLINE_MS } from "../../src/application/ports/provider-deadline.js";
-import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
+import { FakeClock } from "../support/fake-clock.js";
 import { SystemProviderDeadline } from "../../src/infrastructure/time/provider-deadline.js";
 import {
 	ProfileAudienceService,

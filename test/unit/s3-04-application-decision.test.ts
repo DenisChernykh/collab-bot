@@ -6,7 +6,7 @@ import type {
 	OutboxDeliveryStore,
 } from "../../src/application/ports/outbox-delivery-store.js";
 import type { TransactionRunner } from "../../src/application/ports/transaction-runner.js";
-import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
+import { FakeClock } from "../support/fake-clock.js";
 
 const NOW = 1_700_000_100_000;
 const COLLABORATION_ID = "11111111-1111-4111-8111-111111111111";

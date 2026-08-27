@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { SqliteTelegramUserRepository } from "../../src/infrastructure/database/telegram-user-repository.js";
 import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/database/transaction-runner.js";
-import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
+import { FakeClock } from "../support/fake-clock.js";
 import { createMarketplaceFeature } from "../../src/modules/marketplace/index.js";
 import { withFreshMigratedDatabase } from "../support/migrated-database.js";
 

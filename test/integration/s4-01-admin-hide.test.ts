@@ -18,7 +18,7 @@ import { MigrationRunner, MigrationSource } from "../../src/infrastructure/datab
 import { SqliteOutboxDeliveryRepository } from "../../src/infrastructure/database/outbox-delivery-repository.js";
 import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/database/transaction-runner.js";
 import { FakeTelegramTransport } from "../support/fake-telegram-transport.js";
-import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
+import { FakeClock } from "../support/fake-clock.js";
 import { AdminModerationService } from "../../src/modules/moderation/index.js";
 import { SqliteAdminModerationRepository } from "../../src/modules/moderation/infrastructure/sqlite-admin-moderation-repository.js";
 

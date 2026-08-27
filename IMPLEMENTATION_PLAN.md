@@ -132,6 +132,7 @@ P0-01 → P0-02
 | R2-13F | `9215d9d2c9f4ee5f03afa21a4138db4e8168c062` | removed remaining feature bridges and owned deadline policy |
 | R2-14A | `a12e7e275db5cc4b562be044668cc59b00fbee89` | test-owned grammY API fake |
 | R2-14B | `0889b71bb810033bca3fcd6b35130255a79d9300` | test-owned Telegram transport fake |
+| R2-14C | `c349454d191cf78ecf3bfde2efa82b07a32c9636` | test-support FakeClock facade and first consumer cohort |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -1114,7 +1115,7 @@ P0-01 → P0-02
 
 #### R2-14D — Cut the second fake-clock consumer cohort
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Перевести двенадцать записанных integration/unit consumers на test-support facade.
 - **Dependencies:** `R2-14C`.
 - **Read first:** integration `r2-08`, `r2-10a`, `s1-01`, `s1-02`, `s2-01`, `s2-02`, `s3-02`, `s3-03`, `s3-04`, `s4-01`; unit `fut-01`, `s3-04`.
@@ -1123,11 +1124,12 @@ P0-01 → P0-02
 - **Invariants:** test timestamps/lifecycle remain explicit and unchanged.
 - **Verification:** affected tests; all suites; architecture; `pnpm check`; `pnpm test:e2e:fake`; `pnpm db:verify`.
 - **Exit criteria:** only three E2E tests import the source path; один commit `R2-14D: cut second fake-clock cohort`.
+- **Completion evidence:** Commit SHA: `SELF`; switched the recorded twelve integration/unit files to the test-support FakeClock facade. The facade still delegates to the unchanged canonical implementation; only the three scheduled E2E consumers plus the facade itself retain the source import. Exactly twelve import-only test paths plus this plan changed; timestamps, assertions, DB isolation and lifecycle stayed unchanged. Affected tests PASS (12 files, 81 tests); remaining-import audit matches the recorded final cohort; architecture PASS (128 modules, 416 dependencies); `pnpm check` PASS (69 unit, 88 integration, 47 runtime, lint/typecheck/build); all fake E2E PASS (33); `pnpm db:verify` PASS. No credential, real Telegram, remote or production mutation.
 - **Stop conditions:** recorded cohort or importer count differs at preflight.
 
 #### R2-14E — Remove the fake-clock source bridge
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Перевести последние три E2E importers и удалить последний test-only production path.
 - **Dependencies:** `R2-14D`.
 - **Read first:** E2E `s1-02`, `s2-01`, `s3-02`, facade content and exact `src/infrastructure/testing|time` scan.
