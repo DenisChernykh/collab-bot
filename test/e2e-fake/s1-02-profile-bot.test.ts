@@ -13,7 +13,7 @@ import { DatabaseBoundary } from "../../src/infrastructure/database/database-bou
 import { MigrationRunner, MigrationSource } from "../../src/infrastructure/database/migrations.js";
 import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/database/transaction-runner.js";
 import { SqliteTelegramUserRepository } from "../../src/infrastructure/database/telegram-user-repository.js";
-import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
+import { FakeClock } from "../support/fake-clock.js";
 import { SystemProviderDeadline } from "../../src/infrastructure/time/provider-deadline.js";
 import {
 	ProfileAudienceService,

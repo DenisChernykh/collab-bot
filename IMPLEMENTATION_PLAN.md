@@ -133,6 +133,7 @@ P0-01 → P0-02
 | R2-14A | `a12e7e275db5cc4b562be044668cc59b00fbee89` | test-owned grammY API fake |
 | R2-14B | `0889b71bb810033bca3fcd6b35130255a79d9300` | test-owned Telegram transport fake |
 | R2-14C | `c349454d191cf78ecf3bfde2efa82b07a32c9636` | test-support FakeClock facade and first consumer cohort |
+| R2-14D | `e1f3ae7f0f1c500d6c0371bfc0f5b99044235551` | second FakeClock consumer cohort |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -1129,7 +1130,7 @@ P0-01 → P0-02
 
 #### R2-14E — Remove the fake-clock source bridge
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Перевести последние три E2E importers и удалить последний test-only production path.
 - **Dependencies:** `R2-14D`.
 - **Read first:** E2E `s1-02`, `s2-01`, `s3-02`, facade content and exact `src/infrastructure/testing|time` scan.
@@ -1138,11 +1139,12 @@ P0-01 → P0-02
 - **Invariants:** all tests use the same moved implementation and no production module depends on it.
 - **Verification:** all suites together; architecture; `pnpm check`; `pnpm test:e2e:fake`; `pnpm db:verify`; zero test-only source scan.
 - **Exit criteria:** production `src` has no test-only adapter; один commit `R2-14E: remove fake-clock source bridge`.
+- **Completion evidence:** Commit SHA: `SELF`; replaced the temporary test facade with the byte-identical FakeClock implementation, switched the final three E2E consumers and deleted `src/infrastructure/time/fake-clock.ts` plus the now-empty `src/infrastructure/testing` directory. Production `src` now contains no test-only clock, grammY API fake or Telegram transport fake. Five source/test paths plus this plan changed; clock validation/mutation behavior, explicit per-test instances, assertions and lifecycle stayed unchanged. Exact old-path/source scans PASS; focused final E2E/primitive tests PASS (4 files, 32 tests); architecture PASS (127 modules, 415 dependencies); `pnpm check` PASS (69 unit, 88 integration, 47 runtime, lint/typecheck/build); all fake E2E PASS (33); `pnpm db:verify` PASS. No credential, real Telegram, remote or production mutation.
 - **Stop conditions:** any source consumer or behavioral difference remains.
 
 #### R2-15 — Close the physical transition
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Синхронизировать TD/README, доказать completed tree и независимо проверить весь R2 candidate.
 - **Dependencies:** `R2-14E`.
 - **Read first:** full R2 diff/log, actual tree/import graph, all unit evidence and docs.
