@@ -1,6 +1,6 @@
 import { randomBytes, randomInt } from "node:crypto";
 
-import { Bot, InlineKeyboard, Keyboard, type Context } from "grammy";
+import { Bot, Composer, InlineKeyboard, Keyboard, type Context } from "grammy";
 import type { Update } from "grammy/types";
 
 import type { Clock } from "../application/ports/clock.js";
@@ -43,6 +43,7 @@ import type { AdminModerationService } from "../application/moderation/admin-mod
 import type { CollaborationDraftInput, CollaborationDraftState, CollaborationWizardStep } from "../domain/collaborations/collaboration.js";
 import type { ProfileInput, ProfileRecord } from "../domain/profiles/profile.js";
 import { DomainValidationError, parseCollaborationFormat, parsePlatformType, parseProfileType, parseTargetProfileType, parseTopic, type CollaborationFormat, type PlatformType, type ProfileType, type Topic } from "../domain/value-objects/enums.js";
+import { registerDurableTelegramIngress } from "./durable-telegram-ingress.js";
 
 const PROFILE_STATIC_CALLBACKS = new Set(["menu:home", "profile:create", "profile:resume", "profile:view", "profile:edit", "profile:unavailable", "collaboration:start", "collaboration:resume", "collaboration:own", "application:own", "browse:start"]);
 const CALLBACK_ACTION_TTL_MS = 24 * 60 * 60 * 1_000;
@@ -150,119 +151,123 @@ export interface RegisteredProfileBot {
 export function registerProfileBot(bot: Bot, options: ProfileBotOptions): RegisteredProfileBot {
 	const requestIdFactory = options.requestIdFactory ?? (() => randomInt(1, 2_147_483_647));
 
-	bot.on("message", async (ctx) => {
-		const message = ctx.message;
-		await runDurable(ctx, options, { kind: "message", text: message.text ?? "", hasChatShared: message.chat_shared !== undefined }, async (workCtx) => {
-			if (workCtx.chat?.type !== "private" || workCtx.from === undefined) return;
-			if (!(await ensureActor(workCtx, options))) return;
-			const userId = String(workCtx.from.id);
-			if (message.chat_shared !== undefined) {
-				await handleChatShared(workCtx, options, userId, message.chat_shared);
-				return;
-			}
-			if (message.text !== undefined) await handleText(workCtx, options, userId, message.text);
-		});
-	});
-
-	bot.on("callback_query:data", async (ctx) => {
-		const callbackQuery = ctx.callbackQuery;
-		const data = callbackQuery.data;
-		if (data.startsWith("cb_")) {
-			await handleOpaqueCallback(ctx, options, data);
+	const messageRoute = new Composer<Context>();
+	messageRoute.on("message", async (workCtx) => {
+		const message = workCtx.message;
+		if (workCtx.chat?.type !== "private" || workCtx.from === undefined) return;
+		if (!(await ensureActor(workCtx, options))) return;
+		const userId = String(workCtx.from.id);
+		if (message.chat_shared !== undefined) {
+			await handleChatShared(workCtx, options, userId, message.chat_shared);
 			return;
 		}
-		await runDurable(ctx, options, { kind: "callback_query", data }, async (workCtx) => {
-			if (callbackQuery.message?.chat.type !== "private" || workCtx.from === undefined) {
-				await workCtx.answerCallbackQuery();
-				return;
-			}
-			if (!(await ensureActor(workCtx, options))) {
-				await workCtx.answerCallbackQuery();
-				return;
-			}
+		if (message.text !== undefined) await handleText(workCtx, options, userId, message.text);
+	});
+
+	const callbackRoute = new Composer<Context>();
+	callbackRoute.on("callback_query:data", async (workCtx) => {
+		const callbackQuery = workCtx.callbackQuery;
+		const data = callbackQuery.data;
+		if (callbackQuery.message?.chat.type !== "private" || workCtx.from === undefined) {
 			await workCtx.answerCallbackQuery();
-			const mutation = parseProfileMutationCallback(data);
-			const collaborationMutation = parseCollaborationMutationCallback(data);
-			const browseMutation = parseBrowseMutation(data);
-			const applicationStart = parseApplicationStart(data);
-			if (!PROFILE_STATIC_CALLBACKS.has(data) && mutation === undefined && collaborationMutation === undefined && browseMutation === undefined && applicationStart === undefined) return;
-			const userId = String(workCtx.from.id);
-			if (mutation !== undefined) {
-				switch (mutation.kind) {
-					case "back":
-						await backSession(workCtx, options, userId, mutation);
-						return;
-					case "cancel":
-						await cancelSession(workCtx, options, userId, mutation);
-						return;
-					case "apply":
-						await apply(workCtx, options, userId, mutation);
-						return;
-					case "type":
-						await chooseType(workCtx, options, userId, mutation.value ?? "", mutation);
-						return;
-					case "platform":
-						await choosePlatform(workCtx, options, userId, mutation.value ?? "", requestIdFactory, mutation);
-						return;
-					case "omit":
-						await omitOptional(workCtx, options, userId, mutation);
-						return;
-				}
-			}
-			if (collaborationMutation !== undefined) {
-				await handleCollaborationMutation(workCtx, options, userId, collaborationMutation);
-				return;
-			}
-			if (browseMutation !== undefined) {
-				await handleBrowseMutation(workCtx, options, userId, browseMutation);
-				return;
-			}
-			if (applicationStart !== undefined) {
-				await handleApplicationStart(workCtx, options, userId, applicationStart);
-				return;
-			}
-			switch (data) {
-			case "menu:home":
-				await renderMenu(workCtx, options, userId);
-				return;
-			case "profile:create":
-				await startOrResume(workCtx, options, userId, false);
-				return;
-			case "profile:resume":
-				await resume(workCtx, options, userId);
-				return;
-			case "profile:view":
-				await showProfile(workCtx, options, userId);
-				return;
-			case "profile:edit":
-				await startOrResume(workCtx, options, userId, true);
-				return;
-			case "profile:unavailable":
-				await workCtx.reply("Этот раздел пока готовится. Сейчас вы можете создать и отредактировать профиль.", { reply_markup: menuKeyboard(options) });
-				return;
-			case "collaboration:start":
-			case "collaboration:resume":
-				await startOrResumeCollaboration(workCtx, options, userId);
-				return;
-			case "collaboration:own":
-				await renderOwnCollaborations(workCtx, options, userId);
-				return;
-			case "application:own":
-				await renderOwnApplications(workCtx, options, userId);
-				return;
-			case "browse:start":
-				await openFeed(workCtx, options, userId);
-				return;
-			default:
-				if (data.startsWith("profile:type:")) {
-					await chooseType(workCtx, options, userId, data.slice("profile:type:".length));
+			return;
+		}
+		if (!(await ensureActor(workCtx, options))) {
+			await workCtx.answerCallbackQuery();
+			return;
+		}
+		await workCtx.answerCallbackQuery();
+		const mutation = parseProfileMutationCallback(data);
+		const collaborationMutation = parseCollaborationMutationCallback(data);
+		const browseMutation = parseBrowseMutation(data);
+		const applicationStart = parseApplicationStart(data);
+		if (!PROFILE_STATIC_CALLBACKS.has(data) && mutation === undefined && collaborationMutation === undefined && browseMutation === undefined && applicationStart === undefined) return;
+		const userId = String(workCtx.from.id);
+		if (mutation !== undefined) {
+			switch (mutation.kind) {
+				case "back":
+					await backSession(workCtx, options, userId, mutation);
 					return;
-				}
-				if (data.startsWith("profile:platform:")) {
-					await choosePlatform(workCtx, options, userId, data.slice("profile:platform:".length), requestIdFactory);
-				}
+				case "cancel":
+					await cancelSession(workCtx, options, userId, mutation);
+					return;
+				case "apply":
+					await apply(workCtx, options, userId, mutation);
+					return;
+				case "type":
+					await chooseType(workCtx, options, userId, mutation.value ?? "", mutation);
+					return;
+				case "platform":
+					await choosePlatform(workCtx, options, userId, mutation.value ?? "", requestIdFactory, mutation);
+					return;
+				case "omit":
+					await omitOptional(workCtx, options, userId, mutation);
+					return;
 			}
-		});
+		}
+		if (collaborationMutation !== undefined) {
+			await handleCollaborationMutation(workCtx, options, userId, collaborationMutation);
+			return;
+		}
+		if (browseMutation !== undefined) {
+			await handleBrowseMutation(workCtx, options, userId, browseMutation);
+			return;
+		}
+		if (applicationStart !== undefined) {
+			await handleApplicationStart(workCtx, options, userId, applicationStart);
+			return;
+		}
+		switch (data) {
+		case "menu:home":
+			await renderMenu(workCtx, options, userId);
+			return;
+		case "profile:create":
+			await startOrResume(workCtx, options, userId, false);
+			return;
+		case "profile:resume":
+			await resume(workCtx, options, userId);
+			return;
+		case "profile:view":
+			await showProfile(workCtx, options, userId);
+			return;
+		case "profile:edit":
+			await startOrResume(workCtx, options, userId, true);
+			return;
+		case "profile:unavailable":
+			await workCtx.reply("Этот раздел пока готовится. Сейчас вы можете создать и отредактировать профиль.", { reply_markup: menuKeyboard(options) });
+			return;
+		case "collaboration:start":
+		case "collaboration:resume":
+			await startOrResumeCollaboration(workCtx, options, userId);
+			return;
+		case "collaboration:own":
+			await renderOwnCollaborations(workCtx, options, userId);
+			return;
+		case "application:own":
+			await renderOwnApplications(workCtx, options, userId);
+			return;
+		case "browse:start":
+			await openFeed(workCtx, options, userId);
+			return;
+		default:
+			if (data.startsWith("profile:type:")) {
+				await chooseType(workCtx, options, userId, data.slice("profile:type:".length));
+				return;
+			}
+			if (data.startsWith("profile:platform:")) {
+				await choosePlatform(workCtx, options, userId, data.slice("profile:platform:".length), requestIdFactory);
+			}
+		}
+	});
+
+	registerDurableTelegramIngress(bot, {
+		executeDurably: (ctx, input, route) => runDurable(ctx, options, input, route),
+		messageRoute: messageRoute.middleware(),
+		callbackRoute: callbackRoute.middleware(),
+		opaqueCallbackRoute: async (ctx) => {
+			const data = ctx.callbackQuery?.data;
+			if (data !== undefined) await handleOpaqueCallback(ctx, options, data);
+		},
 	});
 
 	return { profileService: options.profileService };

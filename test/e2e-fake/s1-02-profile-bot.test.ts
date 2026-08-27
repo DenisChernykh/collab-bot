@@ -133,6 +133,7 @@ describe("S1-02 fake Telegram profile journey", () => {
 			const applyPromise = restartedBot.handleUpdate({ update_id: 17, callback_query: callback(17, firstApplyCallback) });
 			await lookupStarted;
 			expect(fake.calls.at(-1)?.method).toBe("answerCallbackQuery");
+			expect(fake.calls.slice(callsBeforeApply).filter((call) => call.method === "sendMessage")).toHaveLength(0);
 			const observer = new DatabaseBoundary(databasePath);
 			try {
 				expect(await observer.query("SELECT status FROM command_receipts WHERE command_id = 'telegram:update:17'")).toEqual([{ status: "completed" }]);

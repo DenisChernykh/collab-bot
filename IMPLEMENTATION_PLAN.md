@@ -88,6 +88,7 @@ P0-01 → P0-02
 | R1-01 | `SELF` | executable import graph and cycle enforcement |
 | R1-02 | `SELF` | consumer-oriented applications use cases and ports |
 | R1-03 | `SELF` | feature-owned applications persistence and composition |
+| R1-04 | `SELF` | single durable Telegram ingress seam |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -496,7 +497,7 @@ P0-01 → P0-02
 
 #### R1-04 — Establish a single durable grammY ingress seam
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Сохранить один receipt/transaction envelope и дать feature composers безопасную точку подключения.
 - **Requirements:** TD §4.1, §10.1–§10.4; `LFR-10`, `LAC-08`.
 - **Dependencies:** `R1-03`.
@@ -508,12 +509,12 @@ P0-01 → P0-02
 - **Tests first:** duplicate update, opaque callback и post-commit reply routing tests.
 - **Verification:** focused fake tests; all e2e-fake; architecture; `pnpm check`; diff/secret scans.
 - **Exit criteria:** feature middleware может работать на durable proxy context; один commit `R1-04: establish durable Telegram routing seam`.
-- **Completion evidence:** pending.
+- **Completion evidence:** Commit SHA: `SELF`; added a root grammY ingress router, mounted the existing message/callback logic as two terminal Composer middlewares on the durable proxy context, and kept `cb_*` on its existing callback-action executor without an outer receipt/transaction envelope. Four source/test files plus this plan changed; `runDurable`, `ReplyCollector`, `handleOpaqueCallback`, runtime, SQL, applications, copy, keyboards and callback codecs stayed unchanged. Test-first RED was the missing ingress module; focused ingress/profile/opaque fake tests PASS (3 files, 19 tests); all fake E2E PASS (4 files, 22 tests); architecture PASS (103 modules, 303 dependencies); `pnpm check` PASS (66 unit, 81 integration, 30 runtime tests and build); `git diff --check` PASS. Independent read-only review verified mutually exclusive routing, one durable call for generic updates, `cb_*` bypass, terminal `next`, canonical-input parity and production post-commit reply/ack behavior, and returned PASS with no findings. No credential, real Telegram, remote or production mutation.
 - **Stop conditions:** middleware ordering меняет replay/ack или нужен новый context framework.
 
 #### R1-05A — Extract the profile Telegram composer
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Передать profile wizard/render/session routing feature-owned presentation без изменения quick-profile continuation.
 - **Requirements:** `LFR-01`, `LAC-01`, `LAC-03`; TD §10.3, §10.5.
 - **Dependencies:** `R1-04`.
