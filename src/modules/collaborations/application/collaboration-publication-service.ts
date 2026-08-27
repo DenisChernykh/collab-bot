@@ -4,6 +4,7 @@ import { OutboxDeliveryService } from "../../../application/outbox/outbox-servic
 import type { Clock } from "../../../application/ports/clock.js";
 import type { OutboxDeliveryStore } from "../../../application/ports/outbox-delivery-store.js";
 import type { TransactionRunner } from "../../../application/ports/transaction-runner.js";
+import { isDeadlineDue, isMutationAllowed } from "../domain/deadline.js";
 import type { CollaborationPublicationRepository, CollaborationSummary } from "./ports/collaboration-publication-repository.js";
 import type { CollaborationRepository } from "./ports/collaboration-repository.js";
 import type { CollaborationSessionRepository } from "./ports/collaboration-session-repository.js";
@@ -49,7 +50,7 @@ export class CollaborationPublicationService {
 			if (existing !== undefined) {
 				return { collaborationId, status: current.status as PublishCollaborationResult["status"], ...(existing.lastDeliveryId === null ? {} : { deliveryId: existing.lastDeliveryId }) };
 			}
-			if (current.status !== "draft" || current.publicToken !== null || current.responseDeadlineAt === null || now > current.responseDeadlineAt || current.format === null || current.targetProfileType === null || current.topics.length === 0 || current.title === null || current.offerText === null || current.expectationText === null || current.slotsTotal === null) throw new CollaborationNotPublishableError();
+			if (current.status !== "draft" || current.publicToken !== null || current.responseDeadlineAt === null || !isMutationAllowed(now, current.responseDeadlineAt) || current.format === null || current.targetProfileType === null || current.topics.length === 0 || current.title === null || current.offerText === null || current.expectationText === null || current.slotsTotal === null) throw new CollaborationNotPublishableError();
 			const token = randomBytes(16).toString("base64url");
 			const renderedText = renderCollaborationCard(current);
 			const renderedHash = createHash("sha256").update(renderedText, "utf8").digest("hex");
@@ -90,7 +91,7 @@ export class CollaborationPublicationService {
 		if (delivery.status === "sent" && delivery.messageId !== null) {
 			const collaboration = await this.collaborations.findById(publication.collaborationId);
 			const outcomeAt = delivery.updatedAt;
-			if (collaboration !== undefined && collaboration.responseDeadlineAt !== null && outcomeAt > collaboration.responseDeadlineAt) {
+			if (collaboration !== undefined && collaboration.responseDeadlineAt !== null && isDeadlineDue(outcomeAt, collaboration.responseDeadlineAt)) {
 				await this.transactions.withTransaction(async () => {
 					if (!(await this.publications.markExpired(publication.collaborationId, delivery.messageId!, outcomeAt))) return;
 					const terminalText = renderCollaborationCard(collaboration, { expired: true });

@@ -128,6 +128,7 @@ P0-01 → P0-02
 | R2-13B | `f97d771f32d0dd33382bdfa98cdafaebfbf2ce05` | removed profile compatibility paths |
 | R2-13C | `383ea3d26ac1aa1d0886f4c1f8580337ce2dd30e` | collaboration consumer cutover to module ownership |
 | R2-13D | `49f05d81dcb7c1a3e0c7b53d996e20de20ff3b0a` | removed collaboration compatibility paths |
+| R2-13E | `f97f32d1edaa0807d2f6ca563cb92b5e3357d0dd` | remaining feature consumer cutover to module ownership |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -1054,7 +1055,7 @@ P0-01 → P0-02
 
 #### R2-13F — Remove remaining feature bridges and misplaced deadline policy
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Физически удалить marketplace, applications и moderation compatibility files, а collaboration deadline policy передать доменному owner.
 - **Dependencies:** `R2-13E`.
 - **Read first:** exact source import graph, seven remaining bridge files, `infrastructure/time/deadline.ts`, its two production consumers and primitive test.
@@ -1063,11 +1064,12 @@ P0-01 → P0-02
 - **Invariants:** no feature code or compatibility export survives in shared domain/application/infrastructure; deadline behavior has one collaboration-owned implementation.
 - **Verification:** zero legacy feature scan over `src` and `test`; architecture; `pnpm check`; all fake E2E; `pnpm db:verify`.
 - **Exit criteria:** feature-first completion definition holds for production `src`; один commit `R2-13F: remove remaining feature bridges`.
+- **Completion evidence:** Commit SHA: `SELF`; deleted the final seven marketplace/applications/moderation compatibility exports and removed their empty shared directories. Moved the duplicate collaboration date/deadline primitive from generic infrastructure into `modules/collaborations/domain/deadline.ts`; the collaboration domain now uses that canonical parse/format/end-of-day logic and publication uses its inclusive mutation/due predicates instead of duplicate comparisons. The primitive test follows the real owner unchanged. Dependency-cruiser rejects all removed legacy feature/deadline imports. Exactly twelve source/test paths plus architecture config and this plan changed; deadline boundaries, SQL, product policy and Telegram behavior stayed unchanged. Deadline/domain/publication focused tests PASS (3 files, 19 tests); exact source/test old-path scans PASS; architecture PASS (130 modules, 420 dependencies); `pnpm check` PASS (69 unit, 88 integration, 47 runtime, lint/typecheck/build); all fake E2E PASS (33); `pnpm db:verify` PASS. No credential, real Telegram, remote or production mutation.
 - **Stop conditions:** any bridge still has an active consumer.
 
 #### R2-14A — Move the grammY API fake to test support
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Убрать `FakeTelegramApi` из production source.
 - **Dependencies:** `R2-13F`.
 - **Read first:** fake implementation and its ten sorted consumers.

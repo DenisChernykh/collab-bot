@@ -26,7 +26,7 @@ import {
 	isDeadlineDue,
 	isMutationAllowed,
 	parseLocalDate,
-} from "../../src/infrastructure/time/deadline.js";
+} from "../../src/modules/collaborations/domain/deadline.js";
 import {
 	generateCallbackToken,
 	generatePublicToken,

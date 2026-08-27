@@ -43,6 +43,14 @@ module.exports = {
 			},
 		},
 		{
+			name: "no-remaining-legacy-feature-imports",
+			severity: "error",
+			from: { path: "(^|/)src/" },
+			to: {
+				path: "(^|/)src/(application/(applications/|collaborations/collaboration-browse-service\\.ts$|moderation/|ports/(collaboration-browse-repository|admin-moderation-repository)\\.ts$)|infrastructure/database/(collaboration-browse-repository|admin-moderation-repository)\\.ts$|infrastructure/time/deadline\\.ts$)",
+			},
+		},
+		{
 			name: "bot-application-must-compose-features-through-public-entrypoints",
 			severity: "error",
 			from: { path: "(^|/)src/runtime/bot-application\\.ts$" },

@@ -1,5 +1,4 @@
-import { format, isValid, parse } from "date-fns";
-import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
+import { formatInTimeZone } from "date-fns-tz";
 
 import {
 	DomainValidationError,
@@ -11,15 +10,18 @@ import {
 	type TargetProfileType,
 	type Topic,
 } from "../../../domain/value-objects/enums.js";
+import {
+	deadlineAtEndOfLocalDay,
+	formatEventDate,
+	parseLocalDate,
+	type LocalDate,
+} from "./deadline.js";
 
 export const COLLABORATION_CITY = "ekaterinburg" as const;
 export const COLLABORATION_SESSION_VERSION = 1 as const;
 export const COLLABORATION_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 export const MAX_TELEGRAM_MESSAGE_UTF16_LENGTH = 4096;
 const LOCAL_TIME_ZONE = "Asia/Yekaterinburg";
-const LOCAL_DATE_PATTERN = /^\d{2}\.\d{2}\.\d{4}$/;
-
-export interface LocalDate { readonly year: number; readonly month: number; readonly day: number }
 
 export interface CollaborationDraftInput {
 	readonly format?: CollaborationFormat;
@@ -155,21 +157,6 @@ export function localDateFromMilliseconds(milliseconds: number): LocalDate {
 export function responseDeadlineDateFromMilliseconds(milliseconds: number): string {
 	const date = localDateFromMilliseconds(milliseconds);
 	return formatEventDate(date);
-}
-
-function parseLocalDate(value: string): LocalDate {
-	if (!LOCAL_DATE_PATTERN.test(value)) throw new RangeError("date must use strict DD.MM.YYYY format");
-	const parsed = parse(value, "dd.MM.yyyy", new Date(0));
-	if (!isValid(parsed) || format(parsed, "dd.MM.yyyy") !== value) throw new RangeError("date is not a valid calendar date");
-	return { year: Number(value.slice(6, 10)), month: Number(value.slice(3, 5)), day: Number(value.slice(0, 2)) };
-}
-
-function formatEventDate(date: LocalDate): string {
-	return `${date.year.toString().padStart(4, "0")}-${date.month.toString().padStart(2, "0")}-${date.day.toString().padStart(2, "0")}`;
-}
-
-function deadlineAtEndOfLocalDay(date: LocalDate): number {
-	return fromZonedTime(`${formatEventDate(date)}T23:59:59.999`, LOCAL_TIME_ZONE).getTime();
 }
 
 function parseLocalDateOrDomainError(value: string): LocalDate {
