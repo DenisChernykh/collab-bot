@@ -4,10 +4,11 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { CanonicalInput } from "../../src/application/commands/canonical-input.js";
 import type { SafeResult } from "../../src/application/commands/safe-result.js";
-import { createMarketplaceTelegramFeature } from "../../src/bot/marketplace/marketplace-composer.js";
-import { parseMarketplaceCallback } from "../../src/bot/marketplace/marketplace-callback-codec.js";
+import { createApplicationsTelegramFeature } from "../../src/bot/marketplace/marketplace-composer.js";
+import { parseApplicationsCallback } from "../../src/bot/marketplace/marketplace-callback-codec.js";
 import { createModerationTelegramFeature } from "../../src/bot/moderation/moderation-composer.js";
 import { FakeTelegramApi } from "../../src/infrastructure/testing/fake-telegram-api.js";
+import { createMarketplaceTelegramFeature, parseMarketplaceCallback } from "../../src/modules/marketplace/index.js";
 
 const NOW = 1_700_000_000_000;
 
@@ -15,17 +16,21 @@ describe("R1-05C marketplace and moderation Telegram composers", () => {
 	it("claims only marketplace callbacks and lets one outer acknowledgement serve the handled route", async () => {
 		expect(parseMarketplaceCallback("browse:start")).toEqual({ kind: "open_feed" });
 		expect(parseMarketplaceCallback("b:n:0123456789abcdef:z")).toEqual({ kind: "browse", mutation: { kind: "next", generation: "0123456789abcdef", revision: 35 } });
-		expect(parseMarketplaceCallback(`application:start:d:${"A".repeat(22)}`)).toEqual({ kind: "start_application", start: { publicToken: "A".repeat(22), source: "deep_link" } });
+		expect(parseApplicationsCallback(`application:start:d:${"A".repeat(22)}`)).toEqual({ kind: "start_application", start: { publicToken: "A".repeat(22), source: "deep_link" } });
+		expect(parseApplicationsCallback("application:own")).toEqual({ kind: "own_applications" });
 		expect(parseMarketplaceCallback("profile:view")).toBeUndefined();
 		expect(parseMarketplaceCallback("collaboration:own")).toBeUndefined();
 		expect(parseMarketplaceCallback("cb_opaque")).toBeUndefined();
 
 		const fake = telegramFake();
-		const feature = createMarketplaceTelegramFeature({
+		const feature = createApplicationsTelegramFeature({
 			applicationsApi: applicationsApi({ listOwnApplications: async () => [] }),
 			clock: { now: () => new Date(NOW) },
 			menuKeyboard: () => new InlineKeyboard().text("Menu", "menu:home"),
 			profileFlow: emptyProfileFlow(),
+			targetFlow: emptyTargetFlow(),
+			profileTypeLabel: String,
+			topicLabel: String,
 			upsertActorSnapshot: async () => {},
 			occurredAt: () => new Date(NOW),
 			getUpdateId: (ctx) => ctx.update.update_id,
@@ -53,12 +58,9 @@ describe("R1-05C marketplace and moderation Telegram composers", () => {
 	it("keeps malformed collaboration deep links claimed while generic start remains available", async () => {
 		const replies: string[] = [];
 		const feature = createMarketplaceTelegramFeature({
-			clock: { now: () => new Date(NOW) },
+			browseService: { openDeepLink: async () => ({ kind: "unavailable" }) } as never,
 			menuKeyboard: () => new InlineKeyboard().text("Menu", "menu:home"),
-			profileFlow: emptyProfileFlow(),
-			upsertActorSnapshot: async () => {},
-			occurredAt: () => new Date(NOW),
-			getUpdateId: (ctx) => ctx.update.update_id,
+			applicationStartCallback: (source, token) => `application:start:${source === "feed" ? "f" : "d"}:${token}`,
 		});
 		const ctx = { reply: async (text: string) => { replies.push(text); } } as unknown as Context;
 		expect(await feature.routeStart(ctx, "100", "")).toBe(false);
@@ -68,7 +70,7 @@ describe("R1-05C marketplace and moderation Telegram composers", () => {
 
 	it("keeps opaque callbacks actor-bound, outside the generic composer, and acknowledges a stale result once", async () => {
 		const invokedActors: unknown[] = [];
-		const feature = createMarketplaceTelegramFeature({
+		const feature = createApplicationsTelegramFeature({
 			applicationsApi: applicationsApi(),
 			callbackActionService: {
 				invoke: async (request: { context: { actor: unknown } }): Promise<SafeResult> => {
@@ -79,6 +81,9 @@ describe("R1-05C marketplace and moderation Telegram composers", () => {
 			clock: { now: () => new Date(NOW) },
 			menuKeyboard: () => new InlineKeyboard().text("Menu", "menu:home"),
 			profileFlow: emptyProfileFlow(),
+			targetFlow: emptyTargetFlow(),
+			profileTypeLabel: String,
+			topicLabel: String,
 			upsertActorSnapshot: async () => {},
 			occurredAt: () => new Date(NOW),
 			getUpdateId: (ctx) => ctx.update.update_id,
@@ -131,9 +136,16 @@ function applicationsApi(overrides: Record<string, unknown> = {}): never {
 
 function emptyProfileFlow(): never {
 	return {
-		findSession: async () => undefined,
+		activeSessionKeyboard: async () => undefined,
 		startApplicationMessage: async () => {},
 		startQuickApplicationProfile: async () => {},
+	} as never;
+}
+
+function emptyTargetFlow(): never {
+	return {
+		resolveApplicationTarget: async () => ({ kind: "handled" }),
+		renderApplicationTarget: async () => {},
 	} as never;
 }
 

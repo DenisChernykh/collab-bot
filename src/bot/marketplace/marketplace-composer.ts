@@ -2,128 +2,97 @@ import { Composer, InlineKeyboard, type Context } from "grammy";
 
 import type { CallbackActionService } from "../../application/commands/callback-action.js";
 import type { SafeResult } from "../../application/commands/safe-result.js";
-import {
-	BrowseSessionStaleError,
-	type CollaborationBrowseService,
-	type BrowseFilterDimension,
-	type BrowseFilterValue,
-	type BrowsePage,
-} from "../../application/collaborations/collaboration-browse-service.js";
 import type { Clock } from "../../application/ports/clock.js";
-import type { BrowseCollaborationRecord, BrowseSessionRecord } from "../../application/ports/collaboration-browse-repository.js";
-import type { ProfileSessionRecord } from "../../modules/profiles/application/index.js";
-import { DomainValidationError, type CollaborationFormat, type Topic } from "../../domain/value-objects/enums.js";
+import type { ProfileType, Topic } from "../../domain/value-objects/enums.js";
 import type { ApplicationsFeatureApi, ApplicationFailureCode, AuthorManagementView } from "../../modules/applications/index.js";
+import { collaborationStatusLabel } from "../../modules/collaborations/index.js";
+import type { ApplicationTargetResolution } from "../../modules/marketplace/index.js";
 import {
-	COLLABORATION_FORMAT_LABELS,
-	collaborationStatusLabel,
-	renderCollaborationCard,
-} from "../../modules/collaborations/index.js";
-import {
-	PROFILE_TYPE_LABELS,
-	TOPIC_LABELS,
-	applicationNavigationKeyboard,
-	profileTypeLabel,
-	resumeKeyboard,
-	topicLabel,
-	type ApplicationContinuation,
-	type ProfileSessionIdentity,
-} from "../profile/profile-presentation.js";
-import {
-	applicationStartCallback,
-	browseCallback,
-	parseMarketplaceCallback,
+	parseApplicationsCallback,
 	type ApplicationStart,
-	type BrowseMutation,
 } from "./marketplace-callback-codec.js";
 
 const CALLBACK_ACTION_TTL_MS = 24 * 60 * 60 * 1_000;
 
-export interface MarketplaceProfileFlow {
-	findSession(userId: string): Promise<ProfileSessionRecord | undefined>;
+export interface ApplicationContinuation {
+	readonly kind: "submit_application";
+	readonly collaborationId: string;
+	readonly source: "feed" | "deep_link";
+}
+
+export interface ApplicationsProfileFlow {
+	activeSessionKeyboard(userId: string): Promise<InlineKeyboard | undefined>;
 	startApplicationMessage(ctx: Context, userId: string, continuation: ApplicationContinuation): Promise<void>;
 	startQuickApplicationProfile(ctx: Context, userId: string, continuation: ApplicationContinuation): Promise<void>;
 }
 
-export interface MarketplaceTelegramFeatureOptions {
+export interface ApplicationsTargetFlow {
+	resolveApplicationTarget(ctx: Context, userId: string, publicToken: string): Promise<ApplicationTargetResolution>;
+	renderApplicationTarget(ctx: Context, userId: string, publicToken: string): Promise<void>;
+}
+
+export interface ApplicationsTelegramFeatureOptions {
 	readonly applicationsApi?: ApplicationsFeatureApi;
-	readonly collaborationBrowseService?: CollaborationBrowseService;
 	readonly callbackActionService?: CallbackActionService;
 	readonly clock: Clock;
 	readonly menuKeyboard: () => InlineKeyboard;
-	readonly profileFlow: MarketplaceProfileFlow;
+	readonly profileFlow: ApplicationsProfileFlow;
+	readonly targetFlow: ApplicationsTargetFlow;
+	readonly profileTypeLabel: (value: ProfileType) => string;
+	readonly topicLabel: (value: Topic) => string;
 	readonly upsertActorSnapshot: (ctx: Context) => Promise<void>;
 	readonly occurredAt: (ctx: Context) => Date;
 	readonly getUpdateId: (ctx: Context) => number | undefined;
 }
 
-export interface MarketplaceTelegramFeature {
+export interface ApplicationsTelegramFeature {
 	readonly composer: Composer<Context>;
 	routeStart(ctx: Context, userId: string, startParameter: string): Promise<boolean>;
 	routeCommand(ctx: Context, userId: string, command: string | undefined): Promise<boolean>;
 	renderManagedCollaborations(ctx: Context, userId: string): Promise<readonly string[]>;
 	reopenApplicationCard(ctx: Context, userId: string, collaborationId: string): Promise<void>;
-	replyApplicationFailure(
-		ctx: Context,
-		code: ApplicationFailureCode,
-		session?: ProfileSessionIdentity,
-		profileWasSaved?: boolean,
-	): Promise<void>;
+	replyApplicationFailure(ctx: Context, code: ApplicationFailureCode, retryKeyboard?: InlineKeyboard, profileWasSaved?: boolean): Promise<void>;
 	handleOpaqueCallback(ctx: Context, callbackPayload: string): Promise<void>;
 }
 
-export function createMarketplaceTelegramFeature(options: MarketplaceTelegramFeatureOptions): MarketplaceTelegramFeature {
-	const feature: MarketplaceTelegramFeature = {
-		composer: new Composer<Context>(),
-		routeStart: async (ctx, userId, startParameter) => {
-			if (!startParameter.startsWith("c_")) return false;
-			await renderDeepLink(ctx, options, userId, startParameter);
-			return true;
-		},
-		routeCommand: async (ctx, userId, command) => {
-			if (command === "/my_applications" || command === "/my_apps") {
-				await renderOwnApplications(ctx, options, userId);
-				return true;
-			}
-			if (command === "/feed") {
-				await openFeed(ctx, options, userId);
-				return true;
-			}
-			return false;
-		},
-		renderManagedCollaborations: (ctx, userId) => renderManagedCollaborations(ctx, options, userId),
-		reopenApplicationCard: (ctx, userId, collaborationId) => reopenApplicationCard(ctx, options, userId, collaborationId),
-		replyApplicationFailure: (ctx, code, session, profileWasSaved) => replyApplicationFailure(ctx, options, code, session, profileWasSaved),
-		handleOpaqueCallback: (ctx, callbackPayload) => handleOpaqueCallback(ctx, options, callbackPayload),
-	};
-
-	feature.composer.on("callback_query:data", async (ctx, next) => {
-		const callback = parseMarketplaceCallback(ctx.callbackQuery.data);
+export function createApplicationsTelegramFeature(options: ApplicationsTelegramFeatureOptions): ApplicationsTelegramFeature {
+	const composer = new Composer<Context>();
+	composer.on("callback_query:data", async (ctx, next) => {
+		const callback = parseApplicationsCallback(ctx.callbackQuery.data);
 		if (callback === undefined || ctx.from === undefined) {
 			await next();
 			return;
 		}
 		const userId = String(ctx.from.id);
-		switch (callback.kind) {
-			case "open_feed":
-				await openFeed(ctx, options, userId);
-				return;
-			case "own_applications":
-				await renderOwnApplications(ctx, options, userId);
-				return;
-			case "browse":
-				await handleBrowseMutation(ctx, options, userId, callback.mutation);
-				return;
-			case "start_application":
-				await handleApplicationStart(ctx, options, userId, callback.start);
-				return;
+		if (callback.kind === "own_applications") {
+			await renderOwnApplications(ctx, options, userId);
+			return;
 		}
+		await handleApplicationStart(ctx, options, userId, callback.start);
 	});
 
-	return feature;
+	return {
+		composer,
+		routeStart: async (ctx, userId, startParameter) => {
+			if (!/^c_[A-Za-z0-9_-]{22}$/.test(startParameter) || options.applicationsApi === undefined) return false;
+			const management = await options.applicationsApi.getAuthorManagementByPublicToken(userId, startParameter.slice(2));
+			if (management === undefined) return false;
+			await renderAuthorManagement(ctx, options, userId, management);
+			return true;
+		},
+		routeCommand: async (ctx, userId, command) => {
+			if (command !== "/my_applications" && command !== "/my_apps") return false;
+			await renderOwnApplications(ctx, options, userId);
+			return true;
+		},
+		renderManagedCollaborations: (ctx, userId) => renderManagedCollaborations(ctx, options, userId),
+		reopenApplicationCard: (ctx, userId, collaborationId) => reopenApplicationCard(ctx, options, userId, collaborationId),
+		replyApplicationFailure: (ctx, code, retryKeyboard, profileWasSaved) => replyApplicationFailure(ctx, options, code, retryKeyboard, profileWasSaved),
+		handleOpaqueCallback: (ctx, callbackPayload) => handleOpaqueCallback(ctx, options, callbackPayload),
+	};
 }
 
-async function handleOpaqueCallback(ctx: Context, options: MarketplaceTelegramFeatureOptions, callbackPayload: string): Promise<void> {
+async function handleOpaqueCallback(ctx: Context, options: ApplicationsTelegramFeatureOptions, callbackPayload: string): Promise<void> {
 	const from = ctx.from;
 	const updateId = options.getUpdateId(ctx);
 	if (ctx.callbackQuery?.message?.chat.type !== "private" || from === undefined || updateId === undefined) {
@@ -208,13 +177,13 @@ function parseCallbackEntity(value: string | null, kind: "application" | "collab
 	return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id) ? id : undefined;
 }
 
-async function renderManagedCollaborations(ctx: Context, options: MarketplaceTelegramFeatureOptions, userId: string): Promise<readonly string[]> {
+async function renderManagedCollaborations(ctx: Context, options: ApplicationsTelegramFeatureOptions, userId: string): Promise<readonly string[]> {
 	const management = options.applicationsApi === undefined ? [] : await options.applicationsApi.listAuthorManagement(userId);
 	for (const card of management) await renderAuthorManagement(ctx, options, userId, card);
 	return management.map((card) => card.collaborationId);
 }
 
-async function renderOwnApplications(ctx: Context, options: MarketplaceTelegramFeatureOptions, userId: string): Promise<void> {
+async function renderOwnApplications(ctx: Context, options: ApplicationsTelegramFeatureOptions, userId: string): Promise<void> {
 	const service = options.applicationsApi;
 	if (service === undefined) {
 		await ctx.reply("Этот раздел пока готовится.", { reply_markup: options.menuKeyboard() });
@@ -242,7 +211,7 @@ async function renderOwnApplications(ctx: Context, options: MarketplaceTelegramF
 
 async function renderAuthorManagement(
 	ctx: Context,
-	options: MarketplaceTelegramFeatureOptions,
+	options: ApplicationsTelegramFeatureOptions,
 	userId: string,
 	management: AuthorManagementView,
 ): Promise<void> {
@@ -263,9 +232,9 @@ async function renderAuthorManagement(
 		const applicant = application.applicant;
 		const lines = [
 			`Кандидат: ${applicant.displayName}`,
-			`Тип: ${profileTypeLabel(applicant.type)}`,
+			`Тип: ${options.profileTypeLabel(applicant.type)}`,
 			...(applicant.description === null ? [] : [`Описание: ${applicant.description}`]),
-			...(applicant.topics.length === 0 ? [] : [`Темы: ${applicant.topics.map(topicLabel).join(", ")}`]),
+			...(applicant.topics.length === 0 ? [] : [`Темы: ${applicant.topics.map(options.topicLabel).join(", ")}`]),
 			`Площадка: ${applicant.platform.title === null ? applicant.platform.url : `${applicant.platform.title} — ${applicant.platform.url}`}`,
 			...(applicant.platform.audienceSize === null ? [] : [`Аудитория: ${applicant.platform.audienceSize}`]),
 			"",
@@ -287,7 +256,7 @@ async function renderAuthorManagement(
 }
 
 async function createDecisionToken(
-	options: MarketplaceTelegramFeatureOptions,
+	options: ApplicationsTelegramFeatureOptions,
 	telegramUserId: string,
 	actionType: "application.accept" | "application.reject" | "collaboration.close",
 	entityId: string,
@@ -308,116 +277,25 @@ function applicationStatusLabel(status: string): string {
 	return ({ pending: "ожидает решения", accepted: "принят", rejected: "отклонён", closed: "закрыт", withdrawn: "отозван" } as Record<string, string>)[status] ?? "недоступен";
 }
 
-async function openFeed(ctx: Context, options: MarketplaceTelegramFeatureOptions, userId: string): Promise<void> {
-	if (options.collaborationBrowseService === undefined) {
-		await ctx.reply("Этот раздел пока готовится.", { reply_markup: options.menuKeyboard() });
-		return;
-	}
-	try {
-		await renderBrowsePage(ctx, options, await options.collaborationBrowseService.openFeed(userId));
-	} catch (error) {
-		if (error instanceof BrowseSessionStaleError) {
-			await ctx.reply("Экран ленты устарел. Откройте ленту снова.", { reply_markup: new InlineKeyboard().text("Открыть ленту", "browse:start") });
-			return;
-		}
-		throw error;
-	}
-}
-
-async function handleBrowseMutation(ctx: Context, options: MarketplaceTelegramFeatureOptions, userId: string, mutation: BrowseMutation): Promise<void> {
-	const service = options.collaborationBrowseService;
-	if (service === undefined) {
-		await ctx.reply("Этот раздел пока готовится.", { reply_markup: options.menuKeyboard() });
-		return;
-	}
-	try {
-		switch (mutation.kind) {
-			case "next": await renderBrowsePage(ctx, options, await service.next(userId, mutation)); return;
-			case "reset": await renderBrowsePage(ctx, options, await service.reset(userId, mutation)); return;
-			case "filters": await renderBrowseFilterDimensions(ctx, await service.touch(userId, mutation)); return;
-			case "filter": {
-				if (mutation.dimension === undefined) throw new BrowseSessionStaleError();
-				await renderBrowseFilterValues(ctx, await service.touch(userId, mutation), mutation.dimension);
-				return;
-			}
-			case "set": {
-				const dimension = toBrowseFilterDimension(mutation.dimension);
-				if (dimension === undefined || mutation.value === undefined) throw new BrowseSessionStaleError();
-				const value: BrowseFilterValue = mutation.value === "any" ? null : mutation.value as BrowseFilterValue;
-				await renderBrowsePage(ctx, options, await service.changeFilter(userId, mutation, dimension, value));
-				return;
-			}
-		}
-	} catch (error) {
-		if (error instanceof BrowseSessionStaleError || error instanceof DomainValidationError) {
-			await ctx.reply("Экран ленты устарел. Откройте ленту снова.", { reply_markup: new InlineKeyboard().text("Открыть ленту", "browse:start") });
-			return;
-		}
-		throw error;
-	}
-}
-
-async function renderBrowsePage(ctx: Context, options: MarketplaceTelegramFeatureOptions, page: BrowsePage): Promise<void> {
-	const current = options.collaborationBrowseService === undefined ? page : await options.collaborationBrowseService.revalidate(page);
-	if (current.card === null) {
-		await ctx.reply("Подходящих карточек пока нет. Измените фильтры или покажите выдачу сначала.", { reply_markup: browseEmptyKeyboard(current.session) });
-		return;
-	}
-	await ctx.reply(renderCollaborationCard(current.card), { parse_mode: "HTML", reply_markup: browseCardKeyboard(current.card, current.session) });
-}
-
-async function renderDeepLink(ctx: Context, options: MarketplaceTelegramFeatureOptions, userId: string, startParameter: string): Promise<void> {
-	if (/^c_[A-Za-z0-9_-]{22}$/.test(startParameter) && options.applicationsApi !== undefined) {
-		const management = await options.applicationsApi.getAuthorManagementByPublicToken(userId, startParameter.slice(2));
-		if (management !== undefined) {
-			await renderAuthorManagement(ctx, options, userId, management);
-			return;
-		}
-	}
-	const service = options.collaborationBrowseService;
-	if (service === undefined) {
-		await ctx.reply("Предложение недоступно.", { reply_markup: options.menuKeyboard() });
-		return;
-	}
-	await renderDeepLinkResult(ctx, options, await service.openDeepLink(userId, startParameter));
-}
-
-async function renderDeepLinkResult(
-	ctx: Context,
-	options: MarketplaceTelegramFeatureOptions,
-	result: Awaited<ReturnType<CollaborationBrowseService["openDeepLink"]>>,
-): Promise<void> {
-	switch (result.kind) {
-		case "card": await ctx.reply(renderCollaborationCard(result.card), { parse_mode: "HTML", reply_markup: deepLinkCardKeyboard(result.card, result.actionable) }); return;
-		case "expired": await ctx.reply("Срок откликов истёк.", { reply_markup: options.menuKeyboard() }); return;
-		case "closed": await ctx.reply("Предложение закрыто.", { reply_markup: options.menuKeyboard() }); return;
-		case "unavailable": await ctx.reply("Предложение недоступно.", { reply_markup: options.menuKeyboard() }); return;
-	}
-}
-
-async function handleApplicationStart(ctx: Context, options: MarketplaceTelegramFeatureOptions, userId: string, start: ApplicationStart): Promise<void> {
-	const browseService = options.collaborationBrowseService;
+async function handleApplicationStart(ctx: Context, options: ApplicationsTelegramFeatureOptions, userId: string, start: ApplicationStart): Promise<void> {
 	const applications = options.applicationsApi;
-	if (browseService === undefined || applications === undefined) {
+	if (applications === undefined) {
 		await ctx.reply("Отклик сейчас недоступен.", { reply_markup: options.menuKeyboard() });
 		return;
 	}
-	const currentSession = await options.profileFlow.findSession(userId);
-	if (currentSession !== undefined) {
-		await ctx.reply("Сначала завершите или отмените текущее заполнение.", { reply_markup: resumeKeyboard(currentSession) });
+	const activeKeyboard = await options.profileFlow.activeSessionKeyboard(userId);
+	if (activeKeyboard !== undefined) {
+		await ctx.reply("Сначала завершите или отмените текущее заполнение.", { reply_markup: activeKeyboard });
 		return;
 	}
-	const result = await browseService.openDeepLink(userId, `c_${start.publicToken}`);
-	if (result.kind !== "card") {
-		await renderDeepLinkResult(ctx, options, result);
-		return;
-	}
+	const target = await options.targetFlow.resolveApplicationTarget(ctx, userId, start.publicToken);
+	if (target.kind === "handled") return;
 	const eligibility = await applications.checkEligibility({
 		telegramUserId: userId,
-		collaborationId: result.card.id,
+		collaborationId: target.collaborationId,
 		occurredAt: options.occurredAt(ctx).getTime(),
 	});
-	const continuation: ApplicationContinuation = { kind: "submit_application", collaborationId: result.card.id, source: start.source };
+	const continuation: ApplicationContinuation = { kind: "submit_application", collaborationId: target.collaborationId, source: start.source };
 	if (eligibility.ok) {
 		await options.profileFlow.startApplicationMessage(ctx, userId, continuation);
 		return;
@@ -429,10 +307,9 @@ async function handleApplicationStart(ctx: Context, options: MarketplaceTelegram
 	await replyApplicationFailure(ctx, options, eligibility.code);
 }
 
-async function reopenApplicationCard(ctx: Context, options: MarketplaceTelegramFeatureOptions, userId: string, collaborationId: string): Promise<void> {
+async function reopenApplicationCard(ctx: Context, options: ApplicationsTelegramFeatureOptions, userId: string, collaborationId: string): Promise<void> {
 	const applications = options.applicationsApi;
-	const browseService = options.collaborationBrowseService;
-	if (applications === undefined || browseService === undefined) {
+	if (applications === undefined) {
 		await ctx.reply("Предложение недоступно.", { reply_markup: options.menuKeyboard() });
 		return;
 	}
@@ -446,18 +323,18 @@ async function reopenApplicationCard(ctx: Context, options: MarketplaceTelegramF
 		await ctx.reply("Предложение недоступно.", { reply_markup: options.menuKeyboard() });
 		return;
 	}
-	await renderDeepLinkResult(ctx, options, await browseService.openDeepLink(userId, `c_${publicToken}`));
+	await options.targetFlow.renderApplicationTarget(ctx, userId, publicToken);
 }
 
 async function replyApplicationFailure(
 	ctx: Context,
-	options: MarketplaceTelegramFeatureOptions,
+	options: ApplicationsTelegramFeatureOptions,
 	code: ApplicationFailureCode,
-	session?: ProfileSessionIdentity,
+	retryKeyboard?: InlineKeyboard,
 	profileWasSaved = false,
 ): Promise<void> {
 	if (code === "invalid_message") {
-		await ctx.reply("Сообщение должно содержать от 10 до 500 символов.", { reply_markup: session === undefined ? options.menuKeyboard() : applicationNavigationKeyboard(session) });
+		await ctx.reply("Сообщение должно содержать от 10 до 500 символов.", { reply_markup: retryKeyboard ?? options.menuKeyboard() });
 		return;
 	}
 	const text: Record<Exclude<ApplicationFailureCode, "invalid_message">, string> = {
@@ -471,58 +348,4 @@ async function replyApplicationFailure(
 		full: "Все места в этой коллаборации уже заняты.",
 	};
 	await ctx.reply(`${profileWasSaved ? "Профиль сохранён. " : ""}${text[code]}`, { reply_markup: options.menuKeyboard() });
-}
-
-async function renderBrowseFilterDimensions(ctx: Context, session: BrowseSessionRecord): Promise<void> {
-	const target = session.filters.targetProfileType === null ? "Любой" : PROFILE_TYPE_LABELS[session.filters.targetProfileType];
-	const format = session.filters.format === null ? "Любой" : COLLABORATION_FORMAT_LABELS[session.filters.format];
-	const topic = session.filters.topic === null ? "Любая" : TOPIC_LABELS[session.filters.topic];
-	const keyboard = new InlineKeyboard()
-		.text(`Тип: ${target}`, browseCallback("b:f:t", session)).row()
-		.text(`Формат: ${format}`, browseCallback("b:f:f", session)).row()
-		.text(`Тема: ${topic}`, browseCallback("b:f:o", session)).row()
-		.text("Показать сначала", browseCallback("b:r", session));
-	await ctx.reply("Настройте фильтры. Выбранные измерения применяются вместе.", { reply_markup: keyboard });
-}
-
-async function renderBrowseFilterValues(ctx: Context, session: BrowseSessionRecord, dimension: NonNullable<BrowseMutation["dimension"]>): Promise<void> {
-	const keyboard = new InlineKeyboard();
-	if (dimension === "target") {
-		for (const [value, label] of [["any", "Любой"], ["blogger", "Блогер"], ["telegram_channel", "Telegram-канал"], ["venue_or_brand", "Заведение или бренд"]] as const) keyboard.text(label, browseCallback(`b:s:t:${value}`, session)).row();
-	} else if (dimension === "format") {
-		keyboard.text("Любой", browseCallback("b:s:f:any", session)).row();
-		for (const [value, label] of Object.entries(COLLABORATION_FORMAT_LABELS) as [CollaborationFormat, string][]) keyboard.text(label, browseCallback(`b:s:f:${value}`, session)).row();
-	} else {
-		keyboard.text("Любая", browseCallback("b:s:o:any", session)).row();
-		for (const [value, label] of Object.entries(TOPIC_LABELS) as [Topic, string][]) keyboard.text(label, browseCallback(`b:s:o:${value}`, session)).row();
-	}
-	await ctx.reply("Выберите значение фильтра:", { reply_markup: keyboard });
-}
-
-function toBrowseFilterDimension(value: BrowseMutation["dimension"]): BrowseFilterDimension | undefined {
-	if (value === "target") return "target_profile_type";
-	if (value === "format" || value === "topic") return value;
-	return undefined;
-}
-
-function browseCardKeyboard(card: BrowseCollaborationRecord, session: BrowseSessionRecord): InlineKeyboard {
-	const keyboard = new InlineKeyboard();
-	if (card.publicToken !== null) keyboard.text("Откликнуться", applicationStartCallback("feed", card.publicToken)).row();
-	return keyboard
-		.text("Дальше", browseCallback("b:n", session)).row()
-		.text("Фильтры", browseCallback("b:fs", session)).row()
-		.text("Показать сначала", browseCallback("b:r", session));
-}
-
-function browseEmptyKeyboard(session: BrowseSessionRecord): InlineKeyboard {
-	return new InlineKeyboard()
-		.text("Фильтры", browseCallback("b:fs", session)).row()
-		.text("Показать сначала", browseCallback("b:r", session)).row()
-		.text("← В главное меню", "menu:home");
-}
-
-function deepLinkCardKeyboard(card: BrowseCollaborationRecord, actionable: boolean): InlineKeyboard {
-	const keyboard = new InlineKeyboard();
-	if (actionable && card.publicToken !== null) keyboard.text("Откликнуться", applicationStartCallback("deep_link", card.publicToken)).row();
-	return keyboard.text("Открыть ленту", "browse:start").row().text("← В главное меню", "menu:home");
 }

@@ -15,9 +15,13 @@ import {
 	type CollaborationPublicationService,
 	type CollaborationTelegramFeature,
 } from "../modules/collaborations/index.js";
+import { createMarketplaceTelegramFeature } from "../modules/marketplace/index.js";
 import {
+	applicationNavigationKeyboard,
 	createProfileTelegramFeature,
+	profileTypeLabel,
 	resumeKeyboard,
+	topicLabel,
 	type ProfileAudiencePlan,
 	type ProfileAudienceService,
 	type ProfileDraft,
@@ -28,7 +32,8 @@ import {
 } from "../modules/profiles/index.js";
 import { routeTelegramText } from "../presentation/telegram/telegram-routing.js";
 import { registerDurableTelegramIngress } from "./durable-telegram-ingress.js";
-import { createMarketplaceTelegramFeature } from "./marketplace/marketplace-composer.js";
+import { createApplicationsTelegramFeature } from "./marketplace/marketplace-composer.js";
+import { applicationStartCallback } from "./marketplace/marketplace-callback-codec.js";
 import { createModerationTelegramFeature, type ModerationTelegramFeature } from "./moderation/moderation-composer.js";
 
 const AUDIENCE_SNAPSHOT_UNAVAILABLE = "Аудиторию Telegram определить не удалось; профиль сохранён, число можно указать позже в «Мой профиль».";
@@ -58,16 +63,29 @@ export interface RegisteredProfileBot {
 
 export function registerProfileBot(bot: Bot, options: ProfileBotOptions): RegisteredProfileBot {
 	const marketplaceFeature = createMarketplaceTelegramFeature({
+		...(options.collaborationBrowseService === undefined ? {} : { browseService: options.collaborationBrowseService }),
+		applicationStartCallback,
+		menuKeyboard: () => menuKeyboard(options),
+	});
+	const applicationsFeature = createApplicationsTelegramFeature({
 		...(options.applicationService === undefined ? {} : { applicationsApi: options.applicationService }),
-		...(options.collaborationBrowseService === undefined ? {} : { collaborationBrowseService: options.collaborationBrowseService }),
 		...(options.callbackActionService === undefined ? {} : { callbackActionService: options.callbackActionService }),
 		clock: options.clock,
 		menuKeyboard: () => menuKeyboard(options),
 		profileFlow: {
-			findSession: (userId) => profileFeature.findSession(userId),
+			activeSessionKeyboard: async (userId) => {
+				const session = await profileFeature.findSession(userId);
+				return session === undefined ? undefined : resumeKeyboard(session);
+			},
 			startApplicationMessage: (ctx, userId, continuation) => profileFeature.startApplicationMessage(ctx, userId, continuation),
 			startQuickApplicationProfile: (ctx, userId, continuation) => profileFeature.startQuickApplicationProfile(ctx, userId, continuation),
 		},
+		targetFlow: {
+			resolveApplicationTarget: (ctx, userId, publicToken) => marketplaceFeature.resolveApplicationTarget(ctx, userId, publicToken),
+			renderApplicationTarget: (ctx, userId, publicToken) => marketplaceFeature.renderApplicationTarget(ctx, userId, publicToken),
+		},
+		profileTypeLabel,
+		topicLabel,
 		upsertActorSnapshot: (ctx) => upsertActorSnapshot(ctx, options),
 		occurredAt: (ctx) => telegramOccurredAt(ctx.update),
 		getUpdateId: (ctx) => getUpdateId(ctx.update),
@@ -82,7 +100,7 @@ export function registerProfileBot(bot: Bot, options: ProfileBotOptions): Regist
 			startForCollaboration: (ctx, userId) => profileFeature.startOrResume(ctx, userId, false, { kind: "create_collaboration" }),
 			resumeKeyboard,
 		},
-		renderManagedCollaborations: (ctx, userId) => marketplaceFeature.renderManagedCollaborations(ctx, userId),
+		renderManagedCollaborations: (ctx, userId) => applicationsFeature.renderManagedCollaborations(ctx, userId),
 	});
 	const profileFeature = createProfileTelegramFeature({
 		profileService: options.profileService,
@@ -94,8 +112,8 @@ export function registerProfileBot(bot: Bot, options: ProfileBotOptions): Regist
 		isCollaborationActive: (userId) => collaborationFeature.isActive(userId),
 		continueCreateCollaboration: (ctx, userId) => collaborationFeature.continueAfterProfile(ctx, userId),
 		scheduleProfileAudience: (ctx, profile, draft) => scheduleProfileAudience(ctx, options, profile, draft),
-		reopenApplicationCard: (ctx, userId, collaborationId) => marketplaceFeature.reopenApplicationCard(ctx, userId, collaborationId),
-		replyApplicationFailure: (ctx, code, session, profileWasSaved) => marketplaceFeature.replyApplicationFailure(ctx, code, session, profileWasSaved),
+		reopenApplicationCard: (ctx, userId, collaborationId) => applicationsFeature.reopenApplicationCard(ctx, userId, collaborationId),
+		replyApplicationFailure: (ctx, code, session, profileWasSaved) => applicationsFeature.replyApplicationFailure(ctx, code, session === undefined ? undefined : applicationNavigationKeyboard(session), profileWasSaved),
 		occurredAt: (ctx) => telegramOccurredAt(ctx.update).getTime(),
 	});
 	const moderationFeature = createModerationTelegramFeature({
@@ -114,11 +132,17 @@ export function registerProfileBot(bot: Bot, options: ProfileBotOptions): Regist
 		const text = workCtx.message.text;
 		const handled = await routeTelegramText(workCtx, userId, text, {
 			routeModeration: (ctx, actorId, command, commandText) => moderationFeature.routeCommand(ctx, actorId, command, commandText),
-			routeStart: (ctx, actorId, startParameter) => marketplaceFeature.routeStart(ctx, actorId, startParameter),
+			routeStart: async (ctx, actorId, startParameter) => {
+				if (await applicationsFeature.routeStart(ctx, actorId, startParameter)) return true;
+				return marketplaceFeature.routeStart(ctx, actorId, startParameter);
+			},
 			renderMenu: (ctx, actorId) => renderMenu(ctx, options, profileFeature, collaborationFeature, actorId),
 			renderHelp: (ctx) => ctx.reply(`«Давай вместе» помогает блогерам, Telegram-каналам, заведениям и брендам находить партнёров для совместных проектов.\n\nСейчас сервис работает в Екатеринбурге. Вы можете создать и отредактировать свой профиль. По вопросам работы бота: ${options.helpContact}`),
 			routeCollaboration: (ctx, actorId, command) => collaborationFeature.routeCommand(ctx, actorId, command),
-			routeMarketplace: (ctx, actorId, command) => marketplaceFeature.routeCommand(ctx, actorId, command),
+			routeMarketplace: async (ctx, actorId, command) => {
+				if (await applicationsFeature.routeCommand(ctx, actorId, command)) return true;
+				return marketplaceFeature.routeCommand(ctx, actorId, command);
+			},
 		});
 		if (handled) return;
 		await next();
@@ -146,6 +170,7 @@ export function registerProfileBot(bot: Bot, options: ProfileBotOptions): Regist
 	callbackRoute.use(profileFeature.composer);
 	callbackRoute.use(collaborationFeature.composer);
 	callbackRoute.use(marketplaceFeature.composer);
+	callbackRoute.use(applicationsFeature.composer);
 	callbackRoute.on("callback_query:data", async (workCtx) => {
 		const userId = String(workCtx.from.id);
 		switch (workCtx.callbackQuery.data) {
@@ -164,7 +189,7 @@ export function registerProfileBot(bot: Bot, options: ProfileBotOptions): Regist
 		callbackRoute: callbackRoute.middleware(),
 		opaqueCallbackRoute: async (ctx) => {
 			const data = ctx.callbackQuery?.data;
-			if (data !== undefined) await marketplaceFeature.handleOpaqueCallback(ctx, data);
+			if (data !== undefined) await applicationsFeature.handleOpaqueCallback(ctx, data);
 		},
 	});
 	return { profileService: options.profileService };

@@ -113,7 +113,8 @@ P0-01 → P0-02
 | R2-06 | `3868e52236668b8683bbc8a0306ad8be0b60178f` | consumer-neutral atomic wizard admission |
 | R2-07A | `92b37305909e1834b04f930fb54cc2c76d450907` | collaboration SQLite adapters and composition ownership |
 | R2-07B | `b9ec2b3d82e0e1766aec040d2c373840ee158127` | collaboration Telegram presentation ownership |
-| R2-08 | `SELF` | marketplace CQRS read-model ownership |
+| R2-08 | `730f8790a11082974dc2ee6d0e28990d487c1ba1` | marketplace CQRS read-model ownership |
+| R2-09A | `SELF` | marketplace Telegram presentation and split routing seam |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -856,31 +857,32 @@ P0-01 → P0-02
 - **Completion evidence:** Commit SHA: `SELF`; moved the browse service, its consumer port and SQLite projection under `modules/marketplace`, added pure application/root entrypoints plus `createMarketplaceFeature({ boundary, transactions, clock })`, and retained three exact compatibility exports for scheduled presentation/runtime/test cutover. The factory exposes only the browse service, not its repository. Test-first RED was the missing marketplace root/factory; the migrated-SQLite composition test now proves an empty feed persists and resumes the same generation with revision 1→2 across recomposition. Technical Design now records marketplace as the explicit CQRS exception: its adapter may join authoritative profiles/collaborations/applications/actor tables for current visibility, while writes remain limited to owned `browse_sessions`. Ten source/test paths plus this plan and TD changed; SQL predicates/order/parameters, keyset cursor, TTL/cleanup, stale-session and deep-link behavior remain unchanged. Focused composition/browse tests PASS (7); architecture PASS (152 modules, 443 dependencies); `pnpm check` PASS (69 unit, 87 integration, 47 runtime, lint/typecheck/build); all fake E2E PASS (30); `pnpm db:verify` PASS. No credential, real Telegram, remote or production mutation.
 - **Stop conditions:** projection write expands beyond browse sessions or SQL behavior changes.
 
-#### R2-09A — Extract applications Telegram presentation
+#### R2-09A — Extract marketplace Telegram presentation
+
+- **Status:** `completed`
+- **Objective:** Передать marketplace собственные browse/deep-link handlers и ввести явный presentation seam до applications move.
+- **Dependencies:** `R2-08`.
+- **Read first:** mixed marketplace composer/codec, browse/deep-link flows, profile continuation, opaque callback and S3 fake tests.
+- **Scope:** move browse/deep-link composer and callback codec under `modules/marketplace/presentation/telegram`; root mounts marketplace and a temporary applications-only legacy facade through injected profile/target ports.
+- **Do not touch:** application business API, callback/deep-link bytes, copy, browse SQL or root route priority.
+- **Invariants:** browse/application callback prefixes have one owner; `cb_*` stays outside generic durable ingress; target resolution never emits a duplicate card before application eligibility.
+- **Verification:** marketplace/applications-focused R1-05C/S3 fake tests; routing contract; architecture; `pnpm check`; `pnpm db:verify`.
+- **Exit criteria:** marketplace presentation is feature-owned and the temporary applications facade contains no browse handler; один commit `R2-09A: own marketplace Telegram presentation`.
+- **Completion evidence:** Commit SHA: `SELF`; extracted browse/deep-link callbacks, feed rendering, filters and target resolution into `modules/marketplace/presentation/telegram`, exported them through the marketplace public API and rewired the root to mount separate marketplace and temporary applications-only composers. The remaining two `src/bot/marketplace` files now own only application callbacks/management/opaque decisions and communicate with profile/marketplace through injected ports; they contain no browse parser or renderer. Test-first RED proved the marketplace public composer/codec were absent (3 failed); new focused tests now prove browse-only callback ownership, malformed `c_` claim behavior and valid application-target resolution without a duplicate card reply. Root start order is applications author-management then marketplace fallback; command order is applications then `/feed`; generic callback order is profile → collaboration → marketplace → applications, while `cb_*` still reaches only the separate opaque applications route. Eight source/test paths plus this plan changed; callback/deep-link bytes, copy, route priority, profile continuation and application effects remain unchanged. Focused split/routing/S3 tests PASS (20); architecture PASS (154 modules, 450 dependencies); `pnpm check` PASS (69 unit, 87 integration, 47 runtime, lint/typecheck/build); all fake E2E PASS (33); `pnpm db:verify` PASS. No credential, real Telegram, remote or production mutation.
+- **Stop conditions:** split duplicates a handler/reply or requires direct marketplace↔applications/profile imports.
+
+#### R2-09B — Complete applications Telegram presentation
 
 - **Status:** `in_progress`
-- **Objective:** Передать applications собственные Telegram handlers до marketplace cutover.
-- **Dependencies:** `R2-08`.
-- **Read first:** mixed marketplace composer/codec, applications public API, profile continuation and opaque callback tests.
-- **Scope:** submit/own/author-management/decision/completion handlers and application callback codec under `modules/applications/presentation/telegram`; public exports; temporary marketplace facade delegates to the extracted surface.
-- **Do not touch:** browse filtering/page rendering, callback/deep-link bytes, copy or root routing order.
-- **Invariants:** `cb_*` bypasses the generic durable envelope; quick-profile continuation and decision effects remain single-shot.
-- **Verification:** applications-focused R1-05C/S3 fake tests; architecture; `pnpm check`; `pnpm db:verify`.
-- **Exit criteria:** active applications presentation is feature-owned while the temporary facade preserves routing; один commit `R2-09A: own applications Telegram presentation`.
-- **Stop conditions:** extraction duplicates a handler/effect or changes continuation ownership.
-
-#### R2-09B — Complete marketplace Telegram presentation
-
-- **Status:** `pending`
-- **Objective:** Перенести оставшийся browse/deep-link Telegram flow и завершить split consumer cutover.
+- **Objective:** Перенести applications-only facade под реального owner и завершить split consumer cutover.
 - **Dependencies:** `R2-09A`.
-- **Read first:** remaining marketplace composer/codec, marketplace feature API, root router and all S3 fake journeys.
-- **Scope:** marketplace browse/deep-link composer and callback codec under `modules/marketplace/presentation/telegram`; root mounts separate marketplace/applications surfaces; focused consumers switch to public APIs; exact `src/bot/marketplace` bridges remain only до `R2-11C`.
-- **Do not touch:** applications handlers moved in `R2-09A`, browse SQL/pagination, callback/deep-link bytes, copy or route priority.
-- **Invariants:** every update reaches one owner; author deep-link, feed application start and quick-profile return remain unchanged.
-- **Verification:** R1-05C/S3 focused and all fake E2E; architecture; `pnpm check`; `pnpm db:verify`.
-- **Exit criteria:** applications and marketplace have distinct active presentation owners; один commit `R2-09B: complete marketplace Telegram presentation`.
-- **Stop conditions:** exact routing/effect parity cannot be preserved through separate composers.
+- **Read first:** temporary applications composer/codec, applications public API, injected profile/target ports, root router and all S3 fake journeys.
+- **Scope:** move submit/own/author-management/decision/completion presentation and application callback codec under `modules/applications/presentation/telegram`; root switches to applications public API; delete two temporary `src/bot/marketplace` files.
+- **Do not touch:** marketplace handlers moved in `R2-09A`, browse SQL/pagination, callback/deep-link bytes, copy or route priority.
+- **Invariants:** every update reaches one owner; author deep-link, feed application start, quick-profile return and opaque `cb_*` remain unchanged and single-shot.
+- **Verification:** applications-focused R1-05C/S3 tests and all fake E2E; architecture; `pnpm check`; `pnpm db:verify`.
+- **Exit criteria:** applications and marketplace have distinct module-owned presentation surfaces and no active legacy marketplace implementation; один commit `R2-09B: own applications Telegram presentation`.
+- **Stop conditions:** exact routing/effect parity cannot be preserved without a direct module cycle.
 
 #### R2-10A — Move moderation core and composition
 
