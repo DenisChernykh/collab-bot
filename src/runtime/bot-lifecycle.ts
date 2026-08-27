@@ -69,6 +69,9 @@ export function createBotRuntimeLifecycle(operations: BotRuntimeLifecycleOperati
 		operations.onRuntimeReady();
 		try {
 			await operations.preflightShowcase();
+			if (lifecycle !== "starting") {
+				throw new Error("bot runtime cannot start after shutdown or a previous start");
+			}
 			deliveryWorkerPromise = operations.runDeliveryWorker(deliveryAbortController.signal);
 			await operations.startPolling(() => {
 				if (lifecycle === "starting") lifecycle = "running";

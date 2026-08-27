@@ -94,6 +94,7 @@ P0-01 → P0-02
 | R1-05C | `SELF` | feature-owned marketplace and moderation Telegram composers |
 | R1-06A | `SELF` | isolated delivery worker lifecycle |
 | R1-06B | `SELF` | separated bot composition and runtime lifecycle |
+| R1-06C | `SELF` | thin process, config and filesystem bootstrap boundaries |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -604,7 +605,7 @@ P0-01 → P0-02
 
 #### R1-06C — Make process/config/filesystem bootstrap thin
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Оставить CLI только владельцем process signals и запуска готового runtime.
 - **Requirements:** TD §3.2, §13.4, §16, §20.4.
 - **Dependencies:** `R1-06B`.
@@ -616,12 +617,12 @@ P0-01 → P0-02
 - **Tests first:** signal-before/after-start and config/path failure characterization.
 - **Verification:** focused config/runtime tests; architecture; `pnpm check`; fake journey; diff/secret scans.
 - **Exit criteria:** CLI has no object graph or filesystem policy; one commit `R1-06C: thin process bootstrap boundaries`.
-- **Completion evidence:** pending.
+- **Completion evidence:** Commit SHA: `SELF`; separated private env/database path policy, exact env-file config loading, argument/bootstrap construction and one-shot process signal coordination into focused runtime modules. The CLI now owns only argv, the migrations asset anchor, stdout/stderr, the Node signal adapter and `exitCode`; `bot-runtime.ts` is a one-way compatibility facade preserving all previous exports. Both existing `--env-file` forms, the exact usage and generic failure text, the ten-key env allowlist, private file predicates and absence of `process.exit()` remain unchanged. SIGINT/SIGTERM and final cleanup share one memoized stop promise and remove listeners. A signal during awaited showcase preflight exposed a real lifecycle race; a minimal post-preflight state guard now prevents worker/polling from starting after resources were stopped, without adding a readiness/watchdog or exit policy. Nine source/test files plus this plan changed; config fields, production files, DB CLI, runtime topology and product behavior stayed untouched. Test-first RED covered missing bootstrap/process modules, then focused regression RED reproduced immediate pre-start semantics and the preflight/stop race; focused bootstrap/process/lifecycle/runtime tests PASS (5 files, 22 tests); focused config/audience tests PASS (2 files, 24 tests); all fake E2E PASS (7 files, 30 tests); architecture PASS (118 modules, 366 dependencies); `pnpm check` PASS (66 unit, 81 integration, 47 runtime tests and build); `pnpm db:verify` PASS; `git diff --check` PASS. Self-review and independent read-only review matched arguments, env/path predicates, failure/exit behavior, signal timing, facade exports and one-way dependency direction with no remaining findings. No credential, real Telegram, remote or production mutation.
 - **Stop conditions:** requires real process/Telegram or changes externally visible CLI/config contract.
 
 #### R1-07 — Consolidate production-like test support
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Убрать повторяемую setup/teardown composition из application, runtime и fake E2E tests.
 - **Requirements:** TD §20.2–§20.5; `LAC-09`–`LAC-11`.
 - **Dependencies:** `R1-06C`.
