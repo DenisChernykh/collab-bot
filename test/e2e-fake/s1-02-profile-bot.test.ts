@@ -21,7 +21,7 @@ import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/data
 import { SqliteTelegramUserRepository } from "../../src/infrastructure/database/telegram-user-repository.js";
 import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
 import { SystemProviderDeadline } from "../../src/infrastructure/time/provider-deadline.js";
-import { registerProfileBot } from "../../src/bot/profile-bot.js";
+import { registerTelegramRouter } from "../../src/presentation/telegram/telegram-router.js";
 import {
 	callbackData,
 	callbackForUser,
@@ -54,7 +54,7 @@ describe("S1-02 fake Telegram profile journey", () => {
 					clock,
 				);
 			let profileServiceForAssertions = firstProfileService;
-			registerProfileBot(bot, {
+			registerTelegramRouter(bot, {
 				profileService: firstProfileService,
 				sessionRepository: sessionRepositoryWithFailure(new SqliteProfileSessionRepository(boundary), () => failSessionDelete),
 				telegramUserRepository: new SqliteTelegramUserRepository(boundary),
@@ -111,7 +111,7 @@ describe("S1-02 fake Telegram profile journey", () => {
 			profileServiceForAssertions = reopenedProfileService;
 			const reopenedExecutor = new DurableCommandExecutor(new DatabaseBoundaryTransactionRunner(boundary), new SqliteDurableCommandStore(boundary), { hash: hashCanonicalInput }, clock);
 			let restartedBot = new Bot("fake-token", { client: { fetch: fake.fetch } });
-			registerProfileBot(restartedBot, {
+			registerTelegramRouter(restartedBot, {
 				profileService: reopenedProfileService,
 				sessionRepository: sessionRepositoryWithFailure(new SqliteProfileSessionRepository(boundary), () => failSessionDelete),
 				telegramUserRepository: new SqliteTelegramUserRepository(boundary),
@@ -171,7 +171,7 @@ describe("S1-02 fake Telegram profile journey", () => {
 			profileServiceForAssertions = postApplyProfileService;
 			const postApplyExecutor = new DurableCommandExecutor(postApplyTransactions, new SqliteDurableCommandStore(boundary), { hash: hashCanonicalInput }, clock);
 			restartedBot = new Bot("fake-token", { client: { fetch: fake.fetch } });
-			registerProfileBot(restartedBot, {
+			registerTelegramRouter(restartedBot, {
 				profileService: postApplyProfileService,
 				profileAudienceService: new ProfileAudienceService(
 					{
@@ -257,7 +257,7 @@ describe("S1-02 fake Telegram profile journey", () => {
 			const transactions = new DatabaseBoundaryTransactionRunner(boundary);
 			const profileService = new ProfileService(repository, transactions, clock);
 			const audienceTargets: TelegramAudienceTarget[] = [];
-			registerProfileBot(bot, {
+			registerTelegramRouter(bot, {
 				profileService,
 				profileAudienceService: new ProfileAudienceService(
 					{
@@ -327,7 +327,7 @@ describe("S1-02 fake Telegram profile journey", () => {
 			const profileService = new ProfileService(repository, transactions, clock);
 			const sessions = new SqliteProfileSessionRepository(boundary);
 			const bot = new Bot("fake-token", { client: { fetch: fake.fetch } });
-			registerProfileBot(bot, {
+			registerTelegramRouter(bot, {
 				profileService,
 				profileAudienceService: new ProfileAudienceService(
 					{
@@ -446,7 +446,7 @@ describe("S1-02 fake Telegram profile journey", () => {
 			const transactions = new DatabaseBoundaryTransactionRunner(boundary);
 			const sessions = new SqliteProfileSessionRepository(boundary);
 			const bot = new Bot("fake-token", { client: { fetch: fake.fetch } });
-			registerProfileBot(bot, {
+			registerTelegramRouter(bot, {
 				profileService: new ProfileService(repository, transactions, clock),
 				profileAudienceService: new ProfileAudienceService(
 					{
@@ -520,7 +520,7 @@ describe("S1-02 fake Telegram profile journey", () => {
 			const source = await MigrationSource.fromDirectory(migrationsPath);
 			await new MigrationRunner(source, clock).migrate(boundary);
 			const bot = new Bot("fake-token", { client: { fetch: fake.fetch } });
-			registerProfileBot(bot, {
+			registerTelegramRouter(bot, {
 				profileService: new ProfileService(new SqliteProfileRepository(boundary), new DatabaseBoundaryTransactionRunner(boundary), clock),
 				sessionRepository: new SqliteProfileSessionRepository(boundary),
 				telegramUserRepository: new SqliteTelegramUserRepository(boundary),
@@ -561,7 +561,7 @@ describe("S1-02 fake Telegram profile journey", () => {
 			const source = await MigrationSource.fromDirectory(migrationsPath);
 			await new MigrationRunner(source, clock).migrate(boundary);
 			const bot = new Bot("fake-token", { client: { fetch: fake.fetch } });
-			registerProfileBot(bot, {
+			registerTelegramRouter(bot, {
 				profileService: new ProfileService(new SqliteProfileRepository(boundary), new DatabaseBoundaryTransactionRunner(boundary), clock),
 				sessionRepository: new SqliteProfileSessionRepository(boundary),
 				telegramUserRepository: new SqliteTelegramUserRepository(boundary),

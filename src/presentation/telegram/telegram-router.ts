@@ -1,29 +1,29 @@
 import { Bot, Composer, InlineKeyboard, type Context } from "grammy";
 import type { Update } from "grammy/types";
 
-import type { CanonicalInput } from "../application/commands/canonical-input.js";
-import type { DurableCommandExecutor } from "../application/commands/command-executor.js";
-import type { CallbackActionService } from "../application/commands/callback-action.js";
-import type { CollaborationBrowseService } from "../application/collaborations/collaboration-browse-service.js";
-import type { Clock } from "../application/ports/clock.js";
-import type { TelegramUserWriter } from "../application/ports/telegram-user-writer.js";
+import type { CanonicalInput } from "../../application/commands/canonical-input.js";
+import type { DurableCommandExecutor } from "../../application/commands/command-executor.js";
+import type { CallbackActionService } from "../../application/commands/callback-action.js";
+import type { CollaborationBrowseService } from "../../application/collaborations/collaboration-browse-service.js";
+import type { Clock } from "../../application/ports/clock.js";
+import type { TelegramUserWriter } from "../../application/ports/telegram-user-writer.js";
 import {
 	applicationStartCallback,
 	createApplicationsTelegramFeature,
 	type ApplicationsFeatureApi,
-} from "../modules/applications/index.js";
+} from "../../modules/applications/index.js";
 import {
 	createCollaborationTelegramFeature,
 	type CollaborationDraftService,
 	type CollaborationPublicationService,
 	type CollaborationTelegramFeature,
-} from "../modules/collaborations/index.js";
-import { createMarketplaceTelegramFeature } from "../modules/marketplace/index.js";
+} from "../../modules/collaborations/index.js";
+import { createMarketplaceTelegramFeature } from "../../modules/marketplace/index.js";
 import {
 	createModerationTelegramFeature,
 	type AdminModerationService,
 	type ModerationTelegramFeature,
-} from "../modules/moderation/index.js";
+} from "../../modules/moderation/index.js";
 import {
 	applicationNavigationKeyboard,
 	createProfileTelegramFeature,
@@ -37,13 +37,13 @@ import {
 	type ProfileService,
 	type ProfileSessionRepository,
 	type ProfileTelegramFeature,
-} from "../modules/profiles/index.js";
-import { registerDurableTelegramIngress } from "../presentation/telegram/durable-telegram-ingress.js";
-import { routeTelegramText } from "../presentation/telegram/telegram-routing.js";
+} from "../../modules/profiles/index.js";
+import { registerDurableTelegramIngress } from "./durable-telegram-ingress.js";
+import { routeTelegramText } from "./telegram-routing.js";
 
 const AUDIENCE_SNAPSHOT_UNAVAILABLE = "Аудиторию Telegram определить не удалось; профиль сохранён, число можно указать позже в «Мой профиль».";
 
-export interface ProfileBotOptions {
+export interface TelegramRouterOptions {
 	readonly profileService: ProfileService;
 	readonly profileAudienceService?: ProfileAudienceService;
 	readonly sessionRepository: ProfileSessionRepository;
@@ -62,11 +62,11 @@ export interface ProfileBotOptions {
 	readonly adminModerationService?: AdminModerationService;
 }
 
-export interface RegisteredProfileBot {
+export interface RegisteredTelegramRouter {
 	readonly profileService: ProfileService;
 }
 
-export function registerProfileBot(bot: Bot, options: ProfileBotOptions): RegisteredProfileBot {
+export function registerTelegramRouter(bot: Bot, options: TelegramRouterOptions): RegisteredTelegramRouter {
 	const marketplaceFeature = createMarketplaceTelegramFeature({
 		...(options.collaborationBrowseService === undefined ? {} : { browseService: options.collaborationBrowseService }),
 		applicationStartCallback,
@@ -200,7 +200,7 @@ export function registerProfileBot(bot: Bot, options: ProfileBotOptions): Regist
 	return { profileService: options.profileService };
 }
 
-function replyUnknownCommand(ctx: Context, options: ProfileBotOptions): Promise<unknown> {
+function replyUnknownCommand(ctx: Context, options: TelegramRouterOptions): Promise<unknown> {
 	return ctx.reply("Не удалось распознать команду. Откройте главное меню командой /start или воспользуйтесь /help.", { reply_markup: menuKeyboard(options) });
 }
 
@@ -248,7 +248,7 @@ class ReplyCollector {
 	}
 }
 
-function scheduleProfileAudience(ctx: Context, options: ProfileBotOptions, profile: ProfileRecord, draft: ProfileDraft): void {
+function scheduleProfileAudience(ctx: Context, options: TelegramRouterOptions, profile: ProfileRecord, draft: ProfileDraft): void {
 	const plan = options.profileAudienceService?.plan(profile, draft.audienceAutofill ?? "allow");
 	if (plan === undefined) return;
 	const collector = (ctx as CollectedContext)[REPLY_COLLECTOR];
@@ -258,7 +258,7 @@ function scheduleProfileAudience(ctx: Context, options: ProfileBotOptions, profi
 
 async function runDurable(
 	ctx: Context,
-	options: ProfileBotOptions,
+	options: TelegramRouterOptions,
 	profileFeature: ProfileTelegramFeature,
 	moderationFeature: ModerationTelegramFeature,
 	input: CanonicalInput,
@@ -318,7 +318,7 @@ async function runDurable(
 
 async function renderMenu(
 	ctx: Context,
-	options: ProfileBotOptions,
+	options: TelegramRouterOptions,
 	profileFeature: ProfileTelegramFeature,
 	collaborationFeature: CollaborationTelegramFeature,
 	userId: string,
@@ -330,7 +330,7 @@ async function renderMenu(
 	await ctx.reply("Добро пожаловать в «Давай вместе» — сервис для поиска партнёров и совместных проектов.\n\nСейчас мы начинаем с Екатеринбурга. Выберите, что хотите сделать:", { reply_markup: keyboard });
 }
 
-async function ensureActor(ctx: Context, options: ProfileBotOptions): Promise<boolean> {
+async function ensureActor(ctx: Context, options: TelegramRouterOptions): Promise<boolean> {
 	if (ctx.from === undefined) return false;
 	const id = String(ctx.from.id);
 	await upsertActorSnapshot(ctx, options);
@@ -338,7 +338,7 @@ async function ensureActor(ctx: Context, options: ProfileBotOptions): Promise<bo
 	return record?.status === "active";
 }
 
-async function upsertActorSnapshot(ctx: Context, options: ProfileBotOptions): Promise<void> {
+async function upsertActorSnapshot(ctx: Context, options: TelegramRouterOptions): Promise<void> {
 	if (ctx.from === undefined) return;
 	const displayName = [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(" ").trim() || "Telegram user";
 	await options.telegramUserRepository.upsert({
@@ -365,7 +365,7 @@ function telegramOccurredAt(update: Update): Date {
 	return new Date(update.update_id);
 }
 
-function menuKeyboard(options?: ProfileBotOptions): InlineKeyboard {
+function menuKeyboard(options?: TelegramRouterOptions): InlineKeyboard {
 	const collaborationAction = options?.collaborationDraftService === undefined ? "profile:unavailable" : "collaboration:start";
 	const browseAction = options?.collaborationBrowseService === undefined ? "profile:unavailable" : "browse:start";
 	return new InlineKeyboard()

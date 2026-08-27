@@ -21,7 +21,7 @@ import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/data
 import { SqliteTelegramUserRepository } from "../../src/infrastructure/database/telegram-user-repository.js";
 import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
 import type { FakeTelegramApi } from "../../src/infrastructure/testing/fake-telegram-api.js";
-import { registerProfileBot } from "../../src/bot/profile-bot.js";
+import { registerTelegramRouter } from "../../src/presentation/telegram/telegram-router.js";
 import {
 	callbackData,
 	callbackForUser,
@@ -137,7 +137,7 @@ function buildBot(boundary: DatabaseBoundary, clock: FakeClock, fake: FakeTelegr
 	const profileSessions = new SqliteProfileSessionRepository(boundary);
 	const service = new CollaborationDraftService(new SqliteCollaborationRepository(boundary), new SqliteCollaborationSessionRepository(boundary), transactionRunner, clock, profileSessions);
 	const bot = new Bot("fake-token", { client: { fetch: fake.fetch } });
-	registerProfileBot(bot, {
+	registerTelegramRouter(bot, {
 		profileService: new ProfileService(new SqliteProfileRepository(boundary), transactionRunner, clock),
 		sessionRepository: profileSessions,
 		telegramUserRepository: new SqliteTelegramUserRepository(boundary),

@@ -118,6 +118,7 @@ P0-01 → P0-02
 | R2-09B | `d5f61074bba13c29e7b967a5c638d7e6278a80e1` | applications Telegram presentation ownership |
 | R2-10A | `18c313942400369924169f48c66d9d6462bdfb9c` | moderation core, persistence and composition ownership |
 | R2-10B | `2c4523bb334983292be0c971806bee926319c036` | moderation Telegram presentation ownership |
+| R2-11A | `f4383a79e9784c42be4fa2d77d5357a2df47f8aa` | neutral durable Telegram ingress ownership |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -932,7 +933,7 @@ P0-01 → P0-02
 
 #### R2-11B — Establish the neutral Telegram router
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Заменить profile-named root фактическим `telegram-router`.
 - **Dependencies:** `R2-11A`.
 - **Read first:** `profile-bot.ts`, module presentation APIs, routing contract and runtime composition tests.
@@ -941,11 +942,12 @@ P0-01 → P0-02
 - **Invariants:** exact Telegram behavior, update metadata and effect/reply ordering remain unchanged.
 - **Verification:** routing characterization, S1/S2 and all fake E2E, runtime, architecture, `pnpm check`, `pnpm db:verify`.
 - **Exit criteria:** runtime and tests use the neutral router and `profile-bot.ts` is absent; один commit `R2-11B: establish neutral Telegram router`.
+- **Completion evidence:** Commit SHA: `SELF`; moved the behavior-dense root grammY composition from misleading `src/bot/profile-bot.ts` to neutral `src/presentation/telegram/telegram-router.ts`, renamed its public surface to `registerTelegramRouter`/`TelegramRouterOptions`/`RegisteredTelegramRouter`, and switched runtime plus both direct S1/S2 consumers. No compatibility alias remains for the old root name or path. Five source/test paths plus this plan changed; feature construction, route precedence, lazy continuation wiring, durable replay, one generic callback acknowledgement, opaque `cb_*`, actor snapshot, post-commit audience lookup and reply ordering are unchanged. Focused S1/S2/ingress/routing tests PASS (11); runtime PASS (47); architecture PASS (161 modules, 465 dependencies); `pnpm check` PASS (69 unit, 88 integration, 47 runtime, lint/typecheck/build); all fake E2E PASS (33); `pnpm db:verify` PASS. No credential, real Telegram, remote or production mutation.
 - **Stop conditions:** rename introduces an ESM cycle or changes effect/reply order.
 
 #### R2-11C — Remove legacy bot presentation paths
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Удалить оставшиеся exact feature-presentation bridges и физически закрыть `src/bot`.
 - **Dependencies:** `R2-11B`.
 - **Read first:** all `src/bot` files, source/test imports and module presentation entrypoints.

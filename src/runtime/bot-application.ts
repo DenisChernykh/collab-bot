@@ -13,7 +13,7 @@ import { OUTBOX_DELIVERY_KINDS } from "../application/ports/outbox-delivery-stor
 import type { Clock } from "../application/ports/clock.js";
 import { ProfileAudienceService } from "../application/profiles/profile-audience-service.js";
 import { ProfileService } from "../application/profiles/profile-service.js";
-import { registerProfileBot } from "../bot/profile-bot.js";
+import { registerTelegramRouter } from "../presentation/telegram/telegram-router.js";
 import type { AppConfig } from "../config/parse-config.js";
 import { hashCanonicalInput } from "../infrastructure/crypto/canonical-input-hash.js";
 import { RandomClaimTokenGenerator } from "../infrastructure/crypto/claim-token.js";
@@ -149,7 +149,7 @@ export function composeBotApplication(options: BotApplicationCompositionOptions)
 			if (inFlight === 0) drainResolve?.();
 		}
 	});
-	registerProfileBot(bot, {
+	registerTelegramRouter(bot, {
 		profileService,
 		profileAudienceService,
 		sessionRepository: profileSessionRepository,
