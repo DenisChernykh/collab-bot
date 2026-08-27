@@ -42,7 +42,7 @@
 | S4 — Shareable launch | `completed` | 1 | Admin hide, полный real journey и готовая к распространению ссылка |
 | FUT — Telegram audience snapshot | `completed` | 1 | Best-effort снимок аудитории Telegram после сохранения профиля |
 | R1 — Post-launch maintainability | `completed` | 14 | Те же пользовательские контракты с feature-owned кодом и проверяемыми границами |
-| R2 — Complete feature-first layout | `in_progress` | 18 | Весь бизнес-код принадлежит явным модулям; legacy feature paths отсутствуют |
+| R2 — Complete feature-first layout | `in_progress` | 22 | Весь бизнес-код принадлежит явным модулям; legacy feature paths отсутствуют |
 
 ```text
 P0-01 → P0-02
@@ -56,8 +56,9 @@ P0-01 → P0-02
   → R1-05A → R1-05B → R1-05C
   → R1-06A → R1-06B → R1-06C → R1-07 → R1-08 → R1-09
   → R2-00 → R2-01 → R2-02 → R2-03 → R2-04
-  → R2-05A → R2-05B → R2-06 → R2-07A → R2-07B → R2-08 → R2-09
-  → R2-10 → R2-11 → R2-12 → R2-13 → R2-14 → R2-15
+  → R2-05A → R2-05B → R2-06 → R2-07A → R2-07B → R2-08
+  → R2-09A → R2-09B → R2-10A → R2-10B
+  → R2-11A → R2-11B → R2-11C → R2-12 → R2-13 → R2-14 → R2-15
 ```
 
 ## 4. Завершённый ledger
@@ -111,7 +112,8 @@ P0-01 → P0-02
 | R2-05B | `3872a906753d733edf3ed46a279c26f25b45eb27` | collaboration application service ownership |
 | R2-06 | `3868e52236668b8683bbc8a0306ad8be0b60178f` | consumer-neutral atomic wizard admission |
 | R2-07A | `92b37305909e1834b04f930fb54cc2c76d450907` | collaboration SQLite adapters and composition ownership |
-| R2-07B | `SELF` | collaboration Telegram presentation ownership |
+| R2-07B | `b9ec2b3d82e0e1766aec040d2c373840ee158127` | collaboration Telegram presentation ownership |
+| R2-08 | `SELF` | marketplace CQRS read-model ownership |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -842,7 +844,7 @@ P0-01 → P0-02
 
 #### R2-08 — Create the marketplace read module
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Дать feed/deep-link/browse projection отдельного владельца вместо размытого marketplace composer.
 - **Dependencies:** `R2-07B`.
 - **Read first:** browse service/port/repository, feed/deep-link tests and TD CQRS rules.
@@ -851,52 +853,105 @@ P0-01 → P0-02
 - **Invariants:** same filters, keyset order, visibility and revalidation.
 - **Verification:** browse integration/fake E2E; architecture; `pnpm check`; `pnpm db:verify`.
 - **Exit criteria:** browse ownership no longer sits in collaborations/shared DB; один commit `R2-08: establish marketplace read module`.
+- **Completion evidence:** Commit SHA: `SELF`; moved the browse service, its consumer port and SQLite projection under `modules/marketplace`, added pure application/root entrypoints plus `createMarketplaceFeature({ boundary, transactions, clock })`, and retained three exact compatibility exports for scheduled presentation/runtime/test cutover. The factory exposes only the browse service, not its repository. Test-first RED was the missing marketplace root/factory; the migrated-SQLite composition test now proves an empty feed persists and resumes the same generation with revision 1→2 across recomposition. Technical Design now records marketplace as the explicit CQRS exception: its adapter may join authoritative profiles/collaborations/applications/actor tables for current visibility, while writes remain limited to owned `browse_sessions`. Ten source/test paths plus this plan and TD changed; SQL predicates/order/parameters, keyset cursor, TTL/cleanup, stale-session and deep-link behavior remain unchanged. Focused composition/browse tests PASS (7); architecture PASS (152 modules, 443 dependencies); `pnpm check` PASS (69 unit, 87 integration, 47 runtime, lint/typecheck/build); all fake E2E PASS (30); `pnpm db:verify` PASS. No credential, real Telegram, remote or production mutation.
 - **Stop conditions:** projection write expands beyond browse sessions or SQL behavior changes.
 
-#### R2-09 — Split marketplace and applications Telegram presentation
+#### R2-09A — Extract applications Telegram presentation
 
-- **Status:** `pending`
-- **Objective:** Разделить смешанный composer по реальному business ownership.
+- **Status:** `in_progress`
+- **Objective:** Передать applications собственные Telegram handlers до marketplace cutover.
 - **Dependencies:** `R2-08`.
-- **Read first:** marketplace composer/codec, applications APIs and all S3 fake journeys.
-- **Scope:** browse/deep-link rendering под marketplace; submit/own/author decision/opaque `cb_*` под applications; injected public ports; удалить legacy marketplace composer after cutover.
-- **Do not touch:** callback/deep-link bytes, command names, copy or route priority.
-- **Invariants:** `cb_*` не проходит generic durable envelope; no duplicated Telegram/business effect.
-- **Verification:** R1-05C/S3 focused tests; all fake E2E; architecture; `pnpm check`; `pnpm db:verify`.
-- **Exit criteria:** applications и marketplace имеют отдельные presentation owners; один commit `R2-09: split marketplace Telegram ownership`.
-- **Stop conditions:** exact routing/effect parity cannot be proven in one wave.
+- **Read first:** mixed marketplace composer/codec, applications public API, profile continuation and opaque callback tests.
+- **Scope:** submit/own/author-management/decision/completion handlers and application callback codec under `modules/applications/presentation/telegram`; public exports; temporary marketplace facade delegates to the extracted surface.
+- **Do not touch:** browse filtering/page rendering, callback/deep-link bytes, copy or root routing order.
+- **Invariants:** `cb_*` bypasses the generic durable envelope; quick-profile continuation and decision effects remain single-shot.
+- **Verification:** applications-focused R1-05C/S3 fake tests; architecture; `pnpm check`; `pnpm db:verify`.
+- **Exit criteria:** active applications presentation is feature-owned while the temporary facade preserves routing; один commit `R2-09A: own applications Telegram presentation`.
+- **Stop conditions:** extraction duplicates a handler/effect or changes continuation ownership.
 
-#### R2-10 — Complete the moderation feature module
-
-- **Status:** `pending`
-- **Objective:** Собрать moderation service/ports/adapter/presentation и узко оформить её cross-feature orchestration.
-- **Dependencies:** `R2-09`.
-- **Read first:** moderation service/repository/composer and hide audit/outbox tests.
-- **Scope:** moderation vertical module/factory/public API; remove internal presentation import; preserve current atomic repository behavior unless a narrow port split is behavior-neutral and fully characterized.
-- **Do not touch:** hide policy, audit schema, restore/block Later scope or delivery semantics.
-- **Invariants:** hide + audit + channel-delete intent остаются одной authoritative transaction.
-- **Verification:** S4 moderation integration/fake E2E; architecture; `pnpm check`; `pnpm db:verify`.
-- **Exit criteria:** moderation business code absent from shared legacy paths; один commit `R2-10: complete moderation feature module`.
-- **Stop conditions:** ownership split would weaken atomicity or require new product policy.
-
-#### R2-11 — Replace the profile-named root with a neutral Telegram router
+#### R2-09B — Complete marketplace Telegram presentation
 
 - **Status:** `pending`
-- **Objective:** Убрать вводящий в заблуждение `profile-bot.ts` и оставить global routing/durable orchestration в `presentation/telegram`.
-- **Dependencies:** `R2-10`.
-- **Read first:** root bot, durable ingress, feature composer APIs and runtime drain tests.
-- **Scope:** neutral `telegram-router`, durable ingress/executor, menu/update metadata; mount module presentations through narrow ports; delete `src/bot` after consumers switch.
-- **Do not touch:** route/callback priority, reply buffering, replay, audience post-commit action or in-flight middleware ownership.
-- **Invariants:** exact external Telegram behavior and one durable envelope per generic update.
-- **Verification:** routing characterization/runtime/all fake E2E; architecture; `pnpm check`; `pnpm db:verify`.
-- **Exit criteria:** `src/bot` absent; root name/ownership truthful; один commit `R2-11: establish neutral Telegram router`.
-- **Stop conditions:** ESM cycle or changed effect/reply order.
+- **Objective:** Перенести оставшийся browse/deep-link Telegram flow и завершить split consumer cutover.
+- **Dependencies:** `R2-09A`.
+- **Read first:** remaining marketplace composer/codec, marketplace feature API, root router and all S3 fake journeys.
+- **Scope:** marketplace browse/deep-link composer and callback codec under `modules/marketplace/presentation/telegram`; root mounts separate marketplace/applications surfaces; focused consumers switch to public APIs; exact `src/bot/marketplace` bridges remain only до `R2-11C`.
+- **Do not touch:** applications handlers moved in `R2-09A`, browse SQL/pagination, callback/deep-link bytes, copy or route priority.
+- **Invariants:** every update reaches one owner; author deep-link, feed application start and quick-profile return remain unchanged.
+- **Verification:** R1-05C/S3 focused and all fake E2E; architecture; `pnpm check`; `pnpm db:verify`.
+- **Exit criteria:** applications and marketplace have distinct active presentation owners; один commit `R2-09B: complete marketplace Telegram presentation`.
+- **Stop conditions:** exact routing/effect parity cannot be preserved through separate composers.
+
+#### R2-10A — Move moderation core and composition
+
+- **Status:** `pending`
+- **Objective:** Собрать moderation application contract, service, SQLite adapter and factory под одним owner.
+- **Dependencies:** `R2-09B`.
+- **Read first:** moderation service/port/repository, runtime composition and hide audit/outbox integration tests.
+- **Scope:** move moderation port/service/adapter unchanged, add composition factory/public API and temporary exact compatibility exports.
+- **Do not touch:** Telegram composer, repository SQL split, hide policy, audit schema, restore/block Later scope or delivery semantics.
+- **Invariants:** hide, pending-application close, projection supersede, delete intent and audit remain one authoritative transaction.
+- **Verification:** S4 moderation integration and composition tests; architecture; `pnpm check`; `pnpm db:verify`.
+- **Exit criteria:** moderation core and persistence are feature-owned and factory-constructible; один commit `R2-10A: own moderation core and composition`.
+- **Stop conditions:** ownership move weakens atomicity or requires repository/SQL redesign.
+
+#### R2-10B — Move moderation Telegram presentation
+
+- **Status:** `pending`
+- **Objective:** Завершить moderation vertical slice переносом composer и consumer cutover.
+- **Dependencies:** `R2-10A`.
+- **Read first:** moderation composer, collaboration status public surface, root actor routing and focused fake tests.
+- **Scope:** move composer under `modules/moderation/presentation/telegram`, export through module API and switch root/focused consumers; exact legacy bridge remains only до `R2-11C`.
+- **Do not touch:** admin command syntax/copy, actor resolution, hide behavior or routing priority.
+- **Invariants:** non-admin `/admin` remains indistinguishable from unknown command; admin actor tagging and one durable effect remain unchanged.
+- **Verification:** moderation-focused R1-05C/S4 fake tests; architecture; `pnpm check`; `pnpm db:verify`.
+- **Exit criteria:** no active moderation implementation remains under shared application/infrastructure or `src/bot`; один commit `R2-10B: move moderation Telegram presentation`.
+- **Stop conditions:** move changes actor classification or duplicates hide execution.
+
+#### R2-11A — Move durable Telegram ingress
+
+- **Status:** `pending`
+- **Objective:** Передать neutral presentation layer единственную durable ingress seam.
+- **Dependencies:** `R2-10B`.
+- **Read first:** durable ingress, current root router and R1-04 characterization tests.
+- **Scope:** move `registerDurableTelegramIngress` and its contracts under `presentation/telegram`; switch root and focused test; remove the old active ingress path.
+- **Do not touch:** command executor, receipt policy, callback classification or reply buffering.
+- **Invariants:** generic messages/callbacks use one durable envelope; `cb_*` remains a separate opaque path.
+- **Verification:** R1-04 ingress and routing tests; all fake E2E; architecture; `pnpm check`; `pnpm db:verify`.
+- **Exit criteria:** durable ingress has one neutral presentation owner; один commit `R2-11A: move durable Telegram ingress`.
+- **Stop conditions:** classification or middleware terminality changes.
+
+#### R2-11B — Establish the neutral Telegram router
+
+- **Status:** `pending`
+- **Objective:** Заменить profile-named root фактическим `telegram-router`.
+- **Dependencies:** `R2-11A`.
+- **Read first:** `profile-bot.ts`, module presentation APIs, routing contract and runtime composition tests.
+- **Scope:** move root implementation to `presentation/telegram/telegram-router.ts`, rename its internal public contract neutrally and switch runtime plus direct S1/S2 fake consumers.
+- **Do not touch:** feature factories/runtime DI cutover, route priority, menu/copy, replay, reply collector or audience post-commit action.
+- **Invariants:** exact Telegram behavior, update metadata and effect/reply ordering remain unchanged.
+- **Verification:** routing characterization, S1/S2 and all fake E2E, runtime, architecture, `pnpm check`, `pnpm db:verify`.
+- **Exit criteria:** runtime and tests use the neutral router and `profile-bot.ts` is absent; один commit `R2-11B: establish neutral Telegram router`.
+- **Stop conditions:** rename introduces an ESM cycle or changes effect/reply order.
+
+#### R2-11C — Remove legacy bot presentation paths
+
+- **Status:** `pending`
+- **Objective:** Удалить оставшиеся exact feature-presentation bridges и физически закрыть `src/bot`.
+- **Dependencies:** `R2-11B`.
+- **Read first:** all `src/bot` files, source/test imports and module presentation entrypoints.
+- **Scope:** delete unused profile/collaboration/marketplace/moderation compatibility exports; exact zero-path and empty-directory audit.
+- **Do not touch:** module implementations, runtime composition, shared application/infrastructure paths or broad test-support alignment.
+- **Invariants:** every removed file has zero active consumer and an existing public module replacement.
+- **Verification:** zero `src/bot` import/path scan; routing and all fake E2E; architecture; `pnpm check`; `pnpm db:verify`.
+- **Exit criteria:** `src/bot` absent and all Telegram presentation ownership is truthful; один commit `R2-11C: remove legacy bot presentation paths`.
+- **Stop conditions:** any consumer still requires a compatibility bridge.
 
 #### R2-12 — Compose runtime through feature factories
 
 - **Status:** `pending`
 - **Objective:** Убрать ручное создание feature internals из runtime composition.
-- **Dependencies:** `R2-11`.
+- **Dependencies:** `R2-11C`.
 - **Read first:** bot application, all module factories/public APIs and lifecycle tests.
 - **Scope:** runtime creates shared platform primitives, calls feature factories and mounts neutral router; narrow cross-feature ports wired only here.
 - **Do not touch:** bootstrap/preflight/polling/worker/shutdown order.

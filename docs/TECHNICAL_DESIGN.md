@@ -199,7 +199,7 @@ bootstrap/runtime
 - `application` импортирует domain и объявляет порты;
 - adapters/infrastructure реализуют порты;
 - bootstrap создаёт зависимости и владеет lifecycle;
-- модуль не обращается к таблице другого модуля в обход application port/use case;
+- модуль не изменяет таблицы другого модуля в обход его application port/use case; специально объявленный CQRS read adapter может читать чужие authoritative tables, не становясь владельцем их commands или data;
 - Telegram handlers не принимают продуктовые решения.
 
 ### 4.2. Модули
@@ -208,6 +208,7 @@ bootstrap/runtime
 |---|---|
 | `profiles` | профиль, темы и публичные площадки; pairwise Telegram identity action вычисляется отдельно из `telegram_users` |
 | `collaborations` | draft, публикация, версия условий, slots и lifecycle |
+| `marketplace` | read-only browse/deep-link projection, filters, keyset cursor и `browse_sessions` |
 | `applications` | отклик, решение, атомарное заполнение slots |
 | `moderation` | hide/restore, block/unblock и audit |
 | `showcase-publication` | render, send/edit/delete и reconciliation |
@@ -219,6 +220,7 @@ bootstrap/runtime
 
 - `applications` читает profile visibility и collaboration state через порты.
 - `collaborations` не знает grammY и не вызывает Bot API.
+- `marketplace` — явное CQRS-исключение: его read adapter может одним SQL-query соединять profiles, collaborations, applications и actor visibility для актуальной выборки. Модуль не изменяет чужие aggregates и записывает только свою `browse_sessions` projection state.
 - Application transaction создаёт бизнес-изменение, delivery intents и product events.
 - `showcase-publication` проецирует collaboration read model в Telegram-канал.
 - `moderation` оркестрирует profiles, collaborations, applications и publication через application ports.
