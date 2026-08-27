@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
 	validateProfileInput,
 	type ProfileInput,
-} from "../../src/domain/profiles/profile.js";
+} from "../../src/modules/profiles/index.js";
 
 const valid: ProfileInput = {
 	type: "blogger",

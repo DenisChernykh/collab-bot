@@ -16,11 +16,11 @@ import { SqliteCollaborationRepository } from "../../src/infrastructure/database
 import { SqliteCollaborationSessionRepository } from "../../src/infrastructure/database/collaboration-session-repository.js";
 import { SqliteOutboxDeliveryRepository } from "../../src/infrastructure/database/outbox-delivery-repository.js";
 import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/database/transaction-runner.js";
-import { ProfileService } from "../../src/application/profiles/profile-service.js";
-import { SqliteProfileRepository } from "../../src/infrastructure/database/profile-repository.js";
 import { SqliteTelegramUserRepository } from "../../src/infrastructure/database/telegram-user-repository.js";
 import { FakeTelegramTransport } from "../../src/infrastructure/testing/fake-telegram-transport.js";
 import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
+import { ProfileService } from "../../src/modules/profiles/index.js";
+import { SqliteProfileRepository } from "../../src/modules/profiles/infrastructure/sqlite-profile-repository.js";
 
 const migrationsPath = fileURLToPath(new URL("../../migrations/", import.meta.url));
 

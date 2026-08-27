@@ -6,21 +6,23 @@ import { join } from "node:path";
 import { Bot } from "grammy";
 import { describe, expect, it } from "vitest";
 
-import { ProfileService } from "../../src/application/profiles/profile-service.js";
-import { ProfileAudienceService } from "../../src/application/profiles/profile-audience-service.js";
-import type { TelegramAudienceTarget } from "../../src/application/profiles/profile-audience-service.js";
-import type { ProfileSessionRepository } from "../../src/application/ports/profile-session-repository.js";
 import { DurableCommandExecutor } from "../../src/application/commands/command-executor.js";
 import { hashCanonicalInput } from "../../src/infrastructure/crypto/canonical-input-hash.js";
 import { SqliteDurableCommandStore } from "../../src/infrastructure/database/durable-command-repository.js";
-import { SqliteProfileRepository } from "../../src/infrastructure/database/profile-repository.js";
-import { SqliteProfileSessionRepository } from "../../src/infrastructure/database/profile-session-repository.js";
 import { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
 import { MigrationRunner, MigrationSource } from "../../src/infrastructure/database/migrations.js";
 import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/database/transaction-runner.js";
 import { SqliteTelegramUserRepository } from "../../src/infrastructure/database/telegram-user-repository.js";
 import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
 import { SystemProviderDeadline } from "../../src/infrastructure/time/provider-deadline.js";
+import {
+	ProfileAudienceService,
+	ProfileService,
+	type ProfileSessionRepository,
+	type TelegramAudienceTarget,
+} from "../../src/modules/profiles/index.js";
+import { SqliteProfileRepository } from "../../src/modules/profiles/infrastructure/sqlite-profile-repository.js";
+import { SqliteProfileSessionRepository } from "../../src/modules/profiles/infrastructure/sqlite-profile-session-repository.js";
 import { registerTelegramRouter } from "../../src/presentation/telegram/telegram-router.js";
 import {
 	callbackData,

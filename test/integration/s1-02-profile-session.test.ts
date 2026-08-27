@@ -8,14 +8,13 @@ import { describe, expect, it } from "vitest";
 import { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
 import { MigrationRunner, MigrationSource } from "../../src/infrastructure/database/migrations.js";
 import { DurableCommandExecutor } from "../../src/application/commands/command-executor.js";
-import { ProfileService } from "../../src/application/profiles/profile-service.js";
 import { hashCanonicalInput } from "../../src/infrastructure/crypto/canonical-input-hash.js";
 import { SqliteDurableCommandStore } from "../../src/infrastructure/database/durable-command-repository.js";
-import { SqliteProfileRepository } from "../../src/infrastructure/database/profile-repository.js";
 import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/database/transaction-runner.js";
-import { SqliteProfileSessionRepository } from "../../src/infrastructure/database/profile-session-repository.js";
 import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
-import type { ProfileSessionState } from "../../src/application/ports/profile-session-repository.js";
+import { ProfileService, type ProfileSessionState } from "../../src/modules/profiles/index.js";
+import { SqliteProfileRepository } from "../../src/modules/profiles/infrastructure/sqlite-profile-repository.js";
+import { SqliteProfileSessionRepository } from "../../src/modules/profiles/infrastructure/sqlite-profile-session-repository.js";
 
 const migrationsPath = fileURLToPath(new URL("../../migrations/", import.meta.url));
 

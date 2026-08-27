@@ -8,19 +8,19 @@ import { describe, expect, it } from "vitest";
 
 import { CollaborationDraftService } from "../../src/application/collaborations/collaboration-draft-service.js";
 import { DurableCommandExecutor } from "../../src/application/commands/command-executor.js";
-import { ProfileService } from "../../src/application/profiles/profile-service.js";
 import { hashCanonicalInput } from "../../src/infrastructure/crypto/canonical-input-hash.js";
 import { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
 import { SqliteCollaborationRepository } from "../../src/infrastructure/database/collaboration-repository.js";
 import { SqliteCollaborationSessionRepository } from "../../src/infrastructure/database/collaboration-session-repository.js";
 import { SqliteDurableCommandStore } from "../../src/infrastructure/database/durable-command-repository.js";
 import { MigrationRunner, MigrationSource } from "../../src/infrastructure/database/migrations.js";
-import { SqliteProfileRepository } from "../../src/infrastructure/database/profile-repository.js";
-import { SqliteProfileSessionRepository } from "../../src/infrastructure/database/profile-session-repository.js";
 import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/database/transaction-runner.js";
 import { SqliteTelegramUserRepository } from "../../src/infrastructure/database/telegram-user-repository.js";
 import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
 import type { FakeTelegramApi } from "../../src/infrastructure/testing/fake-telegram-api.js";
+import { ProfileService } from "../../src/modules/profiles/index.js";
+import { SqliteProfileRepository } from "../../src/modules/profiles/infrastructure/sqlite-profile-repository.js";
+import { SqliteProfileSessionRepository } from "../../src/modules/profiles/infrastructure/sqlite-profile-session-repository.js";
 import { registerTelegramRouter } from "../../src/presentation/telegram/telegram-router.js";
 import {
 	callbackData,

@@ -12,11 +12,11 @@ import { hashCanonicalInput } from "../../src/infrastructure/crypto/canonical-in
 import { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
 import { MigrationRunner, MigrationSource } from "../../src/infrastructure/database/migrations.js";
 import { SqliteDurableCommandStore } from "../../src/infrastructure/database/durable-command-repository.js";
-import { SqliteProfileRepository } from "../../src/infrastructure/database/profile-repository.js";
-import { SqliteProfileSessionRepository } from "../../src/infrastructure/database/profile-session-repository.js";
 import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/database/transaction-runner.js";
 import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
-import { ProfileService, type ProfileInput } from "../../src/application/profiles/profile-service.js";
+import { ProfileService, type ProfileInput } from "../../src/modules/profiles/index.js";
+import { SqliteProfileRepository } from "../../src/modules/profiles/infrastructure/sqlite-profile-repository.js";
+import { SqliteProfileSessionRepository } from "../../src/modules/profiles/infrastructure/sqlite-profile-session-repository.js";
 
 const canonicalMigrationsPath = fileURLToPath(new URL("../../migrations/", import.meta.url));
 

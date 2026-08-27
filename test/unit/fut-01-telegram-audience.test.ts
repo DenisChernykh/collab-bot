@@ -5,14 +5,16 @@ import type {
 	ProfileAudienceWriter,
 	TelegramAudienceReader,
 	TelegramAudienceTarget,
-} from "../../src/application/profiles/profile-audience-service.js";
-import { TelegramAudienceLookupError } from "../../src/application/profiles/profile-audience-service.js";
+} from "../../src/modules/profiles/index.js";
 import { PROVIDER_DEADLINE_MS } from "../../src/application/ports/provider-deadline.js";
-import { ProfileAudienceService } from "../../src/application/profiles/profile-audience-service.js";
-import type { ProfileRecord } from "../../src/domain/profiles/profile.js";
-import { GrammyTelegramAudienceReader } from "../../src/runtime/bot-runtime.js";
 import { FakeClock } from "../../src/infrastructure/time/fake-clock.js";
 import { SystemProviderDeadline } from "../../src/infrastructure/time/provider-deadline.js";
+import {
+	ProfileAudienceService,
+	TelegramAudienceLookupError,
+	type ProfileRecord,
+} from "../../src/modules/profiles/index.js";
+import { GrammyTelegramAudienceReader } from "../../src/modules/profiles/infrastructure/grammy-telegram-audience-reader.js";
 
 const NOW = 1_700_000_000_000;
 

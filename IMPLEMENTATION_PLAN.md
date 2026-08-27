@@ -123,6 +123,7 @@ P0-01 → P0-02
 | R2-11A | `f4383a79e9784c42be4fa2d77d5357a2df47f8aa` | neutral durable Telegram ingress ownership |
 | R2-11B | `3c12fbab1e91b2e55d92c488c3a8e41a6a7bfe3f` | neutral Telegram router ownership |
 | R2-11C | `fa5859801398d3ce85c731f9ce163825da21535c` | removed legacy bot presentation paths |
+| R2-12 | `59f70493ce162ab00ae640a69eec3479cd8d9227` | runtime composition through feature public factories |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -979,7 +980,7 @@ P0-01 → P0-02
 
 #### R2-13A — Cut profile consumers to the module owner
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Перевести runtime compatibility export и profile-related tests со shared legacy paths на `modules/profiles`.
 - **Dependencies:** `R2-12`.
 - **Read first:** nine remaining profile bridge consumers, profiles public/application/infrastructure surfaces and focused tests.
@@ -988,11 +989,12 @@ P0-01 → P0-02
 - **Invariants:** public contracts and direct adapter coverage remain identical; no module export is widened solely for tests.
 - **Verification:** profile unit/integration/fake tests; architecture; `pnpm check`; all fake E2E; `pnpm db:verify`.
 - **Exit criteria:** no active consumer imports a legacy profile path; один commit `R2-13A: cut profile consumers to module owner`.
+- **Completion evidence:** Commit SHA: `SELF`; switched the runtime compatibility facade and eight profile/cross-feature test files from shared profile re-exports to `modules/profiles` public contracts or the exact feature-owned SQLite/grammY adapter under direct test. The obsolete `GrammyTelegramAudienceReader` runtime re-export is removed, and no module root was widened merely to expose infrastructure for tests. Nine source/test paths plus this plan changed; test bodies/assertions, factory construction, SQL and profile behavior stayed unchanged. Exact consumer scan finds no legacy profile import outside the passive bridge files themselves. Focused profile/cross-feature tests PASS (8 files, 52 tests); architecture PASS (156 modules, 449 dependencies); `pnpm check` PASS (69 unit, 88 integration, 47 runtime, lint/typecheck/build); all fake E2E PASS (33); `pnpm db:verify` PASS. No credential, real Telegram, remote or production mutation.
 - **Stop conditions:** a consumer cannot express the same test through a module-owned surface.
 
 #### R2-13B — Delete profile compatibility paths
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Удалить восемь profile compatibility files из shared domain/application/infrastructure.
 - **Dependencies:** `R2-13A`.
 - **Read first:** exact profile zero-consumer scan and module replacements.
