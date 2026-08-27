@@ -110,7 +110,8 @@ P0-01 → P0-02
 | R2-05A | `aab692ae3259937b8d52217c06fb4cfaec74cbb8` | collaboration domain and port ownership |
 | R2-05B | `3872a906753d733edf3ed46a279c26f25b45eb27` | collaboration application service ownership |
 | R2-06 | `3868e52236668b8683bbc8a0306ad8be0b60178f` | consumer-neutral atomic wizard admission |
-| R2-07A | `SELF` | collaboration SQLite adapters and composition ownership |
+| R2-07A | `92b37305909e1834b04f930fb54cc2c76d450907` | collaboration SQLite adapters and composition ownership |
+| R2-07B | `SELF` | collaboration Telegram presentation ownership |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -827,7 +828,7 @@ P0-01 → P0-02
 
 #### R2-07B — Move collaborations Telegram presentation
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Завершить collaboration vertical slice переносом composer/rendering и consumer cutover.
 - **Dependencies:** `R2-07A`.
 - **Read first:** collaboration composer/presentation, root router, marketplace/moderation consumers and S2 fake tests.
@@ -836,11 +837,12 @@ P0-01 → P0-02
 - **Invariants:** callback bytes, render output, wizard flow and managed-collaboration continuation unchanged.
 - **Verification:** collaboration composer/S2 fake E2E; runtime; architecture; `pnpm check`; `pnpm db:verify`.
 - **Exit criteria:** no active collaboration adapter or presentation implementation remains in shared legacy paths; exact compatibility exports remain scheduled for `R2-13`; один commit `R2-07B: move collaboration Telegram presentation`.
+- **Completion evidence:** Commit SHA: `SELF`; moved the collaboration grammY composer and callback/presentation helpers under `modules/collaborations/presentation/telegram`, exported the feature contract through the collaboration root and switched the root router, marketplace, moderation and focused fake test to that public surface. The two old `src/bot/collaboration/*` files now contain exact compatibility re-exports only; no active production consumer imports them. Test-first RED proved the new public composer was absent (`createCollaborationTelegramFeature is not a function`); the same replay/stale-callback and restart/route-precedence tests are GREEN after the move. Nine source/test paths plus this plan changed; composer/render bodies differ only in imports, while callback bytes, reply copy, render output, route priority and managed-collaboration continuation are unchanged. Focused fake composer PASS (2); architecture PASS (146 modules, 431 dependencies); `pnpm check` PASS (69 unit, 86 integration, 47 runtime, lint/typecheck/build); all fake E2E PASS (30); `pnpm db:verify` PASS. No credential, real Telegram, remote or production mutation.
 - **Stop conditions:** move requires duplicate replies/effects or changes cross-feature continuation.
 
 #### R2-08 — Create the marketplace read module
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Дать feed/deep-link/browse projection отдельного владельца вместо размытого marketplace composer.
 - **Dependencies:** `R2-07B`.
 - **Read first:** browse service/port/repository, feed/deep-link tests and TD CQRS rules.

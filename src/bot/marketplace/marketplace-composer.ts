@@ -9,13 +9,16 @@ import {
 	type BrowseFilterValue,
 	type BrowsePage,
 } from "../../application/collaborations/collaboration-browse-service.js";
-import { renderCollaborationCard } from "../../application/collaborations/collaboration-renderer.js";
 import type { Clock } from "../../application/ports/clock.js";
 import type { BrowseCollaborationRecord, BrowseSessionRecord } from "../../application/ports/collaboration-browse-repository.js";
 import type { ProfileSessionRecord } from "../../modules/profiles/application/index.js";
 import { DomainValidationError, type CollaborationFormat, type Topic } from "../../domain/value-objects/enums.js";
 import type { ApplicationsFeatureApi, ApplicationFailureCode, AuthorManagementView } from "../../modules/applications/index.js";
-import { COLLABORATION_FORMAT_LABELS, collaborationStatusLabel } from "../collaboration/collaboration-presentation.js";
+import {
+	COLLABORATION_FORMAT_LABELS,
+	collaborationStatusLabel,
+	renderCollaborationCard,
+} from "../../modules/collaborations/index.js";
 import {
 	PROFILE_TYPE_LABELS,
 	TOPIC_LABELS,

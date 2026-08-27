@@ -5,12 +5,16 @@ import type { CanonicalInput } from "../application/commands/canonical-input.js"
 import type { DurableCommandExecutor } from "../application/commands/command-executor.js";
 import type { CallbackActionService } from "../application/commands/callback-action.js";
 import type { CollaborationBrowseService } from "../application/collaborations/collaboration-browse-service.js";
-import type { CollaborationDraftService } from "../application/collaborations/collaboration-draft-service.js";
-import type { CollaborationPublicationService } from "../application/collaborations/collaboration-publication-service.js";
 import type { AdminModerationService } from "../application/moderation/admin-moderation-service.js";
 import type { Clock } from "../application/ports/clock.js";
 import type { TelegramUserWriter } from "../application/ports/telegram-user-writer.js";
 import type { ApplicationsFeatureApi } from "../modules/applications/index.js";
+import {
+	createCollaborationTelegramFeature,
+	type CollaborationDraftService,
+	type CollaborationPublicationService,
+	type CollaborationTelegramFeature,
+} from "../modules/collaborations/index.js";
 import {
 	createProfileTelegramFeature,
 	resumeKeyboard,
@@ -23,7 +27,6 @@ import {
 	type ProfileTelegramFeature,
 } from "../modules/profiles/index.js";
 import { routeTelegramText } from "../presentation/telegram/telegram-routing.js";
-import { createCollaborationTelegramFeature, type CollaborationTelegramFeature } from "./collaboration/collaboration-composer.js";
 import { registerDurableTelegramIngress } from "./durable-telegram-ingress.js";
 import { createMarketplaceTelegramFeature } from "./marketplace/marketplace-composer.js";
 import { createModerationTelegramFeature, type ModerationTelegramFeature } from "./moderation/moderation-composer.js";

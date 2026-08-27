@@ -3,12 +3,15 @@ import type { UserFromGetMe, Update } from "grammy/types";
 import { describe, expect, it } from "vitest";
 
 import {
+	CollaborationDraftStaleError,
 	createCollaborationTelegramFeature,
 	type CollaborationDraftCommands,
-} from "../../src/bot/collaboration/collaboration-composer.js";
-import type { CollaborationSessionRecord } from "../../src/application/ports/collaboration-session-repository.js";
-import type { CollaborationDraftInput, CollaborationRecord, CollaborationWizardStep } from "../../src/domain/collaborations/collaboration.js";
-import { CollaborationDraftStaleError, type CollaborationDraftStartResult } from "../../src/application/collaborations/collaboration-draft-service.js";
+	type CollaborationDraftInput,
+	type CollaborationDraftStartResult,
+	type CollaborationRecord,
+	type CollaborationSessionRecord,
+	type CollaborationWizardStep,
+} from "../../src/modules/collaborations/index.js";
 import { FakeTelegramApi } from "../../src/infrastructure/testing/fake-telegram-api.js";
 
 const NOW = 1_700_000_000_000;

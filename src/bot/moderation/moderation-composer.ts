@@ -3,7 +3,7 @@ import type { Context } from "grammy";
 import type { CanonicalInput } from "../../application/commands/canonical-input.js";
 import type { CommandActor } from "../../application/commands/command-contracts.js";
 import type { AdminModerationService } from "../../application/moderation/admin-moderation-service.js";
-import { collaborationStatusLabel } from "../collaboration/collaboration-presentation.js";
+import { collaborationStatusLabel } from "../../modules/collaborations/index.js";
 
 export interface ModerationTelegramFeatureOptions {
 	readonly moderationService?: AdminModerationService;
