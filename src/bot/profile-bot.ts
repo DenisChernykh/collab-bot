@@ -38,8 +38,8 @@ import {
 	type ProfileSessionRepository,
 	type ProfileTelegramFeature,
 } from "../modules/profiles/index.js";
+import { registerDurableTelegramIngress } from "../presentation/telegram/durable-telegram-ingress.js";
 import { routeTelegramText } from "../presentation/telegram/telegram-routing.js";
-import { registerDurableTelegramIngress } from "./durable-telegram-ingress.js";
 
 const AUDIENCE_SNAPSHOT_UNAVAILABLE = "Аудиторию Telegram определить не удалось; профиль сохранён, число можно указать позже в «Мой профиль».";
 

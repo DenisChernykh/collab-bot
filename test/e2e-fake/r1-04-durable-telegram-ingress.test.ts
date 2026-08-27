@@ -3,7 +3,10 @@ import type { UserFromGetMe, Update } from "grammy/types";
 import { describe, expect, it } from "vitest";
 
 import type { CanonicalInput } from "../../src/application/commands/canonical-input.js";
-import { registerDurableTelegramIngress, type ExecuteDurableTelegramRoute } from "../../src/bot/durable-telegram-ingress.js";
+import {
+	registerDurableTelegramIngress,
+	type ExecuteDurableTelegramRoute,
+} from "../../src/presentation/telegram/durable-telegram-ingress.js";
 import { FakeTelegramApi } from "../../src/infrastructure/testing/fake-telegram-api.js";
 
 const DURABLE_PROXY = Symbol("durable-proxy");

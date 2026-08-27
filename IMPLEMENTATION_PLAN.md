@@ -117,6 +117,7 @@ P0-01 → P0-02
 | R2-09A | `fd38d23335f8cb190b12cff9db226ac9a8a6cef6` | marketplace Telegram presentation and split routing seam |
 | R2-09B | `d5f61074bba13c29e7b967a5c638d7e6278a80e1` | applications Telegram presentation ownership |
 | R2-10A | `18c313942400369924169f48c66d9d6462bdfb9c` | moderation core, persistence and composition ownership |
+| R2-10B | `2c4523bb334983292be0c971806bee926319c036` | moderation Telegram presentation ownership |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -917,7 +918,7 @@ P0-01 → P0-02
 
 #### R2-11A — Move durable Telegram ingress
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Передать neutral presentation layer единственную durable ingress seam.
 - **Dependencies:** `R2-10B`.
 - **Read first:** durable ingress, current root router and R1-04 characterization tests.
@@ -926,11 +927,12 @@ P0-01 → P0-02
 - **Invariants:** generic messages/callbacks use one durable envelope; `cb_*` remains a separate opaque path.
 - **Verification:** R1-04 ingress and routing tests; all fake E2E; architecture; `pnpm check`; `pnpm db:verify`.
 - **Exit criteria:** durable ingress has one neutral presentation owner; один commit `R2-11A: move durable Telegram ingress`.
+- **Completion evidence:** Commit SHA: `SELF`; moved the single durable grammY ingress seam from `src/bot` to neutral `src/presentation/telegram`, switched the root router and focused characterization test to the new owner, and removed the old path instead of retaining another bridge. Message and generic callback updates still enter exactly one durable envelope; opaque `cb_*` callbacks still bypass it and remain terminal. Four source/test paths plus this plan changed; canonical input bytes, executor/receipt policy, reply buffering and feature routing stayed unchanged. Focused ingress/routing tests PASS (2); architecture PASS (161 modules, 465 dependencies); `pnpm check` PASS (69 unit, 88 integration, 47 runtime, lint/typecheck/build); all fake E2E PASS (33); `pnpm db:verify` PASS. No credential, real Telegram, remote or production mutation.
 - **Stop conditions:** classification or middleware terminality changes.
 
 #### R2-11B — Establish the neutral Telegram router
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Заменить profile-named root фактическим `telegram-router`.
 - **Dependencies:** `R2-11A`.
 - **Read first:** `profile-bot.ts`, module presentation APIs, routing contract and runtime composition tests.
