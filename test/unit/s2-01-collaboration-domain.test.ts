@@ -37,9 +37,21 @@ describe("S2-01 collaboration domain", () => {
 	});
 
 	it("renders escaped preview without identity tokens and enforces UTF-16 length", () => {
-		const rendered = renderCollaborationCard({ title: "<script>", offerText: "Offer & details", expectationText: "A safe partner.", topics: ["city"] });
+		const rendered = renderCollaborationCard({
+			format: "joint_giveaway",
+			targetProfileType: "blogger",
+			title: "<script>",
+			offerText: "Offer & details",
+			expectationText: "A safe partner.",
+			topics: ["lifestyle", "city"],
+		});
 		expect(rendered).toContain("&lt;script&gt;");
 		expect(rendered).toContain("Offer &amp; details");
+		expect(rendered).toContain("Формат: Совместный розыгрыш");
+		expect(rendered).toContain("Кого ищут: Блогер");
+		expect(rendered).toContain("Темы: Lifestyle, Город");
+		expect(rendered).not.toContain("joint_giveaway");
+		expect(rendered).not.toContain("blogger");
 		expect(rendered).not.toContain("public_token");
 	});
 });

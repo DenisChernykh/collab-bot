@@ -8,11 +8,17 @@ export class GrammyTelegramTransport implements TelegramTransport {
 	async execute(request: TelegramTransportRequest): Promise<TelegramTransportResponse> {
 		try {
 			if (request.method === "send") {
-				const result = await this.bot.api.sendMessage(request.chatId, request.text, request.replyMarkup === undefined ? undefined : { reply_markup: request.replyMarkup as never }, request.signal as never);
+				const result = await this.bot.api.sendMessage(request.chatId, request.text, {
+					parse_mode: "HTML",
+					...(request.replyMarkup === undefined ? {} : { reply_markup: request.replyMarkup as never }),
+				}, request.signal as never);
 				return { method: "send", messageId: result.message_id };
 			}
 			if (request.method === "edit") {
-				await this.bot.api.editMessageText(request.chatId, request.messageId, request.text, request.replyMarkup === undefined ? undefined : { reply_markup: request.replyMarkup as never }, request.signal as never);
+				await this.bot.api.editMessageText(request.chatId, request.messageId, request.text, {
+					parse_mode: "HTML",
+					...(request.replyMarkup === undefined ? {} : { reply_markup: request.replyMarkup as never }),
+				}, request.signal as never);
 				return { method: "edit" };
 			}
 			await this.bot.api.deleteMessage(request.chatId, request.messageId, request.signal as never);
