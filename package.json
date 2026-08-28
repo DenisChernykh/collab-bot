@@ -20,6 +20,7 @@
 		"start": "node dist/cli/bot.js",
 		"db:migrate": "pnpm build && node dist/cli/db-migrate.js",
 		"db:verify": "pnpm build && node dist/cli/db-verify.js",
+		"db:state:export": "pnpm build && node dist/cli/state-export.js",
 		"cloudflare:types": "wrangler types",
 		"cloudflare:types:check": "wrangler types --check",
 		"cloudflare:dev": "wrangler dev --local",

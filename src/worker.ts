@@ -1,5 +1,12 @@
 import { CloudflareMigrationRunner } from "./platform/database/cloudflare-migrations.js";
 import { CloudflareSqlDatabase } from "./platform/database/cloudflare-sql-database.js";
+import {
+	exportStateTransferManifest,
+	importStateTransferManifest,
+	STATE_TRANSFER_AUDIT_TABLE,
+	StateTransferConflictError,
+	StateTransferValidationError,
+} from "./platform/database/state-transfer.js";
 import { Bot } from "grammy";
 
 import type { AppConfig } from "./config/parse-config.js";
@@ -9,6 +16,7 @@ import { SystemClock } from "./platform/time/system-clock.js";
 
 const SINGLETON_NAME = "collaboration-bot-primary";
 const PREFLIGHT_TABLE = "cf1_preflight_cache";
+const MAX_TRANSFER_BYTES = 32 * 1024 * 1024;
 const DELIVERY_STALE_AFTER_MS = 60_000;
 const ALARM_RETRY_DELAY_MS = 1_000;
 
@@ -34,7 +42,7 @@ interface PreflightCache {
 	readonly reason: string | null;
 }
 
-function json(body: Record<string, unknown>, status = 200): Response {
+function json(body: object, status = 200): Response {
 	return Response.json(body, {
 		status,
 		headers: { "cache-control": "no-store" },
@@ -101,7 +109,39 @@ export class CollaborationBotState implements DurableObject {
 		}
 		if (pathname === "/__cf1/state/export" || pathname === "/__cf1/state/import") {
 			await this.ready;
-			return json({ error: "state_transfer_not_ready" }, 501);
+			if (pathname === "/__cf1/state/export" && request.method === "GET") {
+				try {
+					await this.migrations.verify();
+					const manifest = await exportStateTransferManifest(this.database);
+					return Response.json(manifest, { headers: { "cache-control": "no-store" } });
+				} catch {
+					return json({ error: "state_export_unavailable" }, 500);
+				}
+			}
+			if (pathname === "/__cf1/state/import" && request.method === "POST") {
+				if (this.environment.STATE_IMPORT_ENABLED !== "true") return json({ error: "state_import_disabled" }, 403);
+				if (!isJsonContentType(request.headers.get("content-type"))) return json({ error: "unsupported_media_type" }, 415);
+				try {
+					await this.migrations.verify();
+				} catch {
+					return json({ error: "state_import_unavailable" }, 500);
+				}
+				let manifest: unknown;
+				try {
+					manifest = JSON.parse(await readBoundedText(request, MAX_TRANSFER_BYTES));
+				} catch (error) {
+					if (error instanceof TransferTooLargeError) return json({ error: "state_import_too_large" }, 413);
+					return json({ error: "malformed_manifest" }, 400);
+				}
+				try {
+					return json(await importStateTransferManifest(this.database, manifest));
+				} catch (error) {
+					if (error instanceof StateTransferConflictError) return json({ error: "state_import_conflict" }, 409);
+					if (error instanceof StateTransferValidationError) return json({ error: "state_import_invalid" }, 422);
+					return json({ error: "state_import_failed" }, 500);
+				}
+			}
+			return json({ error: "method_not_allowed" }, 405);
 		}
 		if (request.method !== "GET" || !["/__cf1/smoke", "/__cf1/schema"].includes(pathname)) {
 			if (request.method === "POST" && pathname === "/__cf1/update") return this.handleUpdate(request);
@@ -230,6 +270,13 @@ export class CollaborationBotState implements DurableObject {
 				checked_at INTEGER NOT NULL
 			)
 		`);
+		await this.database.execute(`
+			CREATE TABLE IF NOT EXISTS ${STATE_TRANSFER_AUDIT_TABLE} (
+				id INTEGER PRIMARY KEY CHECK (id = 1),
+				digest TEXT NOT NULL CHECK (length(digest) = 64 AND digest NOT GLOB '*[^0-9a-f]*'),
+				imported_at INTEGER NOT NULL
+			)
+		`);
 	}
 
 	private readPreflightCache(): Promise<PreflightCache | undefined> {
@@ -293,6 +340,7 @@ export default {
 			const runtimeEnvironment = environment as CloudflareEnvironment;
 			if (!isOperationsRequestAuthorized(request, runtimeEnvironment.OPERATIONS_TOKEN)) return json({ error: "unauthorized" }, 401);
 			if (url.pathname === "/ops/state/import" && runtimeEnvironment.STATE_IMPORT_ENABLED !== "true") return json({ error: "state_import_disabled" }, 403);
+			if (url.pathname === "/ops/state/import" && !isJsonContentType(request.headers.get("content-type"))) return json({ error: "unsupported_media_type" }, 415);
 			const objectId = runtimeEnvironment.COLLABORATION_STATE.idFromName(SINGLETON_NAME);
 			const response = await runtimeEnvironment.COLLABORATION_STATE.get(objectId).fetch(
 				new Request(new URL(`/__cf1${url.pathname.slice(4)}`, request.url), { method: request.method, headers: request.headers, body: request.method === "POST" ? request.body : null }),
@@ -337,3 +385,36 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function normalizeUsername(value: string | undefined): string {
 	return (value ?? "").replace(/^@+/, "").toLowerCase();
 }
+
+function isJsonContentType(value: string | null): boolean {
+	return value?.split(";", 1)[0]?.trim().toLowerCase() === "application/json";
+}
+
+async function readBoundedText(request: Request, maxBytes: number): Promise<string> {
+	const contentLength = request.headers.get("content-length");
+	if (contentLength !== null && /^\d+$/u.test(contentLength) && Number(contentLength) > maxBytes) throw new TransferTooLargeError();
+	const reader = request.body?.getReader();
+	if (reader === undefined) return "";
+	const chunks: Uint8Array[] = [];
+	let total = 0;
+	try {
+		while (true) {
+			const next = await reader.read();
+			if (next.done) break;
+			total += next.value.byteLength;
+			if (total > maxBytes) throw new TransferTooLargeError();
+			chunks.push(next.value);
+		}
+	} finally {
+		reader.releaseLock();
+	}
+	const body = new Uint8Array(total);
+	let offset = 0;
+	for (const chunk of chunks) {
+		body.set(chunk, offset);
+		offset += chunk.byteLength;
+	}
+	return new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(body);
+}
+
+class TransferTooLargeError extends Error {}
