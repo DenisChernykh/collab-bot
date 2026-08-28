@@ -1,6 +1,6 @@
 import { Composer, type Context, type MiddlewareFn } from "grammy";
 
-import type { CanonicalInput } from "../../application/commands/canonical-input.js";
+import type { CanonicalInput } from "../../shared/application/commands/canonical-input.js";
 
 export type ExecuteDurableTelegramRoute = (
 	sourceContext: Context,

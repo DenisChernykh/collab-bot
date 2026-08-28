@@ -5,20 +5,20 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import type { CommandContext } from "../../src/application/commands/command-contracts.js";
+import type { CommandContext } from "../../src/shared/application/commands/command-contracts.js";
 import {
 	CommandConflictError,
 	CommandIncidentError,
 	DurableCommandExecutor,
-} from "../../src/application/commands/command-executor.js";
+} from "../../src/shared/application/commands/command-executor.js";
 import {
 	CallbackActionService,
 	CallbackActorValidationError,
-} from "../../src/application/commands/callback-action.js";
+} from "../../src/shared/application/commands/callback-action.js";
 import {
 	normalizeTelegramUserActor,
 	RequireActiveActor,
-} from "../../src/application/commands/require-active-actor.js";
+} from "../../src/shared/application/commands/require-active-actor.js";
 import { SqliteTelegramUserRepository } from "../../src/infrastructure/database/telegram-user-repository.js";
 import { SqliteCallbackActionRepository } from "../../src/infrastructure/database/callback-action-repository.js";
 import { SqliteDurableCommandStore } from "../../src/infrastructure/database/durable-command-repository.js";

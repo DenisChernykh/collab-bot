@@ -2,8 +2,8 @@ import { Bot, Composer, InlineKeyboard, type Context } from "grammy";
 import type { UserFromGetMe, Update } from "grammy/types";
 import { describe, expect, it, vi } from "vitest";
 
-import type { CanonicalInput } from "../../src/application/commands/canonical-input.js";
-import type { SafeResult } from "../../src/application/commands/safe-result.js";
+import type { CanonicalInput } from "../../src/shared/application/commands/canonical-input.js";
+import type { SafeResult } from "../../src/shared/application/commands/safe-result.js";
 import { createModerationTelegramFeature } from "../../src/modules/moderation/index.js";
 import { FakeTelegramApi } from "../support/fake-telegram-api.js";
 import { createApplicationsTelegramFeature, parseApplicationsCallback } from "../../src/modules/applications/index.js";

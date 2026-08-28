@@ -1,8 +1,8 @@
 import type { Bot, BotError } from "grammy";
 
-import { CallbackActionService } from "../application/commands/callback-action.js";
-import { DurableCommandExecutor } from "../application/commands/command-executor.js";
-import { RequireActiveActor } from "../application/commands/require-active-actor.js";
+import { CallbackActionService } from "../shared/application/commands/callback-action.js";
+import { DurableCommandExecutor } from "../shared/application/commands/command-executor.js";
+import { RequireActiveActor } from "../shared/application/commands/require-active-actor.js";
 import { DeliveryRunner } from "../application/outbox/delivery-runner.js";
 import { OUTBOX_DELIVERY_KINDS } from "../shared/application/ports/outbox-delivery-store.js";
 import type { Clock } from "../shared/application/ports/clock.js";

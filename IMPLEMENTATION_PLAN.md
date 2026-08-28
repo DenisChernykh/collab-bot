@@ -1249,17 +1249,18 @@ src/
 
 #### R3-03 — Move shared command policies
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Move command execution, canonical input and safe-result policies under shared application.
 - **Dependencies:** `R3-02C`.
 - **Scope:** root `application/commands` and all exact imports.
 - **Do not touch:** canonical bytes, receipts, replay, validation or result shapes.
 - **Verification:** command/ingress focused tests; typecheck; architecture; old-path scan.
 - **Exit criteria:** command policies have one shared owner; one commit `R3-03: move shared command policies`.
+- **Completion evidence:** Commit SHA: `SELF`; moved all six canonical-input, command-contract, executor, callback-action, actor-guard and safe-result policies to `shared/application/commands`, switched every consumer and normalized their now-local shared port imports. Canonical input, receipt/replay, callback and safe-result behavior are unchanged. Typecheck PASS; architecture PASS (127 modules, 415 dependencies); focused command/ingress tests PASS (3 files, 12 tests); old command path and `git diff --check` PASS. No SQL, schema, dependency, credential, real Telegram, production or remote mutation.
 
 #### R3-04 — Move shared outbox policies
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Complete shared application ownership and remove root `application`.
 - **Dependencies:** `R3-03`.
 - **Scope:** outbox payload/runner/service and product-event contracts/service plus consumers; remove empty root `application`.

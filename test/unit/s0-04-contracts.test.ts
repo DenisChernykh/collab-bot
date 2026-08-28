@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import type { CommandActor, CommandContext } from "../../src/application/commands/command-contracts.js";
+import type { CommandActor, CommandContext } from "../../src/shared/application/commands/command-contracts.js";
 import {
 	canonicalizeInput,
 	type CanonicalInput,
-} from "../../src/application/commands/canonical-input.js";
+} from "../../src/shared/application/commands/canonical-input.js";
 import {
 	parseSafeResult,
 	serializeSafeResult,
 	type SafeResult,
-} from "../../src/application/commands/safe-result.js";
+} from "../../src/shared/application/commands/safe-result.js";
 import { hashCanonicalInput } from "../../src/infrastructure/crypto/canonical-input-hash.js";
 
 describe("S0-04 pure contracts", () => {

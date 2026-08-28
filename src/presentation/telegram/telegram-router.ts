@@ -1,9 +1,9 @@
 import { Bot, Composer, InlineKeyboard, type Context } from "grammy";
 import type { Update } from "grammy/types";
 
-import type { CanonicalInput } from "../../application/commands/canonical-input.js";
-import type { DurableCommandExecutor } from "../../application/commands/command-executor.js";
-import type { CallbackActionService } from "../../application/commands/callback-action.js";
+import type { CanonicalInput } from "../../shared/application/commands/canonical-input.js";
+import type { DurableCommandExecutor } from "../../shared/application/commands/command-executor.js";
+import type { CallbackActionService } from "../../shared/application/commands/callback-action.js";
 import type { Clock } from "../../shared/application/ports/clock.js";
 import type { TelegramUserWriter } from "../../shared/application/ports/telegram-user-writer.js";
 import {

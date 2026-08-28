@@ -1,7 +1,7 @@
 import { Composer, InlineKeyboard, type Context } from "grammy";
 
-import type { CallbackActionService } from "../../../../application/commands/callback-action.js";
-import type { SafeResult } from "../../../../application/commands/safe-result.js";
+import type { CallbackActionService } from "../../../../shared/application/commands/callback-action.js";
+import type { SafeResult } from "../../../../shared/application/commands/safe-result.js";
 import type { Clock } from "../../../../shared/application/ports/clock.js";
 import type { ProfileType, Topic } from "../../../../shared/domain/value-objects/enums.js";
 import { collaborationStatusLabel } from "../../../collaborations/index.js";

@@ -1,7 +1,7 @@
 import type { Context } from "grammy";
 
-import type { CanonicalInput } from "../../../../application/commands/canonical-input.js";
-import type { CommandActor } from "../../../../application/commands/command-contracts.js";
+import type { CanonicalInput } from "../../../../shared/application/commands/canonical-input.js";
+import type { CommandActor } from "../../../../shared/application/commands/command-contracts.js";
 import { collaborationStatusLabel } from "../../../collaborations/index.js";
 import type { AdminModerationService } from "../../application/admin-moderation-service.js";
 

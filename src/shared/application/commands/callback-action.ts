@@ -1,13 +1,13 @@
-import type { Clock } from "../../shared/application/ports/clock.js";
+import type { Clock } from "../ports/clock.js";
 import type { CommandContext } from "./command-contracts.js";
 import type {
 	CallbackActionMode,
 	CallbackActionRecord,
 	CallbackActionStore,
-} from "../../shared/application/ports/callback-action-store.js";
-import { CallbackActionStoreCorruptError } from "../../shared/application/ports/callback-action-store.js";
-import type { OpaqueTokenCodec } from "../../shared/application/ports/ingress-crypto.js";
-import type { TransactionRunner } from "../../shared/application/ports/transaction-runner.js";
+} from "../ports/callback-action-store.js";
+import { CallbackActionStoreCorruptError } from "../ports/callback-action-store.js";
+import type { OpaqueTokenCodec } from "../ports/ingress-crypto.js";
+import type { TransactionRunner } from "../ports/transaction-runner.js";
 import {
 	parseSafeResult,
 	serializeSafeResult,

@@ -2,7 +2,7 @@ import { Bot, Composer, type Context } from "grammy";
 import type { UserFromGetMe, Update } from "grammy/types";
 import { describe, expect, it } from "vitest";
 
-import type { CanonicalInput } from "../../src/application/commands/canonical-input.js";
+import type { CanonicalInput } from "../../src/shared/application/commands/canonical-input.js";
 import {
 	registerDurableTelegramIngress,
 	type ExecuteDurableTelegramRoute,

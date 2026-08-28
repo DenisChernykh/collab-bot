@@ -5,9 +5,9 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { DurableCommandExecutor } from "../../src/application/commands/command-executor.js";
-import type { CommandContext } from "../../src/application/commands/command-contracts.js";
-import type { CanonicalInput } from "../../src/application/commands/canonical-input.js";
+import { DurableCommandExecutor } from "../../src/shared/application/commands/command-executor.js";
+import type { CommandContext } from "../../src/shared/application/commands/command-contracts.js";
+import type { CanonicalInput } from "../../src/shared/application/commands/canonical-input.js";
 import { hashCanonicalInput } from "../../src/infrastructure/crypto/canonical-input-hash.js";
 import { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
 import { MigrationRunner, MigrationSource } from "../../src/infrastructure/database/migrations.js";
