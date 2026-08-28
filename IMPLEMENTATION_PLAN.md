@@ -1,10 +1,10 @@
-# Collaboration Bot — solo-launch implementation plan
+# Collaboration Bot — solo-launch and Cloudflare migration implementation plan
 
 - Статус документа: `Approved execution registry`
-- Версия: `1.0`
+- Версия: `1.1`
 - Дата: `2026-08-28`
-- Цель: как можно быстрее получить работающий Telegram-цикл для ручного распространения
-- Ограничение: один stage за пользовательскую авторизацию, один локальный commit на unit, без push/PR/deploy
+- Цель: сохранить работающий Telegram-цикл и перенести его на бесплатный Cloudflare runtime без ослабления durable/transactional гарантий
+- Ограничение: один stage за пользовательскую авторизацию, один локальный commit на unit; push/PR/deploy и внешние mutations только в явно разрешённых cards CF2/CF3
 
 ## 1. Источники и граница
 
@@ -44,6 +44,9 @@
 | R1 — Post-launch maintainability | `completed` | 14 | Те же пользовательские контракты с feature-owned кодом и проверяемыми границами |
 | R2 — Complete feature-first layout | `completed` | 31 | Активные feature implementations принадлежат пяти модулям; shared cross-feature/platform code отделён, legacy paths отсутствуют |
 | R3 — Honest top-level ownership | `completed` | 14 | Корень `src` отражает реальные owners: modules, shared kernel, platform adapters и runtime composition |
+| CF1 — Cloudflare-compatible local runtime | `pending` | 10 | Тот же бот проходит workerd/SQLite Durable Object gates локально; production polling остаётся доступным для rollback |
+| CF2 — Free Cloudflare staging | `pending` | 4 | Отдельный staging Worker и dev-бот проходят hosted webhook/alarm smoke без production traffic |
+| CF3 — Production cutover | `pending` | 4 | Данные перенесены, production webhook включён и hosted journey подтверждён с явным rollback boundary |
 
 ```text
 P0-01 → P0-02
@@ -64,6 +67,9 @@ P0-01 → P0-02
   → R2-14A → R2-14B → R2-14C → R2-14D → R2-14E → R2-15
   → R3-00 → R3-01 → R3-02A → R3-02B → R3-02C → R3-03 → R3-04
   → R3-05A → R3-05B → R3-05C → R3-06 → R3-07A → R3-07B → R3-08
+  → CF1-00 → CF1-01 → CF1-02 → CF1-03 → CF1-04 → CF1-05 → CF1-06 → CF1-07 → CF1-08 → CF1-09
+  → CF2-00 → CF2-01 → CF2-02 → CF2-03
+  → CF3-00 → CF3-01 → CF3-02 → CF3-03
 ```
 
 ## 4. Завершённый ledger
@@ -1361,6 +1367,263 @@ src/
 - **Completion evidence:** Commit SHA: `SELF`; rewrote dependency-cruiser policy around the real `shared/platform/runtime` boundaries, migrated its three layer fixtures, synchronized README and TD 0.8, and recorded authoritative R3 commits. Exact top-level audit returns only `cli`, `config`, `modules`, `platform`, `runtime`, `shared`; no legacy or empty source directories, old source/test import paths, source-to-test edges, runtime deep-feature imports or shared/platform outward edges remain. Full R3 source diff contains only file moves and import-specifier changes after rename normalization; package, lockfile, SQL migrations, behavior and public feature APIs are unchanged. The first aggregate run correctly failed only on old architecture fixtures; after one scoped fixture update, focused policy tests PASS (5). Final `pnpm check` PASS (architecture 127 modules/415 dependencies, 69 unit, 88 integration, 47 runtime, lint/typecheck/build); `pnpm test:e2e:fake` PASS (33); `pnpm db:verify` PASS; `git diff --check` PASS. A separate final blocker-limited critical pass found no credential/private-contact exposure, authoritative-data change, duplicate business/Telegram effect, broken core journey or unrunnable candidate; because current execution rules prohibited agent delegation, this pass was performed by the implementing agent and is not represented as an independent second-agent review. No credential, real Telegram, production, remote, push, PR or deploy mutation.
 - **Stop conditions:** any behavior/schema/dependency change, non-green aggregate gate or unresolved blocker.
 
+### CF — Выбранная Cloudflare-топология и бесплатная граница
+
+Целевая production-топология:
+
+```text
+Telegram webhook
+  → public Cloudflare Worker (secret/header/body/route boundary)
+  → singleton SQLite-backed Durable Object `collaboration-bot-primary`
+      ├── grammY `handleUpdate`
+      ├── application/domain без изменения продуктовых решений
+      ├── private SQLite storage и serialized transaction boundary
+      └── one durable alarm over the existing outbox schedule
+  → Telegram Bot API outside storage transactions
+```
+
+Выбран именно один SQLite-backed Durable Object, а не D1. Решение основано не на цене человеческого переноса, а на целевой модели согласованности:
+
+- product commands атомарно меняют несколько связанных состояний, конкурируют за последнее место и должны детерминированно разрешать `accept`/`block`/replay races; singleton Durable Object является одним serialization owner для этих решений;
+- private strongly-consistent SQLite и storage transactions сохраняют гарантию «receipt + business state + outbox атомарны», а текущий `DurableCommandExecutor` подтверждает, что эта гарантия реально используется, а не является удобством legacy-кода;
+- alarm точно соответствует durable outbox: один ближайший deadline хранится рядом с authoritative data, alarm имеет at-least-once delivery, а claim fencing остаётся защитой от повторной отправки;
+- качественная D1 + Queues модель возможна, но должна отдельно реализовать CAS/conditional batch protocols, ingress ordering, at-least-once deduplication и outbox/Queue reconciliation. Для текущего Telegram-first MVP это увеличивает поверхность correctness/failure states без пользовательского или эксплуатационного выигрыша.
+
+Evolution boundary не является обязательной цепочкой миграций:
+
+- появление TMA или web UI добавляет HTTP adapter к тем же application use cases; все authoritative commands продолжают проходить через singleton Durable Object;
+- D1 вводится только отдельным будущим решением как derived query/read model, если доказаны сложные публичные выборки, независимые readers или read load, который невыгодно обслуживать через Durable Object; такая проекция обновляется идемпотентно из durable state/outbox и не создаёт второй authoritative writer;
+- Queues нужны только если появится доказанная независимая асинхронная обработка или доставка проекции; сам факт TMA/web их не требует;
+- при доказанном quota/throughput/operations trigger и появившемся бюджете допустим прямой переход `Durable Object → PostgreSQL на VPS` без промежуточного D1; repository/application boundaries должны сохранить эту возможность;
+- D1/read model, Queues и VPS/PostgreSQL не входят в CF1–CF3 и требуют отдельного плана и пользовательской авторизации.
+
+Проверенная на `2026-08-28` free-only граница, которую нужно заново подтвердить перед CF2 и CF3:
+
+- [Workers Free limits](https://developers.cloudflare.com/workers/platform/limits/): 100,000 inbound requests/day, 10 ms CPU для front Worker request, 128 MB memory; front Worker поэтому только валидирует и маршрутизирует, а не исполняет business flow;
+- [Durable Objects pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/): 100,000 DO requests/day, 13,000 GB-s/day, 5 million rows read/day, 100,000 rows written/day и 5 GB SQLite storage total на Free; при исчерпании free quota операции fail closed, если account действительно остаётся на Workers Free;
+- [Durable Objects limits](https://developers.cloudflare.com/durable-objects/platform/limits/) и [FAQ](https://developers.cloudflare.com/durable-objects/reference/faq/): 30 seconds CPU per DO request, до 1 GB на один SQLite-backed object на Free и 5 GB total account storage; меньший per-object предел является фактической границей singleton проекта;
+- [Durable Object alarms](https://developers.cloudflare.com/durable-objects/api/alarms/): один alarm на object, at-least-once execution и автоматические retries; приложение хранит много due items в outbox и планирует alarm на ближайший;
+- [SQLite storage/PITR](https://developers.cloudflare.com/durable-objects/api/sqlite-storage-api/): SQL transactions и recovery bookmarks до 30 дней; PITR дополняет, но не заменяет проверяемый экспорт перед рискованным cutover;
+- [local Durable Object environment](https://developers.cloudflare.com/durable-objects/reference/environments/): `wrangler dev` создаёт отдельное local-only окружение; production data по умолчанию локально не открывается.
+
+Free-only является stop condition: никакой unit не включает Workers Paid, billing subscription, paid add-on или ресурс, требующий оплаты. Если Cloudflare предлагает upgrade/payment либо account уже находится на платном Workers plan с риском overage, remote stage останавливается до отдельного решения пользователя.
+
+### CF1 — Cloudflare-compatible local runtime
+
+#### CF1-00 — Зафиксировать Cloudflare technical contract
+
+- **Status:** `pending`
+- **Objective:** Заменить устаревший long-polling/LaunchAgent target в Technical Design на dual local/Cloudflare contract, не меняя PRD journey.
+- **Dependencies:** `R3-08` completed.
+- **Read first:** PRD §1, §3.3, §6, §13–16, §19–20; TD §1–3, §7, §10–13, §15–20, §23; CF target/free boundary above.
+- **Scope:** `docs/TECHNICAL_DESIGN.md`, `README.md`, this plan; topology, storage/transaction/alarm rules, local polling relay, migration/cutover evidence and rollback semantics.
+- **Do not touch:** source, migrations, package files, credentials, Telegram, Cloudflare account or remote.
+- **Invariants:** product policy and `LFR-*`/`LAC-*` remain unchanged; D1 is not described as globally unsuitable or as an automatic TMA/web migration; hosted/24x7 is not claimed before CF3 evidence.
+- **Verification:** document contradiction scan for `long polling`, `DatabaseSync`, LaunchAgent, backup and production-ready claims; relative links; `git diff --check`.
+- **Exit criteria:** sources agree on the target and proof boundaries; one commit `CF1-00: define Cloudflare runtime contract`.
+
+#### CF1-01 — Add workerd toolchain and empty Worker harness
+
+- **Status:** `pending`
+- **Objective:** Add a pinned Wrangler/workerd/Vitest harness that runs locally without creating Cloudflare resources.
+- **Dependencies:** `CF1-00`.
+- **Preconditions:** exact Node/pnpm contract verified before dependency changes.
+- **Scope:** pinned Cloudflare development dependencies, `wrangler.jsonc`, Worker-specific TypeScript/Vitest configuration, ignored `.dev.vars`, scripts `cloudflare:dev`, `cloudflare:typecheck`, `test:cloudflare`; empty front Worker/DO smoke only.
+- **Do not touch:** business composition, current Node start/db scripts, real env files, login, deploy or remote bindings.
+- **Invariants:** no secret value in config/Git; `pnpm start` and existing gates remain green; local Worker state is isolated under ignored Wrangler state.
+- **Tests first:** local fetch and named singleton binding smoke; no network.
+- **Verification:** `pnpm test:cloudflare`; existing `pnpm check`; bundle/startup-size inspection; secret scan.
+- **Exit criteria:** empty Worker + SQLite-backed DO boot under workerd; one commit `CF1-01: establish local workerd harness`.
+
+#### CF1-02 — Remove Node-only primitives from application code
+
+- **Status:** `pending`
+- **Objective:** Make IDs, random tokens and SHA-256 available through runtime-neutral ports/adapters while preserving every serialized format.
+- **Dependencies:** `CF1-01`.
+- **Scope:** direct `node:crypto` imports currently inside feature/application/presentation code; injected UUID/random/token/hash capabilities; Worker/Web Crypto implementation and deterministic test doubles.
+- **Do not touch:** token lengths/alphabets, callback/deep-link formats, command input canonicalization, SQL or user copy.
+- **Invariants:** existing stored hashes and tokens remain valid; cryptographic randomness remains cryptographically secure; no weak `Math.random` fallback.
+- **Tests first:** golden hashes/token regexes and deterministic injected-ID tests before replacing imports.
+- **Verification:** focused crypto/command/publication tests; `rg` proves Node built-ins remain only in explicit Node CLI/adapters; architecture/typecheck.
+- **Exit criteria:** application/modules are Worker-portable; one commit `CF1-02: make runtime primitives Worker portable`.
+
+#### CF1-03 — Introduce a runtime-neutral SQL contract
+
+- **Status:** `pending`
+- **Objective:** Separate repository-facing SQL/transaction APIs from the concrete `node:sqlite` connection without changing SQL behavior.
+- **Dependencies:** `CF1-02`.
+- **Scope:** `SqlDatabase`/result/parameter/transaction contracts; adapt Node `DatabaseBoundary`, transaction runner and shared platform repositories first.
+- **Do not touch:** migration SQL/checksums, repository queries, transaction nesting/rollback semantics or feature behavior.
+- **Invariants:** current Node path remains serialized and rollback-only on nested failure; Telegram calls remain outside transaction.
+- **Tests first:** run the same boundary contract against the Node adapter; include nested failure and conditional `changes` behavior.
+- **Verification:** database/ingress/outbox focused tests; `pnpm db:verify`; typecheck/architecture.
+- **Exit criteria:** shared persistence depends on interface, not `DatabaseSync`; one commit `CF1-03: establish portable SQL boundary`.
+
+#### CF1-04 — Cut feature repositories to the SQL contract
+
+- **Status:** `pending`
+- **Objective:** Move all profile/collaboration/marketplace/application/moderation repositories and factories from the concrete Node boundary to the portable contract.
+- **Dependencies:** `CF1-03`.
+- **Scope:** feature repository constructor types, feature factory types and composition wiring; split before editing if the unit exceeds the repository file-count boundary.
+- **Do not touch:** SQL text, read-model ordering, row validators, public feature APIs or current Node runtime behavior.
+- **Tests first:** existing repository/composition suites are the characterization gate; add only a missing contract assertion discovered during cutover.
+- **Verification:** all integration suites; fake E2E; architecture; exact import scan for concrete Node boundary outside Node composition/tests.
+- **Exit criteria:** one object graph can receive either SQL implementation; one commit `CF1-04: decouple features from Node SQLite`.
+
+#### CF1-05 — Implement Durable Object SQLite and migrations
+
+- **Status:** `pending`
+- **Objective:** Run the authoritative schema and callback-transactions on `ctx.storage.sql` with equivalent atomicity.
+- **Dependencies:** `CF1-04`.
+- **Scope:** Durable Object SQL adapter, `storage.transaction()` runner, bundled/precomputed migration manifest, `_sql_schema_migrations` history, constructor initialization through `blockConcurrencyWhile`, local integrity/foreign-key verification adapted to supported SQL.
+- **Do not touch:** product tables/constraints unless a workerd compatibility test demonstrates a concrete incompatibility; no remote object.
+- **Invariants:** migration checksum drift fails closed; failed migration/command rolls back; receipt + business state + outbox commit atomically; schema can initialize from empty and reopen idempotently.
+- **Tests first:** fresh schema, reopen, failed migration, nested rollback, last-slot race and duplicate update under `cloudflare:test`.
+- **Verification:** Worker database contract suite, schema snapshot against Node SQLite, all existing integration/fake gates.
+- **Stop conditions:** unsupported SQL changes an invariant, `storage.transaction()` cannot reproduce the callback boundary, or migration parity is unproven.
+- **Exit criteria:** local DO owns equivalent authoritative SQLite; one commit `CF1-05: run authoritative state in Durable Object SQLite`.
+
+#### CF1-06 — Add secure webhook and singleton DO composition
+
+- **Status:** `pending`
+- **Objective:** Replace production polling with a public webhook adapter while reusing the same grammY router/application graph inside the singleton DO.
+- **Dependencies:** `CF1-05`.
+- **Scope:** front Worker `POST /telegram/webhook`, exact method/content-type/body-size checks, constant-time `X-Telegram-Bot-Api-Secret-Token` validation, raw Update forwarding to `idFromName("collaboration-bot-primary")`, DO `bot.handleUpdate`, lazy `getMe` identity/showcase preflight, safe `/health/live` and protected readiness diagnostics.
+- **Do not touch:** route order, reply collector, durable command identity, public bot copy or production webhook.
+- **Invariants:** invalid/unsigned requests never reach business state; duplicate webhook is harmless; webhook returns 2xx only after durable update handling; secrets never appear in response/logs.
+- **Tests first:** invalid method/header/body, duplicate update, identity mismatch, handler failure/retry and health redaction.
+- **Verification:** local HTTP/workerd fake journey; existing router/runtime/fake E2E; Telegram adapter contract.
+- **Exit criteria:** fake Telegram can traverse the exact hosted ingress locally; one commit `CF1-06: add durable Telegram webhook ingress`.
+
+#### CF1-07 — Replace the 250 ms loop with a durable alarm
+
+- **Status:** `pending`
+- **Objective:** Wake and drain the existing outbox without a permanent process, Cron or Queue.
+- **Dependencies:** `CF1-06`.
+- **Scope:** alarm scheduler chooses the earliest due/stale delivery, writes one alarm, handler runs bounded claims/sends/projections, reschedules from remaining state; Node `DeliveryWorker` remains only for rollback/local legacy path until CF3 closes.
+- **Do not touch:** delivery statuses, retry backoff, provider deadlines, ambiguity classification, claim fencing or channel projection policy.
+- **Invariants:** Telegram send/edit/delete remains outside storage transaction; alarm at-least-once cannot duplicate a proven effect; new outbox work cannot be stranded after webhook return; no busy loop keeps the DO active.
+- **Tests first:** alarm immediate delivery, retry timing, concurrent alarm/webhook, throw/retry, stale dispatch recovery, empty-queue alarm clearing and ambiguous send.
+- **Verification:** `runDurableObjectAlarm` suites; outbox/runtime tests; local fake publish/accept/hide journeys.
+- **Exit criteria:** local Worker becomes idle between events and recovers scheduled delivery; one commit `CF1-07: drive outbox with Durable Object alarms`.
+
+#### CF1-08 — Build reversible SQLite data-transfer tooling
+
+- **Status:** `pending`
+- **Objective:** Move existing authoritative data without copying a live WAL file or trusting manual table edits.
+- **Dependencies:** `CF1-07`.
+- **Scope:** stopped-source export to a mode-0600 manifest outside Git; explicit product-table allowlist, schema version, ordered rows/counts/content hashes; empty-target, one-shot authenticated DO import; remote read-only verification/export endpoint or operator command; import audit record and disable switch.
+- **Do not touch:** bot token/env contents; migration history import; production DB/DO in this unit.
+- **Invariants:** export starts only after source process is stopped and verified; import rejects non-empty target/rerun/schema mismatch; PII is not logged; source DB and backup stay unchanged.
+- **Tests first:** representative legacy fixture, tamper/hash failure, interrupted import rollback, duplicate import rejection, count/hash parity and unrelated-file safety.
+- **Verification:** local SQLite → local DO rehearsal plus reverse read-only export comparison; secret/PII log scan.
+- **Exit criteria:** deterministic rehearsal proves reversible transfer; one commit `CF1-08: add verified SQLite transfer tooling`.
+
+#### CF1-09 — Preserve real local Telegram development and close CF1
+
+- **Status:** `pending`
+- **Objective:** Keep a convenient real-Telegram local path while proving all application logic executes in local workerd/DO, not a second database implementation.
+- **Dependencies:** `CF1-08`.
+- **Scope:** tiny long-polling relay using a separate development bot token and development showcase channel; relay posts raw updates to local Worker; `.dev.vars.example`, commands/runbook, full Cloudflare fake gate and one blocker-limited stage review.
+- **Do not touch:** production bot webhook/token, BotFather, Cloudflare remote or source production SQLite.
+- **Invariants:** relay contains no business logic/database; the same token is never used simultaneously for webhook and `getUpdates`; local secrets remain ignored.
+- **Verification:** `pnpm check`; `pnpm test:e2e:fake`; `pnpm test:cloudflare`; `pnpm db:verify`; local transfer rehearsal; bundle/startup inspection; secret scan. Real dev-bot smoke remains a separate explicit authorization.
+- **Exit criteria:** CF1 completed locally, legacy `pnpm start` still available for rollback, no remote mutation; one commit `CF1-09: close local Cloudflare migration candidate`.
+
+### CF2 — Free Cloudflare staging
+
+#### CF2-00 — Preflight the exact free Cloudflare account
+
+- **Status:** `pending`
+- **Objective:** Prove the selected account/project can host the staging topology without payment before creating anything.
+- **Dependencies:** `CF1-09`.
+- **Authorization:** separate remote Cloudflare authorization; browser login remains with the user if required.
+- **Scope:** read-only `wrangler whoami`/account inspection, Workers plan, existing names/routes/limits, workers.dev subdomain, current usage, exact staging names and rollback targets.
+- **Do not touch:** resource creation, secrets, deploy, Telegram or production.
+- **Stop conditions:** paid Workers plan/overage risk, payment requirement, name collision, unavailable workers.dev, quota too close to safe smoke, wrong account.
+- **Exit criteria:** evidence records exact account, Free plan and resource names; one commit `CF2-00: record free staging preflight`.
+
+#### CF2-01 — Provision and deploy isolated staging
+
+- **Status:** `pending`
+- **Objective:** Create only `collaboration-bot-staging` and its SQLite DO namespace on Workers Free.
+- **Dependencies:** `CF2-00`.
+- **Authorization:** remote resource creation, secret writes and staging deploy explicitly authorized; no production Telegram action.
+- **Scope:** staging env/binding, non-secret vars for a separate development showcase channel, encrypted `BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET`, deployment, DO schema initialization, version ID/URL capture, `/health/live` and protected readiness.
+- **Do not touch:** production Worker, production bot token/webhook, source SQLite or existing insta-chat resources.
+- **Invariants:** staging uses a separate dev bot, development showcase channel and object namespace; no secret in shell history/log/evidence; no custom domain required.
+- **Verification:** deployment list, exact binding/class, schema history/counts, identity/preflight, logs and free-usage snapshot.
+- **Exit criteria:** hosted staging is ready but receives no Telegram traffic; one commit `CF2-01: deploy isolated Cloudflare staging`.
+
+#### CF2-02 — Run hosted staging webhook and alarm smoke
+
+- **Status:** `pending`
+- **Objective:** Prove the real path `dev Telegram → Worker → DO SQLite → alarm → Telegram`.
+- **Dependencies:** `CF2-01`.
+- **Authorization:** explicit dev BotFather/setWebhook and named-account Telegram actions.
+- **Scope:** set dev webhook with secret and `drop_pending_updates=false`, verify `getWebhookInfo`, run bounded profile → publish → browse → apply → accept → contact/admin-hide journey, duplicate update probe, alarm retry/recovery probe and remote state inspection.
+- **Do not touch:** production bot/channel/data; no follower messages outside named smoke actors.
+- **Invariants:** evidence separates HTTP health, webhook delivery, authoritative rows, Telegram effects and alarm recovery; no replay produces duplicate business/Telegram effect.
+- **Verification:** hosted logs, Data Studio/read-only operator query, webhook info, expected message IDs/state/counts and Free quota deltas.
+- **Exit criteria:** complete hosted staging evidence; one commit `CF2-02: verify hosted Telegram staging journey`.
+
+#### CF2-03 — Close staging operations and cutover readiness
+
+- **Status:** `pending`
+- **Objective:** Review the hosted candidate and produce exact production/rollback commands without mutating production.
+- **Dependencies:** `CF2-02`.
+- **Scope:** migration rehearsal against fresh staging object, PITR bookmark rehearsal if safe, Worker rollback caveat, webhook rollback sequence, logs/usage/Data Studio runbook, final blocker-limited review.
+- **Do not touch:** production deploy/webhook/data, staging deletion or paid settings.
+- **Invariants:** code rollback is not represented as storage rollback; remote mutations after cutover require reconciliation; original SQLite remains recoverable.
+- **Verification:** fresh-object import parity, previous-version identification, runbook dry-run with placeholders only, secret scan.
+- **Exit criteria:** CF2 completed and CF3 has exact inputs/stop conditions; one commit `CF2-03: approve production cutover candidate`.
+
+### CF3 — Production cutover
+
+#### CF3-00 — Freeze and export the authoritative local SQLite
+
+- **Status:** `pending`
+- **Objective:** Establish one immutable source snapshot and prevent split-brain before production import.
+- **Dependencies:** `CF2-03`.
+- **Authorization:** explicit production downtime and local process stop.
+- **Scope:** verify exact local runtime/token identity/DB path, stop polling, prove no open DB/WAL writer, make recoverable consistent backup, run migrations/integrity/foreign-key checks, export manifest and hashes, record pending Telegram webhook/update state.
+- **Do not touch:** Cloudflare production resources or Telegram webhook yet; never delete/overwrite source DB.
+- **Stop conditions:** unknown process, failed integrity, dirty WAL ownership, schema mismatch, export/hash failure or unbounded downtime.
+- **Exit criteria:** immutable backup + verified import manifest; local bot remains stopped; no commit contains data; one commit `CF3-00: freeze production SQLite snapshot`.
+
+#### CF3-01 — Deploy production and import before traffic
+
+- **Status:** `pending`
+- **Objective:** Prepare production Worker/DO with an exact copy while Telegram still has no webhook.
+- **Dependencies:** `CF3-00`.
+- **Authorization:** explicit production Cloudflare resource/secrets/deploy/import authorization.
+- **Scope:** recheck Free plan/usage; deploy production Worker and singleton namespace; set non-secret vars/encrypted secrets; initialize schema; one-shot import; compare table counts/content hashes, invariants, identity, showcase preflight, alarm/outbox state; capture version/PITR bookmark.
+- **Do not touch:** Telegram webhook until every comparison passes; no staging reuse; no source DB mutation.
+- **Rollback:** before webhook, delete/leave unused remote candidate and restart original polling DB; do not alter source snapshot.
+- **Exit criteria:** production target is bit-for-logical-bit verified and traffic-free; evidence only, no data in Git; one commit `CF3-01: verify production Cloudflare import`.
+
+#### CF3-02 — Switch Telegram from polling to production webhook
+
+- **Status:** `pending`
+- **Objective:** Perform the single ingress cutover and prove the hosted core journey.
+- **Dependencies:** `CF3-01`.
+- **Authorization:** explicit production `setWebhook`, showcase and named smoke-user actions.
+- **Scope:** set exact workers.dev HTTPS webhook with secret and `drop_pending_updates=false`; verify `getWebhookInfo`; send bounded `/start` then core mutation/publication/application smoke; inspect Worker/DO logs, state, alarm and message IDs after every boundary.
+- **Do not touch:** source SQLite except read-only comparison; no broad user notification or link distribution.
+- **Rollback:** if no remote business mutation occurred, `deleteWebhook` then restart the frozen local DB; after any remote mutation/Telegram effect, stop and reconcile/export remote state instead of blindly reverting to stale SQLite.
+- **Stop conditions:** identity/preflight mismatch, webhook retries/non-2xx, missing/duplicate effect, quota/resource error, secret exposure or state divergence.
+- **Exit criteria:** real production webhook journey passes with exact hosted evidence; ingress is webhook-only; one commit `CF3-02: cut production ingress to webhook`.
+
+#### CF3-03 — Close deployment evidence and operations handoff
+
+- **Status:** `pending`
+- **Objective:** Make the deployed bot operable without claiming guarantees that Free tier cannot provide.
+- **Dependencies:** `CF3-02`.
+- **Scope:** record deployed version/URL/bindings/webhook status/schema/PITR bookmark/usage; update README/TD/plan; document logs, Data Studio, local dev relay, safe deploy/rollback/export/import procedures and Free quota failure behavior; final blocker-limited review.
+- **Do not touch:** delete staging/source backup, enable billing, distribute bot link or perform further production actions.
+- **Verification:** `pnpm check`; full local Cloudflare gates; read-only hosted health/schema/outbox checks; secret scan; clean tree; exact `origin/main` status before any separately authorized push.
+- **Exit criteria:** CF3 completed; production deployment is evidenced, original SQLite retained read-only for the agreed retention period, and any future push/distribution remains separately authorized; one commit `CF3-03: document Cloudflare production handoff`.
+
 ## 7. Git и evidence
 
 Перед каждым unit: branch/HEAD/status/remote, predecessor Task-ID, Node/pnpm contract и complete card review. Перед commit: exact diff, focused checks, applicable aggregate gate, secret scan и evidence.
@@ -1379,6 +1642,9 @@ Push, remote, PR, merge, deploy, credentials и real Telegram не следую�
 - **Hands-on increment:** после каждого из `S1`–`S3` compiled bot уже содержит новый flow; после отдельной авторизации его сразу проверяют в real Telegram, не откладывая integration до финала.
 - **Local launch candidate:** `S4` и `LAC-01`–`LAC-11` зелёные на fake Telegram.
 - **Manual first launch:** `S4`, отдельно авторизованный `LAC-12` и exact bot/channel checkpoint пройдены; ссылку можно отправлять людям.
-- **Production ready / 24/7 / scalable:** не является целью этого плана и не заявляется.
+- **Cloudflare local candidate:** `CF1` зелёный в workerd/SQLite Durable Object; это ещё не hosted proof.
+- **Hosted staging candidate:** `CF2` прошёл реальный dev-bot webhook/alarm journey на подтверждённом Workers Free account; production не изменён.
+- **Hosted production deployment:** `CF3` прошёл import/cutover/real smoke и имеет точную deployment evidence; это не SLA и не обещание бесконечной доступности после исчерпания Free quota.
+- **24/7 / scalable:** Cloudflare снимает зависимость от включённого Mac, но Free limits остаются fail-closed границей; SLA и подготовка к большому масштабу не заявляются.
 
-После `R3-08` в реестре нет следующего авторизованного pending unit. Новая работа начинается только с отдельной decision-complete карточки и пользовательской авторизации.
+Следующий executable unit — `CF1-00`, но создание этого плана не запускает CF1. Каждый из `CF1`, `CF2` и `CF3` требует отдельной пользовательской авторизации; CF2/CF3 дополнительно требуют точного разрешения на перечисленные remote, secret, deploy, BotFather/webhook и real Telegram mutations.
