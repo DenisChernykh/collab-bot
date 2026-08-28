@@ -3,12 +3,14 @@ import type { OutboxDeliveryStore } from "../../../shared/application/ports/outb
 import type { Clock } from "../../../shared/application/ports/clock.js";
 import type { CryptoCapabilities } from "../../../shared/application/ports/crypto.js";
 import type { TransactionRunner } from "../../../shared/application/ports/transaction-runner.js";
-import type { DatabaseBoundary } from "../../../platform/database/database-boundary.js";
+import { resolveSqlDatabase, type SqlDatabaseInput } from "../../../platform/database/node-sql-database.js";
+import type { SqlDatabase } from "../../../shared/application/ports/sql-database.js";
 import { AdminModerationService } from "../application/admin-moderation-service.js";
 import { SqliteAdminModerationRepository } from "../infrastructure/sqlite-admin-moderation-repository.js";
 
 export interface CreateModerationFeatureOptions {
-	readonly boundary: DatabaseBoundary;
+	readonly boundary?: SqlDatabaseInput;
+	readonly database?: SqlDatabase;
 	readonly outboxStore: OutboxDeliveryStore;
 	readonly transactions: TransactionRunner;
 	readonly clock: Clock;
@@ -22,7 +24,9 @@ export interface ModerationFeature {
 }
 
 export function createModerationFeature(options: CreateModerationFeatureOptions): ModerationFeature {
-	const repository = new SqliteAdminModerationRepository(options.boundary);
+	const database = options.database ?? (options.boundary === undefined ? undefined : resolveSqlDatabase(options.boundary));
+	if (database === undefined) throw new Error("moderation feature requires a SQL database");
+	const repository = new SqliteAdminModerationRepository(database);
 	const outbox = new OutboxDeliveryService(options.outboxStore, options.transactions, options.clock);
 
 	return {

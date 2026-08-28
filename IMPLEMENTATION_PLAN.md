@@ -44,7 +44,7 @@
 | R1 — Post-launch maintainability | `completed` | 14 | Те же пользовательские контракты с feature-owned кодом и проверяемыми границами |
 | R2 — Complete feature-first layout | `completed` | 31 | Активные feature implementations принадлежат пяти модулям; shared cross-feature/platform code отделён, legacy paths отсутствуют |
 | R3 — Honest top-level ownership | `completed` | 14 | Корень `src` отражает реальные owners: modules, shared kernel, platform adapters и runtime composition |
-| CF1 — Cloudflare-compatible local runtime | `in_progress` | 14 | Тот же бот проходит workerd/SQLite Durable Object gates локально; production polling остаётся доступным для rollback |
+| CF1 — Cloudflare-compatible local runtime | `in_progress` | 15 | Тот же бот проходит workerd/SQLite Durable Object gates локально; production polling остаётся доступным для rollback |
 | CF2 — Free Cloudflare staging | `pending` | 4 | Отдельный staging Worker и dev-бот проходят hosted webhook/alarm smoke без production traffic |
 | CF3 — Production cutover | `pending` | 4 | Данные перенесены, production webhook включён и hosted journey подтверждён с явным rollback boundary |
 
@@ -67,7 +67,7 @@ P0-01 → P0-02
   → R2-14A → R2-14B → R2-14C → R2-14D → R2-14E → R2-15
   → R3-00 → R3-01 → R3-02A → R3-02B → R3-02C → R3-03 → R3-04
   → R3-05A → R3-05B → R3-05C → R3-06 → R3-07A → R3-07B → R3-08
-  → CF1-00 → CF1-01 → CF1-02A → CF1-02B → CF1-02C → CF1-02D → CF1-03 → CF1-04A → CF1-04B → CF1-05 → CF1-06 → CF1-07 → CF1-08 → CF1-09
+  → CF1-00 → CF1-01 → CF1-02A → CF1-02B → CF1-02C → CF1-02D → CF1-03 → CF1-04A → CF1-04B → CF1-04C → CF1-05 → CF1-06 → CF1-07 → CF1-08 → CF1-09
   → CF2-00 → CF2-01 → CF2-02 → CF2-03
   → CF3-00 → CF3-01 → CF3-02 → CF3-03
 ```
@@ -1516,20 +1516,33 @@ Free-only является stop condition: никакой unit не включа
 
 #### CF1-04B — Decouple remaining feature persistence
 
-- **Status:** `pending`
-- **Objective:** Move applications, marketplace, moderation, shared repositories and runtime composition to the portable SQL contract.
+- **Status:** `completed`
+- **Objective:** Move applications, marketplace and moderation repositories, factories and runtime composition to the portable SQL contract.
 - **Dependencies:** `CF1-04A`.
-- **Scope:** remaining repository constructor types, factories and Node composition; after cutover `DatabaseBoundary` is allowed only in Node composition, migrations/CLI and Node tests.
+- **Scope:** exactly seven source files across applications, marketplace and moderation repositories/factories plus Node runtime composition; shared callback/durable/retention/telegram-user/transaction/outbox/product-event adapters are deferred to CF1-04C. After the complete cutover, `DatabaseBoundary` is allowed only in Node composition, migrations/CLI and Node tests.
 - **Do not touch:** SQL text, read-model ordering, row validators, public feature APIs or current Node behavior.
 - **Tests first:** applications/marketplace/moderation characterization suites plus composition gate.
 - **Verification:** all integration suites, fake E2E, architecture and exact import scan for concrete Node boundary.
-- **Exit criteria:** one complete object graph receives either SQL implementation; one commit `CF1-04B: decouple remaining features from Node SQLite`.
+- **Exit criteria:** applications, marketplace and moderation object graphs receive `SqlDatabase`; one commit `CF1-04B: decouple remaining feature persistence`.
+- **Evidence:** Commit SHA: `SELF`. Mandatory split discovered before commit: the initial CF1-04B WIP covered 14 source files, exceeding the repository unit boundary. It was divided into CF1-04B (seven feature/runtime files) and CF1-04C (seven shared persistence adapters), increasing CF1 from 14 to 15 units. The exact B subset is `src/modules/applications/composition/create-applications-feature.ts`, `src/modules/applications/infrastructure/sqlite-applications-repository.ts`, `src/modules/marketplace/composition/create-marketplace-feature.ts`, `src/modules/marketplace/infrastructure/sqlite-collaboration-browse-repository.ts`, `src/modules/moderation/composition/create-moderation-feature.ts`, `src/modules/moderation/infrastructure/sqlite-admin-moderation-repository.ts` and `src/runtime/composition/bot-application.ts`; no source/test file outside this seven-file subset was staged. Shared adapter WIP was preserved with named `git stash push --keep-index -m \"CF1-04C: preserve shared persistence WIP\"`, leaving the staged B tree isolated; the legacy user backup stash remained untouched. Applications, marketplace and moderation repositories now consume `SqlDatabase` internally, their factories accept the portable database while retaining the Node-owned compatibility input, and runtime passes one shared `NodeSqlDatabase` to these three feature graphs. Shared adapters and their runtime wiring remain on the committed Node boundary until CF1-04C. Focused B suite passed (6 files, 25 tests); aggregate `pnpm check` passed (lint 0 errors with two pre-existing generated-file warnings, architecture 133 modules/443 dependencies, typecheck, unit 14 files/75 tests, integration 19 files/88 tests, runtime 7 files/47 tests and build); staged source/test count was exactly 7 and `git diff --cached --check` passed. SQL, ordering, validators, public APIs and product behavior were unchanged; no credentials, remote resources, Telegram or production actions touched.
+
+#### CF1-04C — Decouple shared persistence from Node SQLite
+
+- **Status:** `pending`
+- **Objective:** Move shared callback, durable-command, ingress-retention, Telegram-user, transaction, outbox-delivery and product-event adapters to the portable SQL contract.
+- **Dependencies:** `CF1-04B`.
+- **Scope:** exactly seven shared platform adapter files; preserve SQL text, FIFO/transaction semantics, retention counts, outbox status/fencing/retry behavior and product-event ordering.
+- **Do not touch:** feature repositories/factories covered by CF1-04B, migration SQL/schema history, `DatabaseBoundary` internals or product behavior.
+- **Invariants:** shared adapters accept `SqlDatabase` without changing public feature contracts; external delivery remains outside database transactions; nested rollback and cleanup semantics remain unchanged.
+- **Tests first:** shared callback/durable/retention/outbox/product-event characterization suites through the Node adapter.
+- **Verification:** focused shared persistence suites, `pnpm check`, `pnpm db:verify`, architecture and exact concrete-boundary import scan.
+- **Exit criteria:** shared persistence consumes `SqlDatabase`; one commit `CF1-04C: decouple shared persistence from Node SQLite`.
 
 #### CF1-05 — Implement Durable Object SQLite and migrations
 
 - **Status:** `pending`
 - **Objective:** Run the authoritative schema and callback-transactions on `ctx.storage.sql` with equivalent atomicity.
-- **Dependencies:** `CF1-04B`.
+- **Dependencies:** `CF1-04C`.
 - **Scope:** Durable Object SQL adapter, `storage.transaction()` runner, bundled/precomputed migration manifest, the existing canonical `__app_migrations` history table, constructor initialization through `blockConcurrencyWhile`, local integrity/foreign-key verification adapted to supported SQL.
 - **Do not touch:** product tables/constraints unless a workerd compatibility test demonstrates a concrete incompatibility; no remote object.
 - **Invariants:** migration checksum drift fails closed; failed migration/command rolls back; receipt + business state + outbox commit atomically; schema can initialize from empty and reopen idempotently.

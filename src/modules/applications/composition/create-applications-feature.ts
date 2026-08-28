@@ -2,7 +2,8 @@ import type { Clock } from "../../../shared/application/ports/clock.js";
 import type { CryptoCapabilities } from "../../../shared/application/ports/crypto.js";
 import type { OutboxDeliveryStore } from "../../../shared/application/ports/outbox-delivery-store.js";
 import type { TransactionRunner } from "../../../shared/application/ports/transaction-runner.js";
-import type { DatabaseBoundary } from "../../../platform/database/database-boundary.js";
+import { resolveSqlDatabase, type SqlDatabaseInput } from "../../../platform/database/node-sql-database.js";
+import type { SqlDatabase } from "../../../shared/application/ports/sql-database.js";
 import { ApplicationService, type ApplicationsFeatureApi } from "../application/application-feature.js";
 import { SqliteApplicationsRepository } from "../infrastructure/sqlite-applications-repository.js";
 
@@ -18,7 +19,8 @@ export interface ApplicationsFeature {
 }
 
 export interface CreateApplicationsFeatureOptions {
-	readonly boundary: DatabaseBoundary;
+	readonly boundary?: SqlDatabaseInput;
+	readonly database?: SqlDatabase;
 	readonly outboxStore: OutboxDeliveryStore;
 	readonly transactions: TransactionRunner;
 	readonly clock: Clock;
@@ -27,7 +29,9 @@ export interface CreateApplicationsFeatureOptions {
 }
 
 export function createApplicationsFeature(options: CreateApplicationsFeatureOptions): ApplicationsFeature {
-	const repository = new SqliteApplicationsRepository(options.boundary);
+	const database = options.database ?? (options.boundary === undefined ? undefined : resolveSqlDatabase(options.boundary));
+	if (database === undefined) throw new Error("applications feature requires a SQL database");
+	const repository = new SqliteApplicationsRepository(database);
 	const applicationService = new ApplicationService(
 		repository,
 		options.outboxStore,

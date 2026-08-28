@@ -4,7 +4,8 @@ import {
 	type AdminModerationTarget,
 	type OperatorActionRecord,
 } from "../application/ports/admin-moderation-repository.js";
-import type { DatabaseBoundary } from "../../../platform/database/database-boundary.js";
+import { resolveSqlDatabase, type SqlDatabaseInput } from "../../../platform/database/node-sql-database.js";
+import type { SqlDatabase } from "../../../shared/application/ports/sql-database.js";
 
 const STATUSES = new Set<AdminModerationStatus>([
 	"draft",
@@ -28,7 +29,11 @@ interface AdminTargetRow {
 }
 
 export class SqliteAdminModerationRepository implements AdminModerationRepository {
-	constructor(private readonly boundary: DatabaseBoundary) {}
+	private readonly boundary: SqlDatabase;
+
+	constructor(source: SqlDatabaseInput) {
+		this.boundary = resolveSqlDatabase(source);
+	}
 
 	async findByPublicToken(publicToken: string): Promise<AdminModerationTarget | undefined> {
 		const rows = await this.boundary.query<AdminTargetRow>(

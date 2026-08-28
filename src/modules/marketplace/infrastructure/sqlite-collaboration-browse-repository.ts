@@ -12,7 +12,8 @@ import {
 	parseTargetProfileType,
 	parseTopic,
 } from "../../../shared/domain/value-objects/enums.js";
-import type { DatabaseBoundary } from "../../../platform/database/database-boundary.js";
+import { resolveSqlDatabase, type SqlDatabaseInput } from "../../../platform/database/node-sql-database.js";
+import type { SqlDatabase } from "../../../shared/application/ports/sql-database.js";
 
 interface BrowseSessionRow {
 	telegram_user_id?: unknown;
@@ -52,7 +53,11 @@ interface BrowseCardRow {
 interface TopicRow { topic?: unknown }
 
 export class SqliteCollaborationBrowseRepository implements CollaborationBrowseRepository {
-	constructor(private readonly boundary: DatabaseBoundary) {}
+	private readonly boundary: SqlDatabase;
+
+	constructor(source: SqlDatabaseInput) {
+		this.boundary = resolveSqlDatabase(source);
+	}
 
 	async findSession(telegramUserId: string): Promise<BrowseSessionRecord | undefined> {
 		const rows = await this.boundary.query<BrowseSessionRow>(

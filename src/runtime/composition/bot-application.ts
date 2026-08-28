@@ -84,13 +84,13 @@ export function composeBotApplication(options: BotApplicationCompositionOptions)
 		profileSessions: profilesFeature.sessions,
 	});
 	const marketplaceFeature = createMarketplaceFeature({
-		boundary,
+		database,
 		transactions: transactionRunner,
 		clock,
 		crypto,
 	});
 	const applicationsFeature = createApplicationsFeature({
-		boundary,
+		database,
 		outboxStore,
 		transactions: transactionRunner,
 		clock,
@@ -98,7 +98,7 @@ export function composeBotApplication(options: BotApplicationCompositionOptions)
 		botUsername: options.config.expectedBotUsername,
 	});
 	const moderationFeature = createModerationFeature({
-		boundary,
+		database,
 		outboxStore,
 		transactions: transactionRunner,
 		clock,
