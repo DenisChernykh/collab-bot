@@ -15,7 +15,7 @@ import { hashCanonicalInput } from "../../src/platform/crypto/canonical-input-ha
 import { DatabaseBoundary } from "../../src/platform/database/database-boundary.js";
 import { SqliteDurableCommandStore } from "../../src/platform/database/durable-command-repository.js";
 import { MigrationRunner, MigrationSource } from "../../src/platform/database/migrations.js";
-import { SqliteOutboxDeliveryRepository } from "../../src/infrastructure/database/outbox-delivery-repository.js";
+import { SqliteOutboxDeliveryRepository } from "../../src/platform/outbox/outbox-delivery-repository.js";
 import { DatabaseBoundaryTransactionRunner } from "../../src/platform/database/transaction-runner.js";
 import { FakeTelegramTransport } from "../support/fake-telegram-transport.js";
 import { FakeClock } from "../support/fake-clock.js";

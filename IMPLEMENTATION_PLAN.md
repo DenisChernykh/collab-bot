@@ -1293,17 +1293,18 @@ src/
 
 #### R3-05C — Establish platform outbox adapters
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Give durable delivery/event SQLite adapters an explicit platform capability owner and remove root infrastructure.
 - **Dependencies:** `R3-05B`.
 - **Scope:** move outbox delivery and product-event repositories to `platform/outbox`, switch consumers, remove empty `src/infrastructure`.
 - **Do not touch:** repository SQL, claim fencing, statuses or history semantics.
 - **Verification:** outbox/event integration tests; `pnpm db:verify`; typecheck; architecture; exact root scan.
 - **Exit criteria:** no `src/infrastructure`; one commit `R3-05C: establish platform outbox adapters`.
+- **Completion evidence:** Commit SHA: `SELF`; moved the final two SQLite outbox-delivery and product-event adapters to `platform/outbox`, switched all consumers, normalized their dependency on `platform/database` and removed the empty root `src/infrastructure`. Repository classes, SQL, claim fencing, statuses and history semantics are unchanged. Typecheck PASS; architecture PASS (127 modules, 415 dependencies); focused outbox/delivery/decision tests PASS (3 files, 40 tests); `pnpm db:verify` PASS; exact old-root/path scan and `git diff --check` PASS. No schema, dependency, credential, real Telegram, production or remote mutation.
 
 #### R3-06 — Move the global Telegram shell
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Make cross-feature Telegram ingress/routing explicit runtime adapters rather than a misleading root presentation layer.
 - **Dependencies:** `R3-05C`.
 - **Scope:** move the three root Telegram files to `runtime/telegram`, switch consumers, remove `src/presentation`.

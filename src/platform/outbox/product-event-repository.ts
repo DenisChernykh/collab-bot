@@ -10,7 +10,7 @@ import {
 	ProductEventStoreIdConflictError,
 } from "../../shared/application/ports/product-event-store.js";
 import { serializeSafeAttributes } from "../../shared/application/outbox/product-event-service.js";
-import type { DatabaseBoundary } from "../../platform/database/database-boundary.js";
+import type { DatabaseBoundary } from "../database/database-boundary.js";
 
 interface ProductEventRow {
 	event_id?: unknown;

@@ -9,7 +9,7 @@ import type { ClaimTokenGenerator } from "../../src/shared/application/ports/cla
 import type { ProviderDeadline } from "../../src/shared/application/ports/provider-deadline.js";
 import { DatabaseBoundary } from "../../src/platform/database/database-boundary.js";
 import { MigrationRunner, MigrationSource } from "../../src/platform/database/migrations.js";
-import { SqliteOutboxDeliveryRepository } from "../../src/infrastructure/database/outbox-delivery-repository.js";
+import { SqliteOutboxDeliveryRepository } from "../../src/platform/outbox/outbox-delivery-repository.js";
 import { DatabaseBoundaryTransactionRunner } from "../../src/platform/database/transaction-runner.js";
 import { SqliteTelegramUserRepository } from "../../src/platform/database/telegram-user-repository.js";
 import { FakeTelegramTransport } from "../support/fake-telegram-transport.js";

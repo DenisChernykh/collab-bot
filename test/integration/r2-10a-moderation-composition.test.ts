@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { SqliteOutboxDeliveryRepository } from "../../src/infrastructure/database/outbox-delivery-repository.js";
+import { SqliteOutboxDeliveryRepository } from "../../src/platform/outbox/outbox-delivery-repository.js";
 import { DatabaseBoundaryTransactionRunner } from "../../src/platform/database/transaction-runner.js";
 import { FakeClock } from "../support/fake-clock.js";
 import { createModerationFeature } from "../../src/modules/moderation/index.js";

@@ -14,7 +14,7 @@ import { NodeOpaqueTokenCodec } from "../platform/crypto/ingress-codecs.js";
 import { SqliteCallbackActionRepository } from "../platform/database/callback-action-repository.js";
 import type { DatabaseBoundary } from "../platform/database/database-boundary.js";
 import { SqliteDurableCommandStore } from "../platform/database/durable-command-repository.js";
-import { SqliteOutboxDeliveryRepository } from "../infrastructure/database/outbox-delivery-repository.js";
+import { SqliteOutboxDeliveryRepository } from "../platform/outbox/outbox-delivery-repository.js";
 import { SqliteTelegramUserRepository } from "../platform/database/telegram-user-repository.js";
 import { DatabaseBoundaryTransactionRunner } from "../platform/database/transaction-runner.js";
 import { SafeLogger } from "../platform/logging/safe-logger.js";
