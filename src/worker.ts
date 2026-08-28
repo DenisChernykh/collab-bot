@@ -1,3 +1,6 @@
+import { CloudflareMigrationRunner } from "./platform/database/cloudflare-migrations.js";
+import { CloudflareSqlDatabase } from "./platform/database/cloudflare-sql-database.js";
+
 const SINGLETON_NAME = "collaboration-bot-primary";
 
 function json(body: Record<string, unknown>, status = 200): Response {
@@ -9,14 +12,32 @@ function json(body: Record<string, unknown>, status = 200): Response {
 
 export class CollaborationBotState implements DurableObject {
 	private readonly state: DurableObjectState;
+	private readonly database: CloudflareSqlDatabase;
+	private readonly migrations: CloudflareMigrationRunner;
+	private readonly ready: Promise<void>;
 
 	constructor(state: DurableObjectState) {
 		this.state = state;
+		this.database = new CloudflareSqlDatabase(state.storage);
+		this.migrations = new CloudflareMigrationRunner(this.database);
+		this.ready = state.blockConcurrencyWhile(async () => {
+			await this.migrations.migrate();
+		});
 	}
 
 	async fetch(request: Request): Promise<Response> {
-		if (request.method !== "GET" || new URL(request.url).pathname !== "/__cf1/smoke") {
+		const pathname = new URL(request.url).pathname;
+		if (request.method !== "GET" || !["/__cf1/smoke", "/__cf1/schema"].includes(pathname)) {
 			return json({ error: "not_found" }, 404);
+		}
+		await this.ready;
+
+		if (pathname === "/__cf1/schema") {
+			await this.migrations.verify();
+			const rows = await this.database.query<{ count: number }>(
+				"SELECT count(*) AS count FROM __app_migrations",
+			);
+			return json({ migrationCount: rows[0]?.count ?? 0, historyTable: "__app_migrations", integrity: "ok" });
 		}
 
 		this.state.storage.sql.exec(
@@ -44,6 +65,13 @@ export default {
 			const objectId = environment.COLLABORATION_STATE.idFromName(SINGLETON_NAME);
 			return environment.COLLABORATION_STATE.get(objectId).fetch(
 				new Request(new URL("/__cf1/smoke", request.url), request),
+			);
+		}
+
+		if (request.method === "GET" && url.pathname === "/__cf1/schema") {
+			const objectId = environment.COLLABORATION_STATE.idFromName(SINGLETON_NAME);
+			return environment.COLLABORATION_STATE.get(objectId).fetch(
+				new Request(new URL("/__cf1/schema", request.url), request),
 			);
 		}
 

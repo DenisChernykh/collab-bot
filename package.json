@@ -24,6 +24,7 @@
 		"cloudflare:types:check": "wrangler types --check",
 		"cloudflare:dev": "wrangler dev --local",
 		"cloudflare:typecheck": "tsc -p tsconfig.cloudflare.json --noEmit",
+		"cloudflare:migrations:check": "pnpm build && node scripts/verify-cloudflare-migration-manifest.mjs",
 		"test:cloudflare": "vitest run --config vitest.cloudflare.config.ts",
 		"check": "pnpm lint && pnpm architecture && pnpm typecheck && pnpm test:unit && pnpm test:integration && pnpm test:runtime && pnpm build"
 	},

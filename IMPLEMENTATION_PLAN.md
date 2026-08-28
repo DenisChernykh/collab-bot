@@ -1541,7 +1541,7 @@ Free-only является stop condition: никакой unit не включа
 
 #### CF1-05 — Implement Durable Object SQLite and migrations
 
-- **Status:** `pending`
+- **Status:** `completed`
 - **Objective:** Run the authoritative schema and callback-transactions on `ctx.storage.sql` with equivalent atomicity.
 - **Dependencies:** `CF1-04C`.
 - **Scope:** Durable Object SQL adapter, `storage.transaction()` runner, bundled/precomputed migration manifest, the existing canonical `__app_migrations` history table, constructor initialization through `blockConcurrencyWhile`, local integrity/foreign-key verification adapted to supported SQL.
@@ -1551,6 +1551,7 @@ Free-only является stop condition: никакой unit не включа
 - **Verification:** Worker database contract suite, schema snapshot against Node SQLite, all existing integration/fake gates.
 - **Stop conditions:** unsupported SQL changes an invariant, `storage.transaction()` cannot reproduce the callback boundary, or migration parity is unproven.
 - **Exit criteria:** local DO owns equivalent authoritative SQLite; one commit `CF1-05: run authoritative state in Durable Object SQLite`.
+- **Evidence:** Commit SHA: `SELF`. Added `CloudflareSqlDatabase` over SQLite Durable Object storage; `query` consumes cursors immediately with `toArray()`, `execute` normalizes `rowsWritten` to `{ changes }`, blobs are converted to Cloudflare `ArrayBuffer` bindings, and nested transaction failures mark the outer `storage.transaction()` rollback-only. Added a deterministic generated manifest containing all 13 unchanged migration files, runtime checksum/order validation and `pnpm cloudflare:migrations:check` drift verification; unknown or reordered history fails closed. `CollaborationBotState` now initializes the canonical `__app_migrations` schema inside `blockConcurrencyWhile`, exposes local-only schema inspection for the harness, and reuses the same adapter after eviction/reopen. Cloudflare's local runtime rejected `PRAGMA integrity_check` with `SQLITE_AUTH`, so verification uses the supported `PRAGMA foreign_key_check` plus `sqlite_schema` history-table validation; no invariant or migration SQL was weakened. Test-first RED was recorded by the missing adapter module; the focused workerd suite then passed fresh migration/reopen, nested rollback-only and manifest tamper cases (3 tests), full `pnpm test:cloudflare` passed (2 files, 6 tests), `pnpm cloudflare:typecheck`, `pnpm cloudflare:types:check`, manifest drift check, `pnpm check`, `pnpm db:verify` and fake E2E (8 files, 33 tests) passed. Source/test changes are limited to five files; the manifest/script/package metadata are generated/tooling support. No `BEGIN`/`SAVEPOINT` SQL is used in the DO, no product tables or SQL files changed, and no credentials, remote resources, Telegram or production actions touched.
 
 #### CF1-06 — Add secure webhook and singleton DO composition
 
