@@ -1491,7 +1491,7 @@ Free-only является stop condition: никакой unit не включа
 
 #### CF1-03 — Introduce a runtime-neutral SQL contract
 
-- **Status:** `pending`
+- **Status:** `completed`
 - **Objective:** Separate repository-facing SQL/transaction APIs from the concrete `node:sqlite` connection without changing SQL behavior.
 - **Dependencies:** `CF1-02D`.
 - **Scope:** `SqlDatabase`/result/parameter/transaction contracts; adapt Node `DatabaseBoundary`, transaction runner and shared platform repositories first.
@@ -1500,6 +1500,7 @@ Free-only является stop condition: никакой unit не включа
 - **Tests first:** run the same boundary contract against the Node adapter; include nested failure and conditional `changes` behavior.
 - **Verification:** database/ingress/outbox focused tests; `pnpm db:verify`; typecheck/architecture.
 - **Exit criteria:** shared persistence depends on interface, not `DatabaseSync`; one commit `CF1-03: establish portable SQL boundary`.
+- **Evidence:** Commit SHA: `SELF`. Added `SqlValue`, `SqlExecuteResult` and `SqlDatabase` to the shared application port, restricting parameters to SQLite null/number/bigint/string/`Uint8Array` values. Added `NodeSqlDatabase`, a runtime-neutral facade over the existing `DatabaseBoundary`; it normalizes node:sqlite execute results to exactly `{ changes }`, preserves boundary FIFO queueing, `BEGIN IMMEDIATE`, nested rollback-only behavior and lifecycle close, and turns synchronous closed-state failures into rejected promises matching the port contract. Focused contract suite passed (1 file, 3 tests: normalized changes/query, FIFO plus nested rollback-only, close lifecycle); `pnpm typecheck` and `pnpm architecture` passed (133 modules/428 dependencies); `git diff --check` passed. Existing SQL/repositories and Node migration behavior remain untouched for the scheduled CF1-04 adapter cutovers; no credentials, remote resources, Telegram or production actions touched.
 
 #### CF1-04A — Decouple profile and collaboration persistence
 
