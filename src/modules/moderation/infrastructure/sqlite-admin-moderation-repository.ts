@@ -4,7 +4,7 @@ import {
 	type AdminModerationTarget,
 	type OperatorActionRecord,
 } from "../application/ports/admin-moderation-repository.js";
-import type { DatabaseBoundary } from "../../../infrastructure/database/database-boundary.js";
+import type { DatabaseBoundary } from "../../../platform/database/database-boundary.js";
 
 const STATUSES = new Set<AdminModerationStatus>([
 	"draft",

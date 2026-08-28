@@ -7,7 +7,7 @@ import {
 	createBotRuntimeLifecycle,
 	type BotRuntimeLifecycleOperations,
 } from "../../src/runtime/bot-lifecycle.js";
-import type { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
+import type { DatabaseBoundary } from "../../src/platform/database/database-boundary.js";
 import { FakeTelegramApi } from "../support/fake-telegram-api.js";
 import { FakeClock } from "../support/fake-clock.js";
 

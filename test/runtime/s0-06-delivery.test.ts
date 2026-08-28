@@ -21,10 +21,10 @@ import {
 } from "../../src/shared/application/ports/telegram-transport.js";
 import type { ClaimTokenGenerator } from "../../src/shared/application/ports/claim-token.js";
 import type { Clock } from "../../src/shared/application/ports/clock.js";
-import { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
-import { MigrationRunner, MigrationSource } from "../../src/infrastructure/database/migrations.js";
+import { DatabaseBoundary } from "../../src/platform/database/database-boundary.js";
+import { MigrationRunner, MigrationSource } from "../../src/platform/database/migrations.js";
 import { SqliteOutboxDeliveryRepository } from "../../src/infrastructure/database/outbox-delivery-repository.js";
-import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/database/transaction-runner.js";
+import { DatabaseBoundaryTransactionRunner } from "../../src/platform/database/transaction-runner.js";
 import { FakeTelegramTransport } from "../support/fake-telegram-transport.js";
 import { FakeClock } from "../support/fake-clock.js";
 import { SystemProviderDeadline } from "../../src/platform/time/provider-deadline.js";

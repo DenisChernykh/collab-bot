@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { SqliteOutboxDeliveryRepository } from "../../src/infrastructure/database/outbox-delivery-repository.js";
-import { SqliteTelegramUserRepository } from "../../src/infrastructure/database/telegram-user-repository.js";
-import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/database/transaction-runner.js";
+import { SqliteTelegramUserRepository } from "../../src/platform/database/telegram-user-repository.js";
+import { DatabaseBoundaryTransactionRunner } from "../../src/platform/database/transaction-runner.js";
 import { FakeClock } from "../support/fake-clock.js";
 import { SystemProviderDeadline } from "../../src/platform/time/provider-deadline.js";
 import { createCollaborationsFeature } from "../../src/modules/collaborations/index.js";

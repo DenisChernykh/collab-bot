@@ -2,7 +2,7 @@ import { OutboxDeliveryService } from "../../../shared/application/outbox/outbox
 import type { OutboxDeliveryStore } from "../../../shared/application/ports/outbox-delivery-store.js";
 import type { Clock } from "../../../shared/application/ports/clock.js";
 import type { TransactionRunner } from "../../../shared/application/ports/transaction-runner.js";
-import type { DatabaseBoundary } from "../../../infrastructure/database/database-boundary.js";
+import type { DatabaseBoundary } from "../../../platform/database/database-boundary.js";
 import { AdminModerationService } from "../application/admin-moderation-service.js";
 import { SqliteAdminModerationRepository } from "../infrastructure/sqlite-admin-moderation-repository.js";
 

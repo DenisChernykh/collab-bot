@@ -4,8 +4,8 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { Clock } from "../../src/shared/application/ports/clock.js";
-import { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
-import { MigrationRunner, MigrationSource } from "../../src/infrastructure/database/migrations.js";
+import { DatabaseBoundary } from "../../src/platform/database/database-boundary.js";
+import { MigrationRunner, MigrationSource } from "../../src/platform/database/migrations.js";
 
 const migrationsDirectory = fileURLToPath(new URL("../../migrations/", import.meta.url));
 

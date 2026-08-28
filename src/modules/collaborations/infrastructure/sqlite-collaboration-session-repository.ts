@@ -1,6 +1,6 @@
 import type { WizardAdmission } from "../../../shared/application/ports/wizard-admission.js";
-import type { DatabaseBoundary } from "../../../infrastructure/database/database-boundary.js";
-import { SqliteWizardAdmission } from "../../../infrastructure/database/wizard-admission.js";
+import type { DatabaseBoundary } from "../../../platform/database/database-boundary.js";
+import { SqliteWizardAdmission } from "../../../platform/database/wizard-admission.js";
 import type { CollaborationSessionRepository, CollaborationSessionRecord } from "../application/ports/collaboration-session-repository.js";
 import type { CollaborationDraftState } from "../domain/collaboration.js";
 

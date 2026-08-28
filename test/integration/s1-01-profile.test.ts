@@ -9,10 +9,10 @@ import { DurableCommandExecutor } from "../../src/shared/application/commands/co
 import type { CommandContext } from "../../src/shared/application/commands/command-contracts.js";
 import type { CanonicalInput } from "../../src/shared/application/commands/canonical-input.js";
 import { hashCanonicalInput } from "../../src/platform/crypto/canonical-input-hash.js";
-import { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
-import { MigrationRunner, MigrationSource } from "../../src/infrastructure/database/migrations.js";
-import { SqliteDurableCommandStore } from "../../src/infrastructure/database/durable-command-repository.js";
-import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/database/transaction-runner.js";
+import { DatabaseBoundary } from "../../src/platform/database/database-boundary.js";
+import { MigrationRunner, MigrationSource } from "../../src/platform/database/migrations.js";
+import { SqliteDurableCommandStore } from "../../src/platform/database/durable-command-repository.js";
+import { DatabaseBoundaryTransactionRunner } from "../../src/platform/database/transaction-runner.js";
 import { FakeClock } from "../support/fake-clock.js";
 import { ProfileService, type ProfileInput } from "../../src/modules/profiles/index.js";
 import { SqliteProfileRepository } from "../../src/modules/profiles/infrastructure/sqlite-profile-repository.js";

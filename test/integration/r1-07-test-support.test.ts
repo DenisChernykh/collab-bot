@@ -2,7 +2,7 @@ import { stat } from "node:fs/promises";
 
 import { describe, expect, it } from "vitest";
 
-import type { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
+import type { DatabaseBoundary } from "../../src/platform/database/database-boundary.js";
 import { FakeClock } from "../support/fake-clock.js";
 import { withFreshMigratedDatabase } from "../support/migrated-database.js";
 

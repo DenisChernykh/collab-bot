@@ -1,6 +1,6 @@
 import type { Clock } from "../../../shared/application/ports/clock.js";
 import type { TransactionRunner } from "../../../shared/application/ports/transaction-runner.js";
-import type { DatabaseBoundary } from "../../../infrastructure/database/database-boundary.js";
+import type { DatabaseBoundary } from "../../../platform/database/database-boundary.js";
 import { CollaborationBrowseService } from "../application/collaboration-browse-service.js";
 import { SqliteCollaborationBrowseRepository } from "../infrastructure/sqlite-collaboration-browse-repository.js";
 

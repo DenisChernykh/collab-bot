@@ -1282,17 +1282,18 @@ src/
 
 #### R3-05B — Move shared database adapters
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Move the shared SQLite boundary and non-outbox repositories to `platform/database`.
 - **Dependencies:** `R3-05A`.
 - **Scope:** database boundary, migrations, transaction runner, ingress/durable/user/wizard repositories and exact consumers.
 - **Do not touch:** SQL, migration files/checksums, transaction boundaries or persistence behavior.
 - **Verification:** database/ingress focused tests; `pnpm db:verify`; typecheck; architecture; old-path scan.
 - **Exit criteria:** shared database adapters use platform owner; one commit `R3-05B: move shared database adapters`.
+- **Completion evidence:** Commit SHA: `SELF`; moved the SQLite boundary, migration runner, transaction runner and callback/durable/retention/user/wizard adapters to `platform/database`, switched all consumers, restored the local platform-time relation and left only the two scheduled outbox adapters in the old tree with explicit boundary imports. SQL, migration files/checksums and transaction behavior are unchanged. Typecheck PASS; architecture PASS (127 modules, 415 dependencies); focused migration/ingress/wizard tests PASS (2 files, 8 tests); `pnpm db:verify` PASS; old adapter import scan and `git diff --check` PASS. No schema, dependency, credential, real Telegram, production or remote mutation.
 
 #### R3-05C — Establish platform outbox adapters
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Give durable delivery/event SQLite adapters an explicit platform capability owner and remove root infrastructure.
 - **Dependencies:** `R3-05B`.
 - **Scope:** move outbox delivery and product-event repositories to `platform/outbox`, switch consumers, remove empty `src/infrastructure`.

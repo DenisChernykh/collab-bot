@@ -6,7 +6,7 @@ import type {
 } from "../application/ports/collaboration-publication-repository.js";
 import type { DeliveryErrorKind } from "../../../shared/application/ports/outbox-delivery-store.js";
 import { DELIVERY_ERROR_KINDS } from "../../../shared/application/ports/outbox-delivery-store.js";
-import type { DatabaseBoundary } from "../../../infrastructure/database/database-boundary.js";
+import type { DatabaseBoundary } from "../../../platform/database/database-boundary.js";
 
 interface PublicationRow {
 	collaboration_id?: unknown; channel_chat_id?: unknown; message_id?: unknown; status?: unknown;

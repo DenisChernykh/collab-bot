@@ -1,8 +1,8 @@
 import { stat } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 
-import { DatabaseBoundary } from "../infrastructure/database/database-boundary.js";
-import { MigrationRunner, MigrationSource } from "../infrastructure/database/migrations.js";
+import { DatabaseBoundary } from "../platform/database/database-boundary.js";
+import { MigrationRunner, MigrationSource } from "../platform/database/migrations.js";
 
 interface MigrateArguments {
 	databasePath: string;

@@ -7,11 +7,11 @@ import { describe, expect, it } from "vitest";
 import {
 	DatabaseBoundary,
 	TransactionRollbackOnlyError,
-} from "../../src/infrastructure/database/database-boundary.js";
+} from "../../src/platform/database/database-boundary.js";
 import {
 	MigrationRunner,
 	MigrationSource,
-} from "../../src/infrastructure/database/migrations.js";
+} from "../../src/platform/database/migrations.js";
 
 async function temporaryDatabase(): Promise<{
 	directory: string;

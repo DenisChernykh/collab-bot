@@ -12,11 +12,11 @@ import type { ClaimTokenGenerator } from "../../src/shared/application/ports/cla
 import type { ProviderDeadline } from "../../src/shared/application/ports/provider-deadline.js";
 import { TelegramTransportError } from "../../src/shared/application/ports/telegram-transport.js";
 import { hashCanonicalInput } from "../../src/platform/crypto/canonical-input-hash.js";
-import { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
-import { SqliteDurableCommandStore } from "../../src/infrastructure/database/durable-command-repository.js";
-import { MigrationRunner, MigrationSource } from "../../src/infrastructure/database/migrations.js";
+import { DatabaseBoundary } from "../../src/platform/database/database-boundary.js";
+import { SqliteDurableCommandStore } from "../../src/platform/database/durable-command-repository.js";
+import { MigrationRunner, MigrationSource } from "../../src/platform/database/migrations.js";
 import { SqliteOutboxDeliveryRepository } from "../../src/infrastructure/database/outbox-delivery-repository.js";
-import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/database/transaction-runner.js";
+import { DatabaseBoundaryTransactionRunner } from "../../src/platform/database/transaction-runner.js";
 import { FakeTelegramTransport } from "../support/fake-telegram-transport.js";
 import { FakeClock } from "../support/fake-clock.js";
 import { AdminModerationService } from "../../src/modules/moderation/index.js";

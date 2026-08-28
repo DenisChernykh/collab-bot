@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import type { BotRuntime } from "../../src/runtime/bot-runtime.js";
-import type { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
+import type { DatabaseBoundary } from "../../src/platform/database/database-boundary.js";
 import type { FakeTelegramApi } from "../support/fake-telegram-api.js";
 import { FakeClock } from "../support/fake-clock.js";
 import { createFakeBotRuntime } from "../support/fake-bot-runtime.js";

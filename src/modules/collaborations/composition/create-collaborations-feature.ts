@@ -1,8 +1,8 @@
 import type { Clock } from "../../../shared/application/ports/clock.js";
 import type { OutboxDeliveryStore } from "../../../shared/application/ports/outbox-delivery-store.js";
 import type { TransactionRunner } from "../../../shared/application/ports/transaction-runner.js";
-import type { DatabaseBoundary } from "../../../infrastructure/database/database-boundary.js";
-import { SqliteWizardAdmission } from "../../../infrastructure/database/wizard-admission.js";
+import type { DatabaseBoundary } from "../../../platform/database/database-boundary.js";
+import { SqliteWizardAdmission } from "../../../platform/database/wizard-admission.js";
 import type { ProfileSessionRepository } from "../../profiles/application/index.js";
 import { CollaborationDraftService } from "../application/collaboration-draft-service.js";
 import { CollaborationPublicationService } from "../application/collaboration-publication-service.js";

@@ -7,11 +7,11 @@ import { describe, expect, it } from "vitest";
 import { DeliveryRunner } from "../../src/shared/application/outbox/delivery-runner.js";
 import type { ClaimTokenGenerator } from "../../src/shared/application/ports/claim-token.js";
 import type { ProviderDeadline } from "../../src/shared/application/ports/provider-deadline.js";
-import { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
-import { MigrationRunner, MigrationSource } from "../../src/infrastructure/database/migrations.js";
+import { DatabaseBoundary } from "../../src/platform/database/database-boundary.js";
+import { MigrationRunner, MigrationSource } from "../../src/platform/database/migrations.js";
 import { SqliteOutboxDeliveryRepository } from "../../src/infrastructure/database/outbox-delivery-repository.js";
-import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/database/transaction-runner.js";
-import { SqliteTelegramUserRepository } from "../../src/infrastructure/database/telegram-user-repository.js";
+import { DatabaseBoundaryTransactionRunner } from "../../src/platform/database/transaction-runner.js";
+import { SqliteTelegramUserRepository } from "../../src/platform/database/telegram-user-repository.js";
 import { FakeTelegramTransport } from "../support/fake-telegram-transport.js";
 import { FakeClock } from "../support/fake-clock.js";
 import {

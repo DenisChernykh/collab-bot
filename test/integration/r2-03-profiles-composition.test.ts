@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/database/transaction-runner.js";
-import { SqliteTelegramUserRepository } from "../../src/infrastructure/database/telegram-user-repository.js";
+import { DatabaseBoundaryTransactionRunner } from "../../src/platform/database/transaction-runner.js";
+import { SqliteTelegramUserRepository } from "../../src/platform/database/telegram-user-repository.js";
 import { FakeClock } from "../support/fake-clock.js";
 import { SystemProviderDeadline } from "../../src/platform/time/provider-deadline.js";
 import { createProfilesFeature } from "../../src/modules/profiles/index.js";

@@ -15,7 +15,7 @@ import {
 	parseDeliveryPayload,
 	serializeDeliveryPayload,
 } from "../../shared/application/outbox/delivery-payload.js";
-import type { DatabaseBoundary } from "./database-boundary.js";
+import type { DatabaseBoundary } from "../../platform/database/database-boundary.js";
 
 interface OutboxRow {
 	id?: unknown;

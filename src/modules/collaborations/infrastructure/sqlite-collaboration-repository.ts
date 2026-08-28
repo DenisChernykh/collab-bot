@@ -10,7 +10,7 @@ import {
 	type CollaborationDraftInput,
 	type CollaborationRecord,
 } from "../domain/collaboration.js";
-import type { DatabaseBoundary } from "../../../infrastructure/database/database-boundary.js";
+import type { DatabaseBoundary } from "../../../platform/database/database-boundary.js";
 
 interface CollaborationRow {
 	id?: unknown;

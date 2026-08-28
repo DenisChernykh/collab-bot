@@ -3,8 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { DatabaseBoundary } from "../infrastructure/database/database-boundary.js";
-import { MigrationRunner, MigrationSource } from "../infrastructure/database/migrations.js";
+import { DatabaseBoundary } from "../platform/database/database-boundary.js";
+import { MigrationRunner, MigrationSource } from "../platform/database/migrations.js";
 
 async function main(): Promise<void> {
 	if (process.argv.length !== 2) {

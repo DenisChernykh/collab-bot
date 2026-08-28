@@ -3,7 +3,7 @@ import type { Bot } from "grammy";
 import type { Clock } from "../../../shared/application/ports/clock.js";
 import type { ProviderDeadline } from "../../../shared/application/ports/provider-deadline.js";
 import type { TransactionRunner } from "../../../shared/application/ports/transaction-runner.js";
-import type { DatabaseBoundary } from "../../../infrastructure/database/database-boundary.js";
+import type { DatabaseBoundary } from "../../../platform/database/database-boundary.js";
 import type { ProfileSessionRepository } from "../application/ports/profile-session-repository.js";
 import { ProfileAudienceService } from "../application/profile-audience-service.js";
 import { ProfileService } from "../application/profile-service.js";

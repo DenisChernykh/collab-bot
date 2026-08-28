@@ -17,11 +17,11 @@ import {
 	ProductEventIdempotencyConflictError,
 	ProductEventService,
 } from "../../src/shared/application/outbox/product-event-service.js";
-import { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
+import { DatabaseBoundary } from "../../src/platform/database/database-boundary.js";
 import { SqliteOutboxDeliveryRepository } from "../../src/infrastructure/database/outbox-delivery-repository.js";
 import { SqliteProductEventRepository } from "../../src/infrastructure/database/product-event-repository.js";
-import { MigrationRunner, MigrationSource } from "../../src/infrastructure/database/migrations.js";
-import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/database/transaction-runner.js";
+import { MigrationRunner, MigrationSource } from "../../src/platform/database/migrations.js";
+import { DatabaseBoundaryTransactionRunner } from "../../src/platform/database/transaction-runner.js";
 import { FakeClock } from "../support/fake-clock.js";
 
 const canonicalMigrationsPath = fileURLToPath(new URL("../../migrations/", import.meta.url));
