@@ -6,7 +6,7 @@ import type { CanonicalInput } from "../../src/shared/application/commands/canon
 import {
 	registerDurableTelegramIngress,
 	type ExecuteDurableTelegramRoute,
-} from "../../src/presentation/telegram/durable-telegram-ingress.js";
+} from "../../src/runtime/telegram/durable-telegram-ingress.js";
 import { FakeTelegramApi } from "../support/fake-telegram-api.js";
 
 const DURABLE_PROXY = Symbol("durable-proxy");

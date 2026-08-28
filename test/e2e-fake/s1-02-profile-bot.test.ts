@@ -23,7 +23,7 @@ import {
 } from "../../src/modules/profiles/index.js";
 import { SqliteProfileRepository } from "../../src/modules/profiles/infrastructure/sqlite-profile-repository.js";
 import { SqliteProfileSessionRepository } from "../../src/modules/profiles/infrastructure/sqlite-profile-session-repository.js";
-import { registerTelegramRouter } from "../../src/presentation/telegram/telegram-router.js";
+import { registerTelegramRouter } from "../../src/runtime/telegram/telegram-router.js";
 import {
 	callbackData,
 	callbackForUser,

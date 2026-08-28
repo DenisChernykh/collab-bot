@@ -1,7 +1,7 @@
 import type { Context } from "grammy";
 import { describe, expect, it } from "vitest";
 
-import { routeTelegramText, type TelegramTextRouteHandlers } from "../../src/presentation/telegram/telegram-routing.js";
+import { routeTelegramText, type TelegramTextRouteHandlers } from "../../src/runtime/telegram/telegram-routing.js";
 
 const ctx = {} as Context;
 

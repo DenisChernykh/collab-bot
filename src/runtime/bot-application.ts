@@ -6,7 +6,7 @@ import { RequireActiveActor } from "../shared/application/commands/require-activ
 import { DeliveryRunner } from "../shared/application/outbox/delivery-runner.js";
 import { OUTBOX_DELIVERY_KINDS } from "../shared/application/ports/outbox-delivery-store.js";
 import type { Clock } from "../shared/application/ports/clock.js";
-import { registerTelegramRouter } from "../presentation/telegram/telegram-router.js";
+import { registerTelegramRouter } from "./telegram/telegram-router.js";
 import type { AppConfig } from "../config/parse-config.js";
 import { hashCanonicalInput } from "../platform/crypto/canonical-input-hash.js";
 import { RandomClaimTokenGenerator } from "../platform/crypto/claim-token.js";

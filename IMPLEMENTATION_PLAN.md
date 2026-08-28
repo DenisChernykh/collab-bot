@@ -1304,17 +1304,18 @@ src/
 
 #### R3-06 — Move the global Telegram shell
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Make cross-feature Telegram ingress/routing explicit runtime adapters rather than a misleading root presentation layer.
 - **Dependencies:** `R3-05C`.
 - **Scope:** move the three root Telegram files to `runtime/telegram`, switch consumers, remove `src/presentation`.
 - **Do not touch:** route order, callback acknowledgement, durable envelopes, reply buffering or feature presentation.
 - **Verification:** ingress/router/runtime focused tests; typecheck; architecture; old-path scan.
 - **Exit criteria:** no root presentation tree; one commit `R3-06: move global Telegram shell`.
+- **Completion evidence:** Commit SHA: `SELF`; moved durable Telegram ingress, cross-feature router and route-precedence policy unchanged to `runtime/telegram`, switched runtime/direct tests and removed the empty root `src/presentation`. Feature-owned Telegram composers remain inside their modules. Typecheck PASS; architecture PASS (127 modules, 415 dependencies); focused ingress/routing tests PASS (2 files, 2 tests); exact old-root/path scan and `git diff --check` PASS. Route order, durable envelopes, callback acknowledgement and reply behavior are unchanged; no credential, real Telegram, production or remote mutation.
 
 #### R3-07A — Group runtime bootstrap and lifecycle
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Replace the flat runtime bag with explicit startup and lifecycle owners.
 - **Dependencies:** `R3-06`.
 - **Scope:** move bootstrap/env/private-path files under `runtime/bootstrap` and lifecycle/worker/process files under `runtime/lifecycle`; switch consumers.
