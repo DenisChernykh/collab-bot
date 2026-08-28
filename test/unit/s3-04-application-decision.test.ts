@@ -6,6 +6,8 @@ import type {
 	OutboxDeliveryStore,
 } from "../../src/shared/application/ports/outbox-delivery-store.js";
 import type { TransactionRunner } from "../../src/shared/application/ports/transaction-runner.js";
+import type { CryptoCapabilities } from "../../src/shared/application/ports/crypto.js";
+import { webCryptoCapabilities } from "../../src/platform/crypto/capabilities.js";
 import { FakeClock } from "../support/fake-clock.js";
 
 const NOW = 1_700_000_100_000;
@@ -516,9 +518,21 @@ function decisionFixture(input: { readonly slotsTotal: number }): {
 			transactions,
 			new FakeClock(NOW),
 			"collab_bot",
+			deterministicCrypto(),
 		),
 		store,
 		outbox,
+	};
+}
+
+function deterministicCrypto(): CryptoCapabilities {
+	let sequence = 0;
+	return {
+		uuid: () => `00000000-0000-4000-8000-${String(sequence++).padStart(12, "0")}`,
+		randomBytes: (length) => new Uint8Array(length).fill(0xab),
+		randomHex: (length) => "ab".repeat(length),
+		randomBase64Url: (length) => "A".repeat(Math.ceil(length * 4 / 3)),
+		hashUtf8: (value) => webCryptoCapabilities.hashUtf8(value),
 	};
 }
 

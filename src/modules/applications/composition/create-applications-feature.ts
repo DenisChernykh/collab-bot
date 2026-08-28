@@ -1,4 +1,5 @@
 import type { Clock } from "../../../shared/application/ports/clock.js";
+import type { CryptoCapabilities } from "../../../shared/application/ports/crypto.js";
 import type { OutboxDeliveryStore } from "../../../shared/application/ports/outbox-delivery-store.js";
 import type { TransactionRunner } from "../../../shared/application/ports/transaction-runner.js";
 import type { DatabaseBoundary } from "../../../platform/database/database-boundary.js";
@@ -21,6 +22,7 @@ export interface CreateApplicationsFeatureOptions {
 	readonly outboxStore: OutboxDeliveryStore;
 	readonly transactions: TransactionRunner;
 	readonly clock: Clock;
+	readonly crypto: CryptoCapabilities;
 	readonly botUsername: string;
 }
 
@@ -32,6 +34,7 @@ export function createApplicationsFeature(options: CreateApplicationsFeatureOpti
 		options.transactions,
 		options.clock,
 		options.botUsername,
+		options.crypto,
 	);
 	return {
 		api: applicationService,

@@ -1,9 +1,8 @@
-import { randomUUID } from "node:crypto";
-
 import { assertTelegramTextFits, escapeHtml, renderCollaborationCard } from "../../collaborations/application/index.js";
 import type { DeliveryEditPayload, DeliverySendPayload } from "../../../shared/application/outbox/delivery-payload.js";
 import { OutboxDeliveryService } from "../../../shared/application/outbox/outbox-service.js";
 import type { Clock } from "../../../shared/application/ports/clock.js";
+import type { CryptoCapabilities } from "../../../shared/application/ports/crypto.js";
 import type { OutboxDeliveryStore } from "../../../shared/application/ports/outbox-delivery-store.js";
 import type { TransactionRunner } from "../../../shared/application/ports/transaction-runner.js";
 import type {
@@ -71,6 +70,7 @@ export class DecideApplicationUseCase {
 		private readonly transactions: TransactionRunner,
 		private readonly clock: Clock,
 		private readonly botUsername: string,
+		private readonly crypto: CryptoCapabilities,
 	) {
 		this.outbox = new OutboxDeliveryService(outboxStore, transactions, clock);
 	}
@@ -93,7 +93,7 @@ export class DecideApplicationUseCase {
 						decidedAt: input.occurredAt,
 					});
 					const delivery = await this.outbox.createWithinTransaction({
-						id: randomUUID(),
+						id: this.crypto.uuid(),
 						idempotencyKey: `application:${context.application.id}:rejected:v1`,
 						kind: "dm_send",
 						recipientChatId: context.application.applicantTelegramUserId,
@@ -124,7 +124,7 @@ export class DecideApplicationUseCase {
 						decidedAt: null,
 					});
 					await this.outbox.createWithinTransaction({
-						id: randomUUID(),
+						id: this.crypto.uuid(),
 						idempotencyKey: `application:${context.application.id}:closed:v1`,
 						kind: "dm_send",
 						recipientChatId: context.application.applicantTelegramUserId,
@@ -170,14 +170,15 @@ export class DecideApplicationUseCase {
 				});
 
 				const deliveryIds: string[] = [];
-				deliveryIds.push(...await createAcceptedPairDeliveries(this.outbox, context));
+				deliveryIds.push(...await createAcceptedPairDeliveries(this.outbox, context, this.crypto));
 				if (matched) {
 					for (const pair of accepted) {
-						deliveryIds.push(...await createRecruitmentCompletedPairDeliveries(this.outbox, context, pair));
+						deliveryIds.push(...await createRecruitmentCompletedPairDeliveries(this.outbox, context, pair, this.crypto));
 					}
 				}
 				deliveryIds.push(...await createClosedDeliveries(
 					this.outbox,
+					this.crypto,
 					this.botUsername,
 					context.collaboration,
 					closed,
@@ -186,6 +187,7 @@ export class DecideApplicationUseCase {
 					this.store,
 					this.outbox,
 					this.clock,
+					this.crypto,
 					this.botUsername,
 					context.collaboration,
 					matched ? "matched" : "published",
@@ -220,6 +222,7 @@ export class CompleteRecruitmentUseCase {
 		private readonly transactions: TransactionRunner,
 		private readonly clock: Clock,
 		private readonly botUsername: string,
+		private readonly crypto: CryptoCapabilities,
 	) {
 		this.outbox = new OutboxDeliveryService(outboxStore, transactions, clock);
 	}
@@ -250,10 +253,11 @@ export class CompleteRecruitmentUseCase {
 
 				const deliveryIds: string[] = [];
 				for (const pair of accepted) {
-					deliveryIds.push(...await createRecruitmentCompletedPairDeliveries(this.outbox, context, pair));
+					deliveryIds.push(...await createRecruitmentCompletedPairDeliveries(this.outbox, context, pair, this.crypto));
 				}
 				deliveryIds.push(...await createClosedDeliveries(
 					this.outbox,
+					this.crypto,
 					this.botUsername,
 					context.collaboration,
 					closed,
@@ -262,6 +266,7 @@ export class CompleteRecruitmentUseCase {
 					this.store,
 					this.outbox,
 					this.clock,
+					this.crypto,
 					this.botUsername,
 					context.collaboration,
 					"matched",
@@ -304,9 +309,10 @@ async function requireCollaborationUpdate(
 async function createAcceptedPairDeliveries(
 	outbox: OutboxDeliveryService,
 	context: ApplicationDecisionContext,
+	crypto: CryptoCapabilities,
 ): Promise<readonly string[]> {
 	const author = await outbox.createWithinTransaction({
-		id: randomUUID(),
+		id: crypto.uuid(),
 		idempotencyKey: `application:${context.application.id}:accepted:author:v1`,
 		kind: "dm_send",
 		recipientChatId: context.collaboration.authorTelegramUserId,
@@ -318,7 +324,7 @@ async function createAcceptedPairDeliveries(
 		),
 	});
 	const applicant = await outbox.createWithinTransaction({
-		id: randomUUID(),
+		id: crypto.uuid(),
 		idempotencyKey: `application:${context.application.id}:accepted:applicant:v1`,
 		kind: "dm_send",
 		recipientChatId: context.application.applicantTelegramUserId,
@@ -336,9 +342,10 @@ async function createRecruitmentCompletedPairDeliveries(
 	outbox: OutboxDeliveryService,
 	context: Pick<ApplicationDecisionContext, "collaboration" | "authorIdentity"> | RecruitmentDecisionContext,
 	pair: ApplicationNotificationSnapshot,
+	crypto: CryptoCapabilities,
 ): Promise<readonly string[]> {
 	const author = await outbox.createWithinTransaction({
-		id: randomUUID(),
+		id: crypto.uuid(),
 		idempotencyKey: `collaboration:${context.collaboration.id}:matched:author:${pair.application.id}:v1`,
 		kind: "dm_send",
 		recipientChatId: context.collaboration.authorTelegramUserId,
@@ -350,7 +357,7 @@ async function createRecruitmentCompletedPairDeliveries(
 		),
 	});
 	const applicant = await outbox.createWithinTransaction({
-		id: randomUUID(),
+		id: crypto.uuid(),
 		idempotencyKey: `collaboration:${context.collaboration.id}:matched:applicant:${pair.application.id}:v1`,
 		kind: "dm_send",
 		recipientChatId: pair.application.applicantTelegramUserId,
@@ -366,6 +373,7 @@ async function createRecruitmentCompletedPairDeliveries(
 
 async function createClosedDeliveries(
 	outbox: OutboxDeliveryService,
+	crypto: CryptoCapabilities,
 	botUsername: string,
 	collaboration: ApplicationDecisionCollaboration,
 	closed: readonly ApplicationNotificationSnapshot[],
@@ -373,7 +381,7 @@ async function createClosedDeliveries(
 	const ids: string[] = [];
 	for (const item of closed) {
 		const delivery = await outbox.createWithinTransaction({
-			id: randomUUID(),
+			id: crypto.uuid(),
 			idempotencyKey: `application:${item.application.id}:closed:v1`,
 			kind: "dm_send",
 			recipientChatId: item.application.applicantTelegramUserId,
@@ -393,6 +401,7 @@ async function createProjectionDelivery(
 	store: RecruitmentDecisionMutationStore,
 	outbox: OutboxDeliveryService,
 	clock: Clock,
+	crypto: CryptoCapabilities,
 	botUsername: string,
 	collaboration: ApplicationDecisionCollaboration,
 	status: "published" | "matched",
@@ -406,7 +415,7 @@ async function createProjectionDelivery(
 		updatedAt: Math.max(occurredAt, clock.now().getTime()),
 	});
 	const delivery = await outbox.createWithinTransaction({
-		id: randomUUID(),
+		id: crypto.uuid(),
 		idempotencyKey: `channel:${collaboration.id}:projection:${projectionRevision}`,
 		kind: "channel_edit",
 		recipientChatId: collaboration.publication.channelChatId,

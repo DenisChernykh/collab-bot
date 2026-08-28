@@ -1,8 +1,7 @@
-import { randomUUID } from "node:crypto";
-
 import type { DeliverySendPayload } from "../../../shared/application/outbox/delivery-payload.js";
 import { OutboxDeliveryService } from "../../../shared/application/outbox/outbox-service.js";
 import type { Clock } from "../../../shared/application/ports/clock.js";
+import type { CryptoCapabilities } from "../../../shared/application/ports/crypto.js";
 import type { OutboxDeliveryStore } from "../../../shared/application/ports/outbox-delivery-store.js";
 import type { TransactionRunner } from "../../../shared/application/ports/transaction-runner.js";
 import type { ProfileType, Topic } from "../../../shared/domain/value-objects/enums.js";
@@ -54,6 +53,7 @@ export class SubmitApplicationUseCase {
 		private readonly transactions: TransactionRunner,
 		clock: Clock,
 		private readonly botUsername: string,
+		private readonly crypto: CryptoCapabilities,
 	) {
 		this.outbox = new OutboxDeliveryService(outboxStore, transactions, clock);
 	}
@@ -68,7 +68,7 @@ export class SubmitApplicationUseCase {
 			if (!eligibility.ok) return eligibility;
 
 			const application: ApplicationRecord = {
-				id: randomUUID(),
+				id: this.crypto.uuid(),
 				collaborationId: eligibility.target.collaborationId,
 				applicantProfileId: eligibility.applicant.profileId,
 				message: normalized.value,
@@ -82,7 +82,7 @@ export class SubmitApplicationUseCase {
 			await this.store.insertPending(application);
 			await this.store.setFirstApplicationAt(application.collaborationId, application.createdAt);
 			const delivery = await this.outbox.createWithinTransaction({
-				id: randomUUID(),
+				id: this.crypto.uuid(),
 				idempotencyKey: `application:${application.id}:author_dm:v1`,
 				kind: "dm_send",
 				recipientChatId: eligibility.target.authorTelegramUserId,

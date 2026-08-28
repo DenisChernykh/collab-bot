@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { SqliteOutboxDeliveryRepository } from "../../src/platform/outbox/outbox-delivery-repository.js";
 import { DatabaseBoundaryTransactionRunner } from "../../src/platform/database/transaction-runner.js";
+import { webCryptoCapabilities } from "../../src/platform/crypto/capabilities.js";
 import { FakeClock } from "../support/fake-clock.js";
 import { createModerationFeature } from "../../src/modules/moderation/index.js";
 import { withFreshMigratedDatabase } from "../support/migrated-database.js";
@@ -43,6 +44,7 @@ describe("R2-10A moderation composition", () => {
 				outboxStore: new SqliteOutboxDeliveryRepository(boundary),
 				transactions,
 				clock,
+				crypto: webCryptoCapabilities,
 				botUsername: "collab_bot",
 				adminTelegramIds: [ADMIN_ID],
 			});

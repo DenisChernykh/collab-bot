@@ -1,4 +1,5 @@
 import type { Clock } from "../../../shared/application/ports/clock.js";
+import type { CryptoCapabilities } from "../../../shared/application/ports/crypto.js";
 import type { OutboxDeliveryStore } from "../../../shared/application/ports/outbox-delivery-store.js";
 import type { TransactionRunner } from "../../../shared/application/ports/transaction-runner.js";
 import type {
@@ -91,11 +92,12 @@ export class ApplicationService implements ApplicationsFeatureApi {
 		transactions: TransactionRunner,
 		clock: Clock,
 		botUsername: string,
+		crypto: CryptoCapabilities,
 	) {
 		this.checkApplicationEligibility = new CheckApplicationEligibilityUseCase(store, transactions);
-		this.submitApplication = new SubmitApplicationUseCase(store, outboxStore, transactions, clock, botUsername);
-		this.decideApplication = new DecideApplicationUseCase(store, outboxStore, transactions, clock, botUsername);
-		this.completeApplicationRecruitment = new CompleteRecruitmentUseCase(store, outboxStore, transactions, clock, botUsername);
+		this.submitApplication = new SubmitApplicationUseCase(store, outboxStore, transactions, clock, botUsername, crypto);
+		this.decideApplication = new DecideApplicationUseCase(store, outboxStore, transactions, clock, botUsername, crypto);
+		this.completeApplicationRecruitment = new CompleteRecruitmentUseCase(store, outboxStore, transactions, clock, botUsername, crypto);
 		this.pairContact = new GetPairContactQuery(store, transactions);
 		this.actionVersion = new GetApplicationActionVersionQuery(store, transactions);
 		this.ownApplications = new ListOwnApplicationsQuery(store, transactions);

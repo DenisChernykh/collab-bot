@@ -92,6 +92,7 @@ export function composeBotApplication(options: BotApplicationCompositionOptions)
 		outboxStore,
 		transactions: transactionRunner,
 		clock,
+		crypto,
 		botUsername: options.config.expectedBotUsername,
 	});
 	const moderationFeature = createModerationFeature({
@@ -99,6 +100,7 @@ export function composeBotApplication(options: BotApplicationCompositionOptions)
 		outboxStore,
 		transactions: transactionRunner,
 		clock,
+		crypto,
 		botUsername: options.config.expectedBotUsername,
 		adminTelegramIds: options.config.adminTelegramIds,
 	});

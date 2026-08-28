@@ -1,5 +1,6 @@
 import type { Clock } from "../../src/shared/application/ports/clock.js";
 import type { OutboxDeliveryStore } from "../../src/shared/application/ports/outbox-delivery-store.js";
+import { webCryptoCapabilities } from "../../src/platform/crypto/capabilities.js";
 import type { DatabaseBoundary } from "../../src/platform/database/database-boundary.js";
 import { SqliteOutboxDeliveryRepository } from "../../src/platform/outbox/outbox-delivery-repository.js";
 import { DatabaseBoundaryTransactionRunner } from "../../src/platform/database/transaction-runner.js";
@@ -21,6 +22,7 @@ export function createTestApplicationsFeature(options: TestApplicationsFeatureOp
 		outboxStore: options.outboxStore ?? new SqliteOutboxDeliveryRepository(options.boundary),
 		transactions: new DatabaseBoundaryTransactionRunner(options.boundary),
 		clock: options.clock,
+		crypto: webCryptoCapabilities,
 		botUsername: options.botUsername ?? "collab_bot",
 	});
 }

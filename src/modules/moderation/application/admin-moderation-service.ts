@@ -1,6 +1,5 @@
-import { randomUUID } from "node:crypto";
-
 import type { Clock } from "../../../shared/application/ports/clock.js";
+import type { CryptoCapabilities } from "../../../shared/application/ports/crypto.js";
 import {
 	HIDEABLE_COLLABORATION_STATUSES,
 	type AdminModerationRepository,
@@ -36,6 +35,7 @@ export interface AdminModerationServiceOptions {
 	readonly outbox: OutboxDeliveryService;
 	readonly transactions: TransactionRunner;
 	readonly clock: Clock;
+	readonly crypto: CryptoCapabilities;
 	readonly botUsername: string;
 	readonly adminTelegramIds: readonly string[];
 }
@@ -45,6 +45,7 @@ export class AdminModerationService {
 	private readonly outbox: OutboxDeliveryService;
 	private readonly transactions: TransactionRunner;
 	private readonly clock: Clock;
+	private readonly crypto: CryptoCapabilities;
 	private readonly botUsername: string;
 	private readonly admins: ReadonlySet<string>;
 
@@ -56,6 +57,7 @@ export class AdminModerationService {
 		this.outbox = options.outbox;
 		this.transactions = options.transactions;
 		this.clock = options.clock;
+		this.crypto = options.crypto;
 		this.botUsername = options.botUsername;
 		this.admins = new Set(options.adminTelegramIds);
 	}
@@ -114,7 +116,7 @@ export class AdminModerationService {
 				updatedAt: hiddenAt,
 			});
 			const delivery = await this.outbox.createWithinTransaction({
-				id: randomUUID(),
+				id: this.crypto.uuid(),
 				idempotencyKey: `channel:${target.collaborationId}:hide:${projectionRevision}`,
 				kind: "channel_delete",
 				recipientChatId: target.channelChatId,
@@ -127,7 +129,7 @@ export class AdminModerationService {
 				updatedAt: hiddenAt,
 			});
 			await this.repository.appendAction({
-				id: randomUUID(),
+				id: this.crypto.uuid(),
 				actorTelegramUserId: input.adminTelegramUserId,
 				collaborationId: target.collaborationId,
 				reason,

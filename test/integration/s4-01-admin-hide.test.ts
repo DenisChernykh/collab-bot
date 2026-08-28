@@ -17,6 +17,7 @@ import { SqliteDurableCommandStore } from "../../src/platform/database/durable-c
 import { MigrationRunner, MigrationSource } from "../../src/platform/database/migrations.js";
 import { SqliteOutboxDeliveryRepository } from "../../src/platform/outbox/outbox-delivery-repository.js";
 import { DatabaseBoundaryTransactionRunner } from "../../src/platform/database/transaction-runner.js";
+import { webCryptoCapabilities } from "../../src/platform/crypto/capabilities.js";
 import { FakeTelegramTransport } from "../support/fake-telegram-transport.js";
 import { FakeClock } from "../support/fake-clock.js";
 import { AdminModerationService } from "../../src/modules/moderation/index.js";
@@ -312,6 +313,7 @@ async function withModerationFixture(work: (fixture: ModerationFixture) => Promi
 			outbox: new OutboxDeliveryService(outboxStore, transactions, clock),
 			transactions,
 			clock,
+			crypto: webCryptoCapabilities,
 			botUsername: BOT_USERNAME,
 			adminTelegramIds: [ADMIN_ID],
 		});

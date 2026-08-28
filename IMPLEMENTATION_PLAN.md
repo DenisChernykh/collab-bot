@@ -1478,7 +1478,7 @@ Free-only является stop condition: никакой unit не включа
 
 #### CF1-02D — Inject crypto into application decisions
 
-- **Status:** `pending`
+- **Status:** `completed`
 - **Objective:** Move applications and moderation decisions onto injected UUID/token capabilities and preserve Node composition.
 - **Dependencies:** `CF1-02C`.
 - **Scope:** applications/moderation feature factories, decision/callback token consumers, remaining Node composition wiring and deterministic test doubles.
@@ -1487,6 +1487,7 @@ Free-only является stop condition: никакой unit не включа
 - **Tests first:** application/moderation decision tests with deterministic crypto doubles.
 - **Verification:** focused integration/E2E, `pnpm architecture`, typecheck and exact `node:crypto` import scan.
 - **Exit criteria:** all application decision flows are Worker-portable; one commit `CF1-02D: inject portable crypto into application decisions`.
+- **Evidence:** Commit SHA: `SELF`. The D slice changes exactly 12 source/test files: `src/modules/applications/application/application-decisions.ts`, `src/modules/applications/application/application-feature.ts`, `src/modules/applications/application/application-submission.ts`, `src/modules/applications/composition/create-applications-feature.ts`, `src/modules/moderation/application/admin-moderation-service.ts`, `src/modules/moderation/composition/create-moderation-feature.ts`, `src/runtime/composition/bot-application.ts`, `test/integration/r1-03-applications-composition.test.ts`, `test/integration/r2-10a-moderation-composition.test.ts`, `test/integration/s4-01-admin-hide.test.ts`, `test/support/applications-feature.ts`, and `test/unit/s3-04-application-decision.test.ts`. Test-first RED was recorded by `pnpm typecheck` before the new constructor/factory contract existed; it reported the expected five missing `crypto` properties/argument. Application submission/decision and moderation now receive the shared capability and use it for application, outbox, projection, channel-delete and audit IDs; deterministic UUID/random doubles are used by the application decision fixture. Focused suite passed (4 files, 17 tests); `pnpm architecture` passed (131 modules/426 dependencies); exact `node:crypto` scan found no imports in applications/moderation; full `pnpm check` passed (72 unit, 88 integration, 47 runtime, lint/typecheck/build; generated Cloudflare config has only two pre-existing unused-disable warnings). No SQL, business rules, receipts, idempotency keys, copy or effect ordering changed; no credentials, remote resources, Telegram or production actions touched.
 
 #### CF1-03 — Introduce a runtime-neutral SQL contract
 
