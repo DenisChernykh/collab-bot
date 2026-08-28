@@ -10,13 +10,13 @@ import {
 	OutboxDeliveryService,
 	OutboxIdempotencyConflictError,
 	OutboxTransitionError,
-} from "../../src/application/outbox/outbox-service.js";
+} from "../../src/shared/application/outbox/outbox-service.js";
 import {
 	createSafeAttributes,
 	ProductEventIdConflictError,
 	ProductEventIdempotencyConflictError,
 	ProductEventService,
-} from "../../src/application/outbox/product-event-service.js";
+} from "../../src/shared/application/outbox/product-event-service.js";
 import { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
 import { SqliteOutboxDeliveryRepository } from "../../src/infrastructure/database/outbox-delivery-repository.js";
 import { SqliteProductEventRepository } from "../../src/infrastructure/database/product-event-repository.js";

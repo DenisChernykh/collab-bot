@@ -1,4 +1,4 @@
-import type { DeliveryPayload } from "../../../application/outbox/delivery-payload.js";
+import type { DeliveryPayload } from "../outbox/delivery-payload.js";
 
 export const OUTBOX_DELIVERY_KINDS = ["dm_send", "channel_send", "channel_edit", "channel_delete"] as const;
 export type OutboxDeliveryKind = (typeof OUTBOX_DELIVERY_KINDS)[number];

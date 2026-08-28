@@ -8,7 +8,7 @@ import {
 	type HideableCollaborationStatus,
 } from "./ports/admin-moderation-repository.js";
 import type { TransactionRunner } from "../../../shared/application/ports/transaction-runner.js";
-import type { OutboxDeliveryService } from "../../../application/outbox/outbox-service.js";
+import type { OutboxDeliveryService } from "../../../shared/application/outbox/outbox-service.js";
 
 const TELEGRAM_USER_ID = /^[0-9]+$/;
 const PUBLIC_TOKEN = /^[A-Za-z0-9_-]{22}$/;

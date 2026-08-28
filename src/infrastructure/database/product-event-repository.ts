@@ -2,14 +2,14 @@ import {
 	PRODUCT_EVENT_TYPES,
 	parseSafeAttributes,
 	type ProductEventRecord,
-} from "../../application/outbox/product-event-service.js";
+} from "../../shared/application/outbox/product-event-service.js";
 import type { ProductEventStore } from "../../shared/application/ports/product-event-store.js";
 import {
 	ProductEventStoreConflictError,
 	ProductEventStoreCorruptError,
 	ProductEventStoreIdConflictError,
 } from "../../shared/application/ports/product-event-store.js";
-import { serializeSafeAttributes } from "../../application/outbox/product-event-service.js";
+import { serializeSafeAttributes } from "../../shared/application/outbox/product-event-service.js";
 import type { DatabaseBoundary } from "./database-boundary.js";
 
 interface ProductEventRow {

@@ -1,23 +1,23 @@
-import type { Clock } from "../../shared/application/ports/clock.js";
-import type { ClaimTokenGenerator } from "../../shared/application/ports/claim-token.js";
+import type { Clock } from "../ports/clock.js";
+import type { ClaimTokenGenerator } from "../ports/claim-token.js";
 import type {
 	DeliveryErrorKind,
 	OutboxDeliveryKind,
 	OutboxDeliveryRecord,
 	OutboxDeliveryStore,
-} from "../../shared/application/ports/outbox-delivery-store.js";
+} from "../ports/outbox-delivery-store.js";
 import {
 	ProviderDeadlineExceededError,
 	ProviderShutdownAbortError,
 	PROVIDER_DEADLINE_MS,
 	type ProviderDeadline,
-} from "../../shared/application/ports/provider-deadline.js";
+} from "../ports/provider-deadline.js";
 import {
 	TelegramTransportError,
 	type TelegramTransport,
 	type TelegramTransportRequest,
 	type TelegramTransportResponse,
-} from "../../shared/application/ports/telegram-transport.js";
+} from "../ports/telegram-transport.js";
 
 export const DELIVERY_MAX_ATTEMPTS = 5;
 export const DELIVERY_STALE_AFTER_MS = 60_000;

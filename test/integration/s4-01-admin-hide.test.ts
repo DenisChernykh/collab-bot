@@ -6,8 +6,8 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { DurableCommandExecutor } from "../../src/shared/application/commands/command-executor.js";
-import { DeliveryRunner } from "../../src/application/outbox/delivery-runner.js";
-import { OutboxDeliveryService } from "../../src/application/outbox/outbox-service.js";
+import { DeliveryRunner } from "../../src/shared/application/outbox/delivery-runner.js";
+import { OutboxDeliveryService } from "../../src/shared/application/outbox/outbox-service.js";
 import type { ClaimTokenGenerator } from "../../src/shared/application/ports/claim-token.js";
 import type { ProviderDeadline } from "../../src/shared/application/ports/provider-deadline.js";
 import { TelegramTransportError } from "../../src/shared/application/ports/telegram-transport.js";

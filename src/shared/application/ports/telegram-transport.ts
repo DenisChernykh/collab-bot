@@ -4,7 +4,7 @@ export interface TelegramSendRequest {
 	readonly method: "send";
 	readonly chatId: string;
 	readonly text: string;
-	readonly replyMarkup?: import("../../../application/outbox/delivery-payload.js").DeliveryInlineKeyboard;
+	readonly replyMarkup?: import("../outbox/delivery-payload.js").DeliveryInlineKeyboard;
 	readonly signal: AbortSignal;
 }
 
@@ -13,7 +13,7 @@ export interface TelegramEditRequest {
 	readonly chatId: string;
 	readonly messageId: number;
 	readonly text: string;
-	readonly replyMarkup?: import("../../../application/outbox/delivery-payload.js").DeliveryInlineKeyboard;
+	readonly replyMarkup?: import("../outbox/delivery-payload.js").DeliveryInlineKeyboard;
 	readonly signal: AbortSignal;
 }
 

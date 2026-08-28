@@ -1260,17 +1260,18 @@ src/
 
 #### R3-04 — Move shared outbox policies
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Complete shared application ownership and remove root `application`.
 - **Dependencies:** `R3-03`.
 - **Scope:** outbox payload/runner/service and product-event contracts/service plus consumers; remove empty root `application`.
 - **Do not touch:** semantic keys, retry/ambiguity behavior, payload bytes or event contracts.
 - **Verification:** focused outbox/delivery tests; typecheck; architecture; exact root scan.
 - **Exit criteria:** no `src/application`; one commit `R3-04: complete shared application ownership`.
+- **Completion evidence:** Commit SHA: `SELF`; moved all five delivery payload/runner/service and product-event contract/service policies to `shared/application/outbox`, switched every consumer, normalized local shared-port references and removed the empty root `src/application`. Payload bytes, semantic keys, retry/ambiguity handling and event contracts are unchanged. Typecheck PASS; architecture PASS (127 modules, 415 dependencies); focused outbox/delivery/publication tests PASS (3 files, 32 tests); exact old-root/path scan and `git diff --check` PASS. No SQL, schema, dependency, credential, real Telegram, production or remote mutation.
 
 #### R3-05A — Move platform primitives
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Rename shared technical implementations from generic infrastructure to capability-oriented platform owners.
 - **Dependencies:** `R3-04`.
 - **Scope:** crypto, logging, Telegram transport and time adapters under `platform`; switch consumers.

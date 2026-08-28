@@ -7,8 +7,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
 	OutboxDeliveryService,
-	} from "../../src/application/outbox/outbox-service.js";
-import { DeliveryRunner } from "../../src/application/outbox/delivery-runner.js";
+	} from "../../src/shared/application/outbox/outbox-service.js";
+import { DeliveryRunner } from "../../src/shared/application/outbox/delivery-runner.js";
 import {
 	PROVIDER_DEADLINE_MS,
 	ProviderDeadlineExceededError,

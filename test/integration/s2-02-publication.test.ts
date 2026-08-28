@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { DeliveryRunner } from "../../src/application/outbox/delivery-runner.js";
+import { DeliveryRunner } from "../../src/shared/application/outbox/delivery-runner.js";
 import type { ClaimTokenGenerator } from "../../src/shared/application/ports/claim-token.js";
 import type { ProviderDeadline } from "../../src/shared/application/ports/provider-deadline.js";
 import { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
