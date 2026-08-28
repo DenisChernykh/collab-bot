@@ -10,7 +10,7 @@ import { DeliveryRunner } from "../../src/application/outbox/delivery-runner.js"
 import type { ClaimTokenGenerator } from "../../src/shared/application/ports/claim-token.js";
 import type { OutboxDeliveryStore } from "../../src/shared/application/ports/outbox-delivery-store.js";
 import type { ProviderDeadline } from "../../src/shared/application/ports/provider-deadline.js";
-import { TelegramTransportError } from "../../src/application/ports/telegram-transport.js";
+import { TelegramTransportError } from "../../src/shared/application/ports/telegram-transport.js";
 import { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
 import { hashCanonicalInput } from "../../src/infrastructure/crypto/canonical-input-hash.js";
 import { SqliteDurableCommandStore } from "../../src/infrastructure/database/durable-command-repository.js";

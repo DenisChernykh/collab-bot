@@ -1,6 +1,6 @@
 import { GrammyError, type Bot } from "grammy";
-import type { TelegramTransport, TelegramTransportRequest, TelegramTransportResponse } from "../../application/ports/telegram-transport.js";
-import { TelegramTransportError } from "../../application/ports/telegram-transport.js";
+import type { TelegramTransport, TelegramTransportRequest, TelegramTransportResponse } from "../../shared/application/ports/telegram-transport.js";
+import { TelegramTransportError } from "../../shared/application/ports/telegram-transport.js";
 
 export class GrammyTelegramTransport implements TelegramTransport {
 	constructor(private readonly bot: Bot) {}

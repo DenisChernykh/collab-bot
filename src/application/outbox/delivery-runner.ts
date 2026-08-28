@@ -17,7 +17,7 @@ import {
 	type TelegramTransport,
 	type TelegramTransportRequest,
 	type TelegramTransportResponse,
-} from "../ports/telegram-transport.js";
+} from "../../shared/application/ports/telegram-transport.js";
 
 export const DELIVERY_MAX_ATTEMPTS = 5;
 export const DELIVERY_STALE_AFTER_MS = 60_000;

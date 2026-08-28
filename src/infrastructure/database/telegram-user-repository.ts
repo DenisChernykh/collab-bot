@@ -1,8 +1,8 @@
 import type {
 	TelegramUserLookup,
 	TelegramUserRecord,
-} from "../../application/ports/telegram-user-lookup.js";
-import type { TelegramUserSnapshot, TelegramUserWriter } from "../../application/ports/telegram-user-writer.js";
+} from "../../shared/application/ports/telegram-user-lookup.js";
+import type { TelegramUserSnapshot, TelegramUserWriter } from "../../shared/application/ports/telegram-user-writer.js";
 import type { DatabaseBoundary } from "./database-boundary.js";
 
 export class SqliteTelegramUserRepository implements TelegramUserLookup, TelegramUserWriter {

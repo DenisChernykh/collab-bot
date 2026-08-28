@@ -18,7 +18,7 @@ import {
 import {
 	TelegramTransportError,
 	type TelegramTransportResponse,
-} from "../../src/application/ports/telegram-transport.js";
+} from "../../src/shared/application/ports/telegram-transport.js";
 import type { ClaimTokenGenerator } from "../../src/shared/application/ports/claim-token.js";
 import type { Clock } from "../../src/shared/application/ports/clock.js";
 import { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";

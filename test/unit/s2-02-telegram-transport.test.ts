@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { GrammyError } from "grammy";
 
-import { TelegramTransportError } from "../../src/application/ports/telegram-transport.js";
+import { TelegramTransportError } from "../../src/shared/application/ports/telegram-transport.js";
 import { GrammyTelegramTransport } from "../../src/infrastructure/telegram/grammy-telegram-transport.js";
 
 describe("S2-02 Telegram transport", () => {

@@ -1238,17 +1238,18 @@ src/
 
 #### R3-02C — Move shared Telegram ports
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Move provider-neutral Telegram transport/user contracts under shared application.
 - **Dependencies:** `R3-02B`.
 - **Scope:** Telegram transport, lookup and writer ports plus consumers.
 - **Do not touch:** grammY adapters, delivery results or user snapshot behavior.
 - **Verification:** focused Telegram/delivery tests; typecheck; architecture; old-path scan.
 - **Exit criteria:** no Telegram port remains in root application; one commit `R3-02C: move shared Telegram ports`.
+- **Completion evidence:** Commit SHA: `SELF`; moved the provider-neutral Telegram transport, user lookup and user writer contracts to `shared/application/ports`, switched all direct consumers and preserved the temporary reference to the not-yet-moved delivery payload policy. Transport failure codes/phases, snapshots and adapter behavior are unchanged. Typecheck PASS; architecture PASS (127 modules, 415 dependencies); focused transport/delivery/application tests PASS (3 files, 31 tests); root ports are empty, old imports and `git diff --check` PASS. No SQL, schema, dependency, credential, real Telegram, production or remote mutation.
 
 #### R3-03 — Move shared command policies
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Move command execution, canonical input and safe-result policies under shared application.
 - **Dependencies:** `R3-02C`.
 - **Scope:** root `application/commands` and all exact imports.

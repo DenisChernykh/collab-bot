@@ -1,6 +1,6 @@
 import type { CommandActor } from "./command-contracts.js";
 import type { SafeResult } from "./safe-result.js";
-import type { TelegramUserLookup } from "../ports/telegram-user-lookup.js";
+import type { TelegramUserLookup } from "../../shared/application/ports/telegram-user-lookup.js";
 
 export interface TelegramUserIngressActor {
 	readonly kind: "telegram_user";
