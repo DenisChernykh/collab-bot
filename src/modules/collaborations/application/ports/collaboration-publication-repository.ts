@@ -1,4 +1,4 @@
-import type { DeliveryErrorKind } from "../../../../application/ports/outbox-delivery-store.js";
+import type { DeliveryErrorKind } from "../../../../shared/application/ports/outbox-delivery-store.js";
 import type { CollaborationRecord } from "../../domain/collaboration.js";
 
 export type CollaborationPublicationStatus = "prepared" | "sending" | "published" | "failed";

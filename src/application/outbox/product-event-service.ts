@@ -1,9 +1,9 @@
 import type { Clock } from "../../shared/application/ports/clock.js";
-import type { ProductEventStore } from "../ports/product-event-store.js";
+import type { ProductEventStore } from "../../shared/application/ports/product-event-store.js";
 import {
 	ProductEventStoreConflictError,
 	ProductEventStoreIdConflictError,
-} from "../ports/product-event-store.js";
+} from "../../shared/application/ports/product-event-store.js";
 import type { TransactionRunner } from "../../shared/application/ports/transaction-runner.js";
 import {
 	PRODUCT_EVENT_TYPES,

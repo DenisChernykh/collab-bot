@@ -2,7 +2,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 
 import { OutboxDeliveryService } from "../../../application/outbox/outbox-service.js";
 import type { Clock } from "../../../shared/application/ports/clock.js";
-import type { OutboxDeliveryStore } from "../../../application/ports/outbox-delivery-store.js";
+import type { OutboxDeliveryStore } from "../../../shared/application/ports/outbox-delivery-store.js";
 import type { TransactionRunner } from "../../../shared/application/ports/transaction-runner.js";
 import { isDeadlineDue, isMutationAllowed } from "../domain/deadline.js";
 import type { CollaborationPublicationRepository, CollaborationSummary } from "./ports/collaboration-publication-repository.js";

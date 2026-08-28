@@ -3,14 +3,14 @@ import type {
 	OutboxDeliveryKind,
 	OutboxDeliveryRecord,
 	OutboxDeliveryStore,
-} from "../../application/ports/outbox-delivery-store.js";
+} from "../../shared/application/ports/outbox-delivery-store.js";
 import {
 	DELIVERY_ERROR_KINDS,
 	OUTBOX_DELIVERY_KINDS,
 	OUTBOX_DELIVERY_STATUSES,
 	OutboxStoreConflictError,
 	OutboxStoreCorruptError,
-} from "../../application/ports/outbox-delivery-store.js";
+} from "../../shared/application/ports/outbox-delivery-store.js";
 import {
 	parseDeliveryPayload,
 	serializeDeliveryPayload,

@@ -3,11 +3,11 @@ import type {
 	OutboxDeliveryKind,
 	OutboxDeliveryRecord,
 	OutboxDeliveryStore,
-} from "../ports/outbox-delivery-store.js";
+} from "../../shared/application/ports/outbox-delivery-store.js";
 import {
 	OUTBOX_DELIVERY_KINDS,
 	OutboxStoreConflictError,
-} from "../ports/outbox-delivery-store.js";
+} from "../../shared/application/ports/outbox-delivery-store.js";
 import type { TransactionRunner } from "../../shared/application/ports/transaction-runner.js";
 import {
 	parseDeliveryPayload,

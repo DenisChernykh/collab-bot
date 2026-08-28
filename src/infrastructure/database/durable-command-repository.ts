@@ -1,7 +1,7 @@
 import type {
 	DurableCommandReceipt,
 	DurableCommandStore,
-} from "../../application/ports/durable-command-store.js";
+} from "../../shared/application/ports/durable-command-store.js";
 import type { DatabaseBoundary } from "./database-boundary.js";
 
 interface ReceiptRow {

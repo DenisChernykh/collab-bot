@@ -4,7 +4,7 @@ import type { CanonicalInputHasher } from "../../shared/application/ports/ingres
 import type {
 	DurableCommandReceipt,
 	DurableCommandStore,
-} from "../ports/durable-command-store.js";
+} from "../../shared/application/ports/durable-command-store.js";
 import type { TransactionRunner } from "../../shared/application/ports/transaction-runner.js";
 import {
 	parseSafeResult,

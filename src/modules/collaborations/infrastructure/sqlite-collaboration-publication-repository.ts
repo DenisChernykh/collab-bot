@@ -4,8 +4,8 @@ import type {
 	CollaborationPublicationStatus,
 	CollaborationSummary,
 } from "../application/ports/collaboration-publication-repository.js";
-import type { DeliveryErrorKind } from "../../../application/ports/outbox-delivery-store.js";
-import { DELIVERY_ERROR_KINDS } from "../../../application/ports/outbox-delivery-store.js";
+import type { DeliveryErrorKind } from "../../../shared/application/ports/outbox-delivery-store.js";
+import { DELIVERY_ERROR_KINDS } from "../../../shared/application/ports/outbox-delivery-store.js";
 import type { DatabaseBoundary } from "../../../infrastructure/database/database-boundary.js";
 
 interface PublicationRow {

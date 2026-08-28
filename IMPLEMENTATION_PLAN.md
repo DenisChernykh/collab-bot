@@ -1227,17 +1227,18 @@ src/
 
 #### R3-02B — Move shared durable-effect ports
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Move durable command/outbox/event store contracts under the shared application kernel.
 - **Dependencies:** `R3-02A`.
 - **Scope:** callback-action, durable-command, outbox-delivery and product-event store ports plus consumers.
 - **Do not touch:** durable semantics, claim state or delivery policy.
 - **Verification:** focused durable/outbox tests; typecheck; architecture; old-path scan.
 - **Exit criteria:** durable store ports have one shared owner; one commit `R3-02B: move shared durable effect ports`.
+- **Completion evidence:** Commit SHA: `SELF`; moved the four provider-neutral callback-action, durable-command, outbox-delivery and product-event store contracts to `shared/application/ports`, switched every direct consumer and kept temporary inward references to the not-yet-moved shared command/outbox policies explicit. Store shapes, error classes, statuses and durability semantics are unchanged. Typecheck PASS; architecture PASS (127 modules, 415 dependencies); focused ingress/outbox/delivery tests PASS (3 files, 35 tests); old-port import scan and `git diff --check` PASS. No SQL, schema, dependency, credential, real Telegram, production or remote mutation.
 
 #### R3-02C — Move shared Telegram ports
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Move provider-neutral Telegram transport/user contracts under shared application.
 - **Dependencies:** `R3-02B`.
 - **Scope:** Telegram transport, lookup and writer ports plus consumers.

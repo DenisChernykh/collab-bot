@@ -4,7 +4,7 @@ import { ApplicationService } from "../../src/modules/applications/application/a
 import type {
 	OutboxDeliveryRecord,
 	OutboxDeliveryStore,
-} from "../../src/application/ports/outbox-delivery-store.js";
+} from "../../src/shared/application/ports/outbox-delivery-store.js";
 import type { TransactionRunner } from "../../src/shared/application/ports/transaction-runner.js";
 import { FakeClock } from "../support/fake-clock.js";
 

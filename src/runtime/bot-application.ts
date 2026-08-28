@@ -4,7 +4,7 @@ import { CallbackActionService } from "../application/commands/callback-action.j
 import { DurableCommandExecutor } from "../application/commands/command-executor.js";
 import { RequireActiveActor } from "../application/commands/require-active-actor.js";
 import { DeliveryRunner } from "../application/outbox/delivery-runner.js";
-import { OUTBOX_DELIVERY_KINDS } from "../application/ports/outbox-delivery-store.js";
+import { OUTBOX_DELIVERY_KINDS } from "../shared/application/ports/outbox-delivery-store.js";
 import type { Clock } from "../shared/application/ports/clock.js";
 import { registerTelegramRouter } from "../presentation/telegram/telegram-router.js";
 import type { AppConfig } from "../config/parse-config.js";

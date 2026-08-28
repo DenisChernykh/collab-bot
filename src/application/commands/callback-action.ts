@@ -4,8 +4,8 @@ import type {
 	CallbackActionMode,
 	CallbackActionRecord,
 	CallbackActionStore,
-} from "../ports/callback-action-store.js";
-import { CallbackActionStoreCorruptError } from "../ports/callback-action-store.js";
+} from "../../shared/application/ports/callback-action-store.js";
+import { CallbackActionStoreCorruptError } from "../../shared/application/ports/callback-action-store.js";
 import type { OpaqueTokenCodec } from "../../shared/application/ports/ingress-crypto.js";
 import type { TransactionRunner } from "../../shared/application/ports/transaction-runner.js";
 import {

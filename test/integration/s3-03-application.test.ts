@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import { DurableCommandExecutor } from "../../src/application/commands/command-executor.js";
 import { DeliveryRunner } from "../../src/application/outbox/delivery-runner.js";
 import type { ClaimTokenGenerator } from "../../src/shared/application/ports/claim-token.js";
-import type { OutboxDeliveryStore } from "../../src/application/ports/outbox-delivery-store.js";
+import type { OutboxDeliveryStore } from "../../src/shared/application/ports/outbox-delivery-store.js";
 import type { ProviderDeadline } from "../../src/shared/application/ports/provider-deadline.js";
 import { TelegramTransportError } from "../../src/application/ports/telegram-transport.js";
 import { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";

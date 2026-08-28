@@ -1,4 +1,4 @@
-import type { CommandSource } from "../commands/command-contracts.js";
+import type { CommandSource } from "../../../application/commands/command-contracts.js";
 
 export interface DurableCommandReceipt {
 	readonly commandId: string;

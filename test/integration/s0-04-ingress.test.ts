@@ -24,7 +24,7 @@ import { SqliteCallbackActionRepository } from "../../src/infrastructure/databas
 import { SqliteDurableCommandStore } from "../../src/infrastructure/database/durable-command-repository.js";
 import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/database/transaction-runner.js";
 import { NodeOpaqueTokenCodec, Sha256CanonicalInputHasher } from "../../src/infrastructure/crypto/ingress-codecs.js";
-import { CallbackActionStoreCorruptError } from "../../src/application/ports/callback-action-store.js";
+import { CallbackActionStoreCorruptError } from "../../src/shared/application/ports/callback-action-store.js";
 import { IngressRetentionService } from "../../src/infrastructure/database/ingress-retention.js";
 import { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
 import { MigrationRunner, MigrationSource } from "../../src/infrastructure/database/migrations.js";

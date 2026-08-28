@@ -3,12 +3,12 @@ import {
 	parseSafeAttributes,
 	type ProductEventRecord,
 } from "../../application/outbox/product-event-service.js";
-import type { ProductEventStore } from "../../application/ports/product-event-store.js";
+import type { ProductEventStore } from "../../shared/application/ports/product-event-store.js";
 import {
 	ProductEventStoreConflictError,
 	ProductEventStoreCorruptError,
 	ProductEventStoreIdConflictError,
-} from "../../application/ports/product-event-store.js";
+} from "../../shared/application/ports/product-event-store.js";
 import { serializeSafeAttributes } from "../../application/outbox/product-event-service.js";
 import type { DatabaseBoundary } from "./database-boundary.js";
 

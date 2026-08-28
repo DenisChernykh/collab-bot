@@ -5,7 +5,7 @@ import type {
 	OutboxDeliveryKind,
 	OutboxDeliveryRecord,
 	OutboxDeliveryStore,
-} from "../ports/outbox-delivery-store.js";
+} from "../../shared/application/ports/outbox-delivery-store.js";
 import {
 	ProviderDeadlineExceededError,
 	ProviderShutdownAbortError,

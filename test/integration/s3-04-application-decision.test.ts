@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { DurableCommandExecutor } from "../../src/application/commands/command-executor.js";
-import type { OutboxDeliveryStore } from "../../src/application/ports/outbox-delivery-store.js";
+import type { OutboxDeliveryStore } from "../../src/shared/application/ports/outbox-delivery-store.js";
 import { hashCanonicalInput } from "../../src/infrastructure/crypto/canonical-input-hash.js";
 import { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
 import { SqliteDurableCommandStore } from "../../src/infrastructure/database/durable-command-repository.js";

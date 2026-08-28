@@ -1,4 +1,4 @@
-import type { ProductEventRecord } from "../outbox/product-event-contracts.js";
+import type { ProductEventRecord } from "../../../application/outbox/product-event-contracts.js";
 
 export interface ProductEventStore {
 	findByIdempotencyKey(idempotencyKey: string): Promise<ProductEventRecord | undefined>;

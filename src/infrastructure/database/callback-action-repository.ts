@@ -1,8 +1,8 @@
 import type {
 	CallbackActionRecord,
 	CallbackActionStore,
-} from "../../application/ports/callback-action-store.js";
-import { CallbackActionStoreCorruptError as CorruptError } from "../../application/ports/callback-action-store.js";
+} from "../../shared/application/ports/callback-action-store.js";
+import { CallbackActionStoreCorruptError as CorruptError } from "../../shared/application/ports/callback-action-store.js";
 import type { DatabaseBoundary } from "./database-boundary.js";
 
 interface ActionRow {
