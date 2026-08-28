@@ -1,8 +1,8 @@
 # Collaboration Bot — solo-launch implementation plan
 
 - Статус документа: `Approved execution registry`
-- Версия: `0.9`
-- Дата: `2026-08-27`
+- Версия: `1.0`
+- Дата: `2026-08-28`
 - Цель: как можно быстрее получить работающий Telegram-цикл для ручного распространения
 - Ограничение: один stage за пользовательскую авторизацию, один локальный commit на unit, без push/PR/deploy
 
@@ -43,6 +43,7 @@
 | FUT — Telegram audience snapshot | `completed` | 1 | Best-effort снимок аудитории Telegram после сохранения профиля |
 | R1 — Post-launch maintainability | `completed` | 14 | Те же пользовательские контракты с feature-owned кодом и проверяемыми границами |
 | R2 — Complete feature-first layout | `completed` | 31 | Активные feature implementations принадлежат пяти модулям; shared cross-feature/platform code отделён, legacy paths отсутствуют |
+| R3 — Honest top-level ownership | `in_progress` | 14 | Корень `src` отражает реальные owners: modules, shared kernel, platform adapters и runtime composition |
 
 ```text
 P0-01 → P0-02
@@ -61,6 +62,8 @@ P0-01 → P0-02
   → R2-11A → R2-11B → R2-11C → R2-12
   → R2-13A → R2-13B → R2-13C → R2-13D → R2-13E → R2-13F
   → R2-14A → R2-14B → R2-14C → R2-14D → R2-14E → R2-15
+  → R3-00 → R3-01 → R3-02A → R3-02B → R3-02C → R3-03 → R3-04
+  → R3-05A → R3-05B → R3-05C → R3-06 → R3-07A → R3-07B → R3-08
 ```
 
 ## 4. Завершённый ledger
@@ -135,6 +138,7 @@ P0-01 → P0-02
 | R2-14C | `c349454d191cf78ecf3bfde2efa82b07a32c9636` | test-support FakeClock facade and first consumer cohort |
 | R2-14D | `e1f3ae7f0f1c500d6c0371bfc0f5b99044235551` | second FakeClock consumer cohort |
 | R2-14E | `ccdc3a6c57e2464b6543e22ef90a3d22c9bc2bce` | removed final test-only production path |
+| R2-15 | `6a4a6f142c7cd95a4c81f473af2ca7ec135a935f` | closed and documented the feature-first transition |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -1157,6 +1161,180 @@ P0-01 → P0-02
 - **Completion evidence:** Commit SHA: `SELF`; синхронизированы README и TD 0.7 с фактическими пятью feature modules, двумя допустимыми public surfaces (`index.ts` и узкий `application/index.ts`), cross-feature Telegram orchestration, applications/moderation transaction ownership, raw-SQL решением, реальным startup/shutdown и test-support ownership. Ledger дополнен R2-14E и исправлен по authoritative Task-ID commits. Безопасно удалён только ignored/untracked/non-symlink generated `dist`, после чего fresh build содержит 460 файлов вместо 700 stale artifacts; exact scans не находят `src/bot`, legacy feature paths/imports, empty `src` directories, test-only production adapters, source-to-test edges, shared-to-feature edges или runtime deep feature imports. R2 pre-closure range содержит 30 уникальных Task-ID commits и 107 changed paths; PRD, migrations, package и lock contracts не менялись. `pnpm check` PASS (architecture 127 modules/415 dependencies, 69 unit, 88 integration, 47 runtime, lint/typecheck/build); `pnpm test:e2e:fake` PASS (33); `pnpm db:verify` PASS; `git diff --check` PASS. Единственный независимый blocker-limited review полного candidate: PASS — нет credential/private-contact exposure, authoritative-data corruption, duplicated business/Telegram effects, broken core journey или unrunnable candidate. Real Telegram, credentials, production, remote, push, PR и deploy не затрагивались.
 - **Stop conditions:** confirmed blocker, non-green aggregate gate or incomplete physical transition.
 
+### R3 — Honest top-level ownership
+
+R3 завершает не feature ownership, уже закрытый в R2, а честное именование оставшихся общих owners. Целевая структура:
+
+```text
+src/
+  modules/                    five business verticals
+  shared/
+    domain/                   framework-free shared vocabulary
+    application/              shared use-case contracts, ports and policies
+  platform/
+    database/                 shared SQLite adapters and migrations boundary
+    telegram/                 grammY transport adapter
+    crypto/                   hashing, codecs and token implementations
+    logging/                  safe process logging
+    time/                     system clock and provider deadline adapter
+    outbox/                   SQLite delivery and product-event adapters
+  runtime/
+    telegram/                 cross-feature Telegram ingress and routing
+    composition/              process object graph
+    lifecycle/                worker and shutdown lifecycle
+    bootstrap/                env/private-path startup preparation
+  config/                     pure configuration parsing
+  cli/                        executable entrypoints
+```
+
+`shared/application` — не импровизированный framework layer: это внутреннее framework-free ядро, которое определяет порты, а `platform` их реализует. NestJS/DI container, ORM и новые зависимости не входят в R3; composition roots остаются явными TypeScript factories. Поведение, SQL, migrations, Telegram copy/callback bytes и public feature APIs не меняются.
+
+#### R3-00 — Define honest top-level ownership
+
+- **Status:** `completed`
+- **Objective:** Зафиксировать полный target и исполняемую последовательность перехода до начала path mutations.
+- **Dependencies:** `R2-15`.
+- **Read first:** фактическое дерево/import graph, README Code organization, TD architecture/runtime sections, dependency-cruiser rules.
+- **Scope:** только этот registry: target tree, ownership/dependency decisions, bounded units, verification and stop conditions.
+- **Do not touch:** source, tests, migrations, dependencies, product policy or runtime behavior.
+- **Invariants:** `shared` points inward and is framework-free; `platform` implements shared/module ports; `runtime` is the only global composition shell; no NestJS or compatibility tree is introduced.
+- **Verification:** Node/pnpm contract; clean preflight; `pnpm architecture`; `git diff --check`; documentation-only diff.
+- **Exit criteria:** decision-complete R3 registry; one commit `R3-00: define honest top-level ownership`.
+- **Completion evidence:** Commit SHA: `SELF`; preflight confirmed clean `main` at unique `R2-15` `6a4a6f142c7cd95a4c81f473af2ca7ec135a935f`, Node `v24.18.0` and pnpm `11.15.1`. Registry-only diff defines the exact `modules/shared/platform/runtime/config/cli` target, inward shared-kernel dependency direction, platform adapters, global runtime shell and fourteen bounded sequential units. `pnpm architecture` PASS (127 modules, 415 dependencies); `git diff --check` PASS; only this plan changed. No source, test, migration, dependency, credential, real Telegram, production or remote mutation.
+- **Stop conditions:** target requires a product-policy, schema, behavior or dependency change.
+
+#### R3-01 — Move shared domain vocabulary
+
+- **Status:** `in_progress`
+- **Objective:** Move the only cross-feature domain vocabulary to `shared/domain`.
+- **Dependencies:** `R3-00`.
+- **Scope:** move `domain/value-objects/enums.ts`, switch exact consumers, delete empty root `domain`.
+- **Do not touch:** enum values, validation, feature-owned domain or behavior.
+- **Verification:** exact old-path scan; domain/unit tests; typecheck; architecture.
+- **Exit criteria:** no `src/domain`; one commit `R3-01: move shared domain vocabulary`.
+
+#### R3-02A — Move shared core application ports
+
+- **Status:** `pending`
+- **Objective:** Establish `shared/application/ports` with framework-free core contracts.
+- **Dependencies:** `R3-01`.
+- **Scope:** clock, transaction, provider-deadline, claim-token, ingress-crypto and wizard-admission ports plus exact consumers.
+- **Do not touch:** implementations, signatures or policy.
+- **Verification:** exact old-path scan; focused primitive/ingress tests; typecheck; architecture.
+- **Exit criteria:** core port imports use `shared`; one commit `R3-02A: move shared core application ports`.
+
+#### R3-02B — Move shared durable-effect ports
+
+- **Status:** `pending`
+- **Objective:** Move durable command/outbox/event store contracts under the shared application kernel.
+- **Dependencies:** `R3-02A`.
+- **Scope:** callback-action, durable-command, outbox-delivery and product-event store ports plus consumers.
+- **Do not touch:** durable semantics, claim state or delivery policy.
+- **Verification:** focused durable/outbox tests; typecheck; architecture; old-path scan.
+- **Exit criteria:** durable store ports have one shared owner; one commit `R3-02B: move shared durable effect ports`.
+
+#### R3-02C — Move shared Telegram ports
+
+- **Status:** `pending`
+- **Objective:** Move provider-neutral Telegram transport/user contracts under shared application.
+- **Dependencies:** `R3-02B`.
+- **Scope:** Telegram transport, lookup and writer ports plus consumers.
+- **Do not touch:** grammY adapters, delivery results or user snapshot behavior.
+- **Verification:** focused Telegram/delivery tests; typecheck; architecture; old-path scan.
+- **Exit criteria:** no Telegram port remains in root application; one commit `R3-02C: move shared Telegram ports`.
+
+#### R3-03 — Move shared command policies
+
+- **Status:** `pending`
+- **Objective:** Move command execution, canonical input and safe-result policies under shared application.
+- **Dependencies:** `R3-02C`.
+- **Scope:** root `application/commands` and all exact imports.
+- **Do not touch:** canonical bytes, receipts, replay, validation or result shapes.
+- **Verification:** command/ingress focused tests; typecheck; architecture; old-path scan.
+- **Exit criteria:** command policies have one shared owner; one commit `R3-03: move shared command policies`.
+
+#### R3-04 — Move shared outbox policies
+
+- **Status:** `pending`
+- **Objective:** Complete shared application ownership and remove root `application`.
+- **Dependencies:** `R3-03`.
+- **Scope:** outbox payload/runner/service and product-event contracts/service plus consumers; remove empty root `application`.
+- **Do not touch:** semantic keys, retry/ambiguity behavior, payload bytes or event contracts.
+- **Verification:** focused outbox/delivery tests; typecheck; architecture; exact root scan.
+- **Exit criteria:** no `src/application`; one commit `R3-04: complete shared application ownership`.
+
+#### R3-05A — Move platform primitives
+
+- **Status:** `pending`
+- **Objective:** Rename shared technical implementations from generic infrastructure to capability-oriented platform owners.
+- **Dependencies:** `R3-04`.
+- **Scope:** crypto, logging, Telegram transport and time adapters under `platform`; switch consumers.
+- **Do not touch:** crypto/token formats, logging redaction, provider deadlines or grammY behavior.
+- **Verification:** primitive/transport tests; typecheck; architecture; old-path scan.
+- **Exit criteria:** four platform capabilities use target paths; one commit `R3-05A: move platform primitives`.
+
+#### R3-05B — Move shared database adapters
+
+- **Status:** `pending`
+- **Objective:** Move the shared SQLite boundary and non-outbox repositories to `platform/database`.
+- **Dependencies:** `R3-05A`.
+- **Scope:** database boundary, migrations, transaction runner, ingress/durable/user/wizard repositories and exact consumers.
+- **Do not touch:** SQL, migration files/checksums, transaction boundaries or persistence behavior.
+- **Verification:** database/ingress focused tests; `pnpm db:verify`; typecheck; architecture; old-path scan.
+- **Exit criteria:** shared database adapters use platform owner; one commit `R3-05B: move shared database adapters`.
+
+#### R3-05C — Establish platform outbox adapters
+
+- **Status:** `pending`
+- **Objective:** Give durable delivery/event SQLite adapters an explicit platform capability owner and remove root infrastructure.
+- **Dependencies:** `R3-05B`.
+- **Scope:** move outbox delivery and product-event repositories to `platform/outbox`, switch consumers, remove empty `src/infrastructure`.
+- **Do not touch:** repository SQL, claim fencing, statuses or history semantics.
+- **Verification:** outbox/event integration tests; `pnpm db:verify`; typecheck; architecture; exact root scan.
+- **Exit criteria:** no `src/infrastructure`; one commit `R3-05C: establish platform outbox adapters`.
+
+#### R3-06 — Move the global Telegram shell
+
+- **Status:** `pending`
+- **Objective:** Make cross-feature Telegram ingress/routing explicit runtime adapters rather than a misleading root presentation layer.
+- **Dependencies:** `R3-05C`.
+- **Scope:** move the three root Telegram files to `runtime/telegram`, switch consumers, remove `src/presentation`.
+- **Do not touch:** route order, callback acknowledgement, durable envelopes, reply buffering or feature presentation.
+- **Verification:** ingress/router/runtime focused tests; typecheck; architecture; old-path scan.
+- **Exit criteria:** no root presentation tree; one commit `R3-06: move global Telegram shell`.
+
+#### R3-07A — Group runtime bootstrap and lifecycle
+
+- **Status:** `pending`
+- **Objective:** Replace the flat runtime bag with explicit startup and lifecycle owners.
+- **Dependencies:** `R3-06`.
+- **Scope:** move bootstrap/env/private-path files under `runtime/bootstrap` and lifecycle/worker/process files under `runtime/lifecycle`; switch consumers.
+- **Do not touch:** startup order, signal semantics, drain/worker timing or filesystem policy.
+- **Verification:** runtime/bootstrap/lifecycle tests; typecheck; architecture; old-path scan.
+- **Exit criteria:** bootstrap/lifecycle owners are explicit; one commit `R3-07A: group runtime bootstrap and lifecycle`.
+
+#### R3-07B — Group runtime composition
+
+- **Status:** `pending`
+- **Objective:** Put object-graph construction under `runtime/composition` while retaining one narrow runtime facade for CLI/tests.
+- **Dependencies:** `R3-07A`.
+- **Scope:** move bot application and showcase preflight to composition; adjust bot runtime/CLI imports and public facade deliberately.
+- **Do not touch:** feature factories, database ownership, startup/preflight order or runtime API behavior.
+- **Verification:** composition/runtime/fake E2E; typecheck; architecture; flat-runtime audit.
+- **Exit criteria:** runtime tree matches the target and no compatibility implementation remains; one commit `R3-07B: group runtime composition`.
+
+#### R3-08 — Enforce and document the completed tree
+
+- **Status:** `pending`
+- **Objective:** Make the target executable, synchronize docs and close R3 on complete evidence.
+- **Dependencies:** `R3-07B`.
+- **Scope:** rewrite architecture rules for `shared/platform/runtime`, update README and TD, authoritative ledger, exact tree/import audit and one blocker-limited critical review.
+- **Do not touch:** product behavior, migrations, dependencies, real Telegram, production or remote.
+- **Invariants:** top-level source directories are exactly `modules`, `shared`, `platform`, `runtime`, `config`, `cli`; modules use only public cross-feature surfaces; shared imports neither platform nor runtime; platform imports neither modules nor runtime; no source imports tests.
+- **Verification:** `pnpm architecture`; `pnpm check`; `pnpm test:e2e:fake`; `pnpm db:verify`; exact old-root/empty-dir/dependency scans; `git diff --check`.
+- **Exit criteria:** R3 completed and documented; one commit `R3-08: close top-level ownership transition`.
+- **Stop conditions:** any behavior/schema/dependency change, non-green aggregate gate or unresolved blocker.
+
 ## 7. Git и evidence
 
 Перед каждым unit: branch/HEAD/status/remote, predecessor Task-ID, Node/pnpm contract и complete card review. Перед commit: exact diff, focused checks, applicable aggregate gate, secret scan и evidence.
@@ -1177,4 +1355,4 @@ Push, remote, PR, merge, deploy, credentials и real Telegram не следую�
 - **Manual first launch:** `S4`, отдельно авторизованный `LAC-12` и exact bot/channel checkpoint пройдены; ссылку можно отправлять людям.
 - **Production ready / 24/7 / scalable:** не является целью этого плана и не заявляется.
 
-После `R2-15` в реестре нет следующего авторизованного pending unit. Новая работа начинается только с отдельной decision-complete карточки и пользовательской авторизации.
+После `R3-08` в реестре нет следующего авторизованного pending unit. Новая работа начинается только с отдельной decision-complete карточки и пользовательской авторизации.
