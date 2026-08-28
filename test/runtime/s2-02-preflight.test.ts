@@ -7,7 +7,7 @@ import { Bot } from "grammy";
 import type { UserFromGetMe } from "grammy/types";
 
 import { createBotRuntime } from "../../src/runtime/bot-runtime.js";
-import { preflightShowcase } from "../../src/runtime/showcase-preflight.js";
+import { preflightShowcase } from "../../src/runtime/composition/showcase-preflight.js";
 import { FakeTelegramApi } from "../support/fake-telegram-api.js";
 import { SqliteOutboxDeliveryRepository } from "../../src/platform/outbox/outbox-delivery-repository.js";
 import type { OutboxDeliveryRecord } from "../../src/shared/application/ports/outbox-delivery-store.js";

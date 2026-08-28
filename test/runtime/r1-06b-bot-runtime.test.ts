@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { Bot } from "grammy";
 import type { UserFromGetMe } from "grammy/types";
 
-import { composeBotApplication } from "../../src/runtime/bot-application.js";
+import { composeBotApplication } from "../../src/runtime/composition/bot-application.js";
 import {
 	createBotRuntimeLifecycle,
 	type BotRuntimeLifecycleOperations,

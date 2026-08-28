@@ -1326,17 +1326,18 @@ src/
 
 #### R3-07B — Group runtime composition
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Put object-graph construction under `runtime/composition` while retaining one narrow runtime facade for CLI/tests.
 - **Dependencies:** `R3-07A`.
 - **Scope:** move bot application and showcase preflight to composition; adjust bot runtime/CLI imports and public facade deliberately.
 - **Do not touch:** feature factories, database ownership, startup/preflight order or runtime API behavior.
 - **Verification:** composition/runtime/fake E2E; typecheck; architecture; flat-runtime audit.
 - **Exit criteria:** runtime tree matches the target and no compatibility implementation remains; one commit `R3-07B: group runtime composition`.
+- **Completion evidence:** Commit SHA: `SELF`; moved the real object graph and showcase preflight to `runtime/composition`, switched bootstrap, facade and direct tests, and retained only `runtime/bot-runtime.ts` as the deliberate narrow compatibility/public facade used by established consumers. Composition imports all five modules through their public roots; startup order and factories are unchanged. Typecheck PASS; architecture PASS (127 modules, 415 dependencies); focused composition/preflight/bootstrap/fake tests PASS (4 files, 17 tests); flat-runtime audit and `git diff --check` PASS. No behavior, schema, dependency, credential, real Telegram, production or remote mutation.
 
 #### R3-08 — Enforce and document the completed tree
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Make the target executable, synchronize docs and close R3 on complete evidence.
 - **Dependencies:** `R3-07B`.
 - **Scope:** rewrite architecture rules for `shared/platform/runtime`, update README and TD, authoritative ledger, exact tree/import audit and one blocker-limited critical review.

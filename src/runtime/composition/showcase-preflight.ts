@@ -1,6 +1,6 @@
 import type { Bot } from "grammy";
-import type { AppConfig } from "../config/parse-config.js";
-import type { ShowcaseCapability } from "../modules/collaborations/index.js";
+import type { AppConfig } from "../../config/parse-config.js";
+import type { ShowcaseCapability } from "../../modules/collaborations/index.js";
 
 export async function preflightShowcase(bot: Bot, config: Pick<AppConfig, "showcaseChannelId" | "showcaseChannelUsername">): Promise<ShowcaseCapability> {
 	try {
