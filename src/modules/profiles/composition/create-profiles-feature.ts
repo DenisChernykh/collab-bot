@@ -3,7 +3,8 @@ import type { Bot } from "grammy";
 import type { Clock } from "../../../shared/application/ports/clock.js";
 import type { ProviderDeadline } from "../../../shared/application/ports/provider-deadline.js";
 import type { TransactionRunner } from "../../../shared/application/ports/transaction-runner.js";
-import type { DatabaseBoundary } from "../../../platform/database/database-boundary.js";
+import { resolveSqlDatabase, type SqlDatabaseInput } from "../../../platform/database/node-sql-database.js";
+import type { SqlDatabase } from "../../../shared/application/ports/sql-database.js";
 import type { ProfileSessionRepository } from "../application/ports/profile-session-repository.js";
 import { ProfileAudienceService } from "../application/profile-audience-service.js";
 import { ProfileService } from "../application/profile-service.js";
@@ -18,7 +19,8 @@ export interface ProfilesFeature {
 }
 
 export interface CreateProfilesFeatureOptions {
-	readonly boundary: DatabaseBoundary;
+	readonly boundary?: SqlDatabaseInput;
+	readonly database?: SqlDatabase;
 	readonly transactions: TransactionRunner;
 	readonly clock: Clock;
 	readonly deadline: ProviderDeadline;
@@ -26,7 +28,9 @@ export interface CreateProfilesFeatureOptions {
 }
 
 export function createProfilesFeature(options: CreateProfilesFeatureOptions): ProfilesFeature {
-	const repository = new SqliteProfileRepository(options.boundary);
+	const database = options.database ?? (options.boundary === undefined ? undefined : resolveSqlDatabase(options.boundary));
+	if (database === undefined) throw new Error("profiles feature requires a SQL database");
+	const repository = new SqliteProfileRepository(database);
 	return {
 		api: new ProfileService(repository, options.transactions, options.clock),
 		audience: new ProfileAudienceService(
@@ -36,6 +40,6 @@ export function createProfilesFeature(options: CreateProfilesFeatureOptions): Pr
 			options.clock,
 			options.deadline,
 		),
-		sessions: new SqliteProfileSessionRepository(options.boundary),
+		sessions: new SqliteProfileSessionRepository(database),
 	};
 }

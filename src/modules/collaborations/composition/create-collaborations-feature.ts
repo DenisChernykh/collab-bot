@@ -3,7 +3,8 @@ import type { CryptoCapabilities } from "../../../shared/application/ports/crypt
 import { webCryptoCapabilities } from "../../../platform/crypto/capabilities.js";
 import type { OutboxDeliveryStore } from "../../../shared/application/ports/outbox-delivery-store.js";
 import type { TransactionRunner } from "../../../shared/application/ports/transaction-runner.js";
-import type { DatabaseBoundary } from "../../../platform/database/database-boundary.js";
+import { resolveSqlDatabase, type SqlDatabaseInput } from "../../../platform/database/node-sql-database.js";
+import type { SqlDatabase } from "../../../shared/application/ports/sql-database.js";
 import { SqliteWizardAdmission } from "../../../platform/database/wizard-admission.js";
 import type { ProfileSessionRepository } from "../../profiles/application/index.js";
 import { CollaborationDraftService } from "../application/collaboration-draft-service.js";
@@ -21,7 +22,8 @@ export interface CollaborationsFeature {
 }
 
 export interface CreateCollaborationsFeatureOptions {
-	readonly boundary: DatabaseBoundary;
+	readonly boundary?: SqlDatabaseInput;
+	readonly database?: SqlDatabase;
 	readonly transactions: TransactionRunner;
 	readonly clock: Clock;
 	readonly crypto?: CryptoCapabilities;
@@ -33,10 +35,12 @@ export interface CreateCollaborationsFeatureOptions {
 }
 
 export function createCollaborationsFeature(options: CreateCollaborationsFeatureOptions): CollaborationsFeature {
-	const repository = new SqliteCollaborationRepository(options.boundary);
+	const database = options.database ?? (options.boundary === undefined ? undefined : resolveSqlDatabase(options.boundary));
+	if (database === undefined) throw new Error("collaborations feature requires a SQL database");
+	const repository = new SqliteCollaborationRepository(database);
 	const sessions = new SqliteCollaborationSessionRepository(
-		options.boundary,
-		new SqliteWizardAdmission(options.boundary),
+		database,
+		new SqliteWizardAdmission(database),
 	);
 	return {
 		draft: new CollaborationDraftService(
@@ -49,7 +53,7 @@ export function createCollaborationsFeature(options: CreateCollaborationsFeature
 		),
 		publication: new CollaborationPublicationService(
 			repository,
-			new SqliteCollaborationPublicationRepository(options.boundary),
+			new SqliteCollaborationPublicationRepository(database),
 			sessions,
 			options.outboxStore,
 			options.transactions,

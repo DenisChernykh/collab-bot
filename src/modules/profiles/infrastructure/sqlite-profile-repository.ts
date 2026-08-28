@@ -13,7 +13,8 @@ import {
 	parseTopic,
 	type Topic,
 } from "../../../shared/domain/value-objects/enums.js";
-import type { DatabaseBoundary } from "../../../platform/database/database-boundary.js";
+import { resolveSqlDatabase, type SqlDatabaseInput } from "../../../platform/database/node-sql-database.js";
+import type { SqlDatabase } from "../../../shared/application/ports/sql-database.js";
 
 interface ProfileRow {
 	id?: unknown;
@@ -43,10 +44,14 @@ interface TopicRow {
 }
 
 export class SqliteProfileRepository implements ProfileRepository, ProfileAudienceWriter {
-	constructor(private readonly boundary: DatabaseBoundary) {}
+	private readonly database: SqlDatabase;
+
+	constructor(source: SqlDatabaseInput) {
+		this.database = resolveSqlDatabase(source);
+	}
 
 	async findActiveByTelegramUserId(telegramUserId: string): Promise<ProfileRecord | undefined> {
-		const rows = await this.boundary.query<ProfileRow>(
+		const rows = await this.database.query<ProfileRow>(
 			"SELECT id, telegram_user_id, type, display_name, description, city_code, status, created_at, updated_at FROM profiles WHERE telegram_user_id = ? AND status = 'active'",
 			[telegramUserId],
 		);
@@ -55,7 +60,7 @@ export class SqliteProfileRepository implements ProfileRepository, ProfileAudien
 	}
 
 	async findPublicById(profileId: string): Promise<PublicProfileRecord | undefined> {
-		const rows = await this.boundary.query<ProfileRow>(
+		const rows = await this.database.query<ProfileRow>(
 			"SELECT id, telegram_user_id, type, display_name, description, city_code, status, created_at, updated_at FROM profiles WHERE id = ? AND status = 'active'",
 			[profileId],
 		);
@@ -67,7 +72,7 @@ export class SqliteProfileRepository implements ProfileRepository, ProfileAudien
 
 	async create(telegramUserId: string, input: ProfileInput, now: number): Promise<ProfileRecord> {
 		const id = generateUuid();
-		await this.boundary.execute(
+		await this.database.execute(
 			"INSERT INTO profiles (id, telegram_user_id, type, display_name, description, city_code, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?)",
 			[id, telegramUserId, input.type, input.displayName, input.description, "ekaterinburg", now, now],
 		);
@@ -80,7 +85,7 @@ export class SqliteProfileRepository implements ProfileRepository, ProfileAudien
 	async update(telegramUserId: string, input: ProfileInput, now: number): Promise<ProfileRecord> {
 		const existing = await this.findActiveByTelegramUserId(telegramUserId);
 		if (existing === undefined) throw new Error("active profile could not be reloaded");
-		await this.boundary.execute(
+		await this.database.execute(
 			"UPDATE profiles SET type = ?, display_name = ?, description = ?, city_code = ?, updated_at = ? WHERE id = ? AND status = 'active'",
 			[input.type, input.displayName, input.description, "ekaterinburg", now, existing.id],
 		);
@@ -96,13 +101,13 @@ export class SqliteProfileRepository implements ProfileRepository, ProfileAudien
 		readonly audienceSize: number;
 		readonly observedAt: number;
 	}): Promise<boolean> {
-		const result = await this.boundary.execute(
+		const result = await this.database.execute(
 			"UPDATE profile_platforms SET audience_size = ?, audience_source = 'telegram_api', audience_observed_at = ? WHERE id = ? AND profile_id = ? AND platform_type = 'telegram' AND audience_size IS NULL",
 			[input.audienceSize, input.observedAt, input.platformId, input.profileId],
 		) as { changes?: number };
 		if (result.changes === 0) return false;
 		if (result.changes !== 1) throw new Error("profile audience conditional write affected an unexpected row count");
-		const profileResult = await this.boundary.execute(
+		const profileResult = await this.database.execute(
 			"UPDATE profiles SET updated_at = max(updated_at, ?) WHERE id = ?",
 			[input.observedAt, input.profileId],
 		) as { changes?: number };
@@ -111,8 +116,8 @@ export class SqliteProfileRepository implements ProfileRepository, ProfileAudien
 	}
 
 	private async replaceChildren(profileId: string, input: ProfileInput, observedAt: number): Promise<void> {
-		await this.boundary.execute("DELETE FROM profile_platforms WHERE profile_id = ?", [profileId]);
-		await this.boundary.execute("DELETE FROM profile_topics WHERE profile_id = ?", [profileId]);
+		await this.database.execute("DELETE FROM profile_platforms WHERE profile_id = ?", [profileId]);
+		await this.database.execute("DELETE FROM profile_topics WHERE profile_id = ?", [profileId]);
 		const provenanceColumnsAvailable = await this.hasAudienceProvenanceColumns();
 		for (const platform of input.platforms) {
 			const baseParameters = [
@@ -120,7 +125,7 @@ export class SqliteProfileRepository implements ProfileRepository, ProfileAudien
 				platform.username ?? null, platform.telegramChatId ?? null, platform.audienceSize ?? null,
 			] as const;
 			if (provenanceColumnsAvailable) {
-				await this.boundary.execute(
+				await this.database.execute(
 					"INSERT INTO profile_platforms (id, profile_id, platform_type, url, title, username, telegram_chat_id, audience_size, audience_source, audience_observed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 					[
 						...baseParameters,
@@ -129,14 +134,14 @@ export class SqliteProfileRepository implements ProfileRepository, ProfileAudien
 					],
 				);
 			} else {
-				await this.boundary.execute(
+				await this.database.execute(
 					"INSERT INTO profile_platforms (id, profile_id, platform_type, url, title, username, telegram_chat_id, audience_size) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
 					baseParameters,
 				);
 			}
 		}
 		for (const topic of input.topics) {
-			await this.boundary.execute(
+			await this.database.execute(
 				"INSERT INTO profile_topics (profile_id, topic) VALUES (?, ?)",
 				[profileId, topic],
 			);
@@ -144,16 +149,16 @@ export class SqliteProfileRepository implements ProfileRepository, ProfileAudien
 	}
 
 	private async hasAudienceProvenanceColumns(): Promise<boolean> {
-		const columns = await this.boundary.query<{ name?: unknown }>("PRAGMA table_info(profile_platforms)");
+		const columns = await this.database.query<{ name?: unknown }>("PRAGMA table_info(profile_platforms)");
 		return columns.some((column) => column.name === "audience_source") && columns.some((column) => column.name === "audience_observed_at");
 	}
 
 	private async readChildren(profileId: string): Promise<{ platforms: readonly ProfilePlatformRecord[]; topics: readonly Topic[] }> {
-		const platformRows = await this.boundary.query<PlatformRow>(
+		const platformRows = await this.database.query<PlatformRow>(
 			"SELECT id, profile_id, platform_type, url, title, username, telegram_chat_id, audience_size FROM profile_platforms WHERE profile_id = ? ORDER BY id",
 			[profileId],
 		);
-		const topicRows = await this.boundary.query<TopicRow>(
+		const topicRows = await this.database.query<TopicRow>(
 			"SELECT topic FROM profile_topics WHERE profile_id = ? ORDER BY topic",
 			[profileId],
 		);

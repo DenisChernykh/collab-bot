@@ -1504,7 +1504,7 @@ Free-only является stop condition: никакой unit не включа
 
 #### CF1-04A — Decouple profile and collaboration persistence
 
-- **Status:** `pending`
+- **Status:** `completed`
 - **Objective:** Move profiles and collaborations repositories/factories from the concrete Node boundary to the portable SQL contract.
 - **Dependencies:** `CF1-03`.
 - **Scope:** profile/collaboration repository constructor types, feature factory wiring and shared repositories directly required by these flows.
@@ -1512,6 +1512,7 @@ Free-only является stop condition: никакой unit не включа
 - **Tests first:** existing profile/collaboration integration and composition suites are the characterization gate.
 - **Verification:** focused profile/collaboration suites, architecture, typecheck and concrete-boundary import scan.
 - **Exit criteria:** profile/collaboration object graphs receive any `SqlDatabase`; one commit `CF1-04A: decouple profile and collaboration persistence`.
+- **Evidence:** Commit SHA: `SELF`. Profile and collaboration SQLite repositories now keep a `SqlDatabase` internally for every query, execute and transaction while preserving their existing SQL text, ordering, validators and transaction boundaries. `SqliteWizardAdmission` is portable on the same contract. Feature factories accept a `SqlDatabase` directly and retain a narrow `DatabaseBoundary` compatibility input only for existing Node-owned test composition; the Node runtime now constructs one `NodeSqlDatabase` and passes it to both feature graphs. Existing direct Node test constructors resolve through the adapter without changing public feature APIs. Ten source files plus this plan changed (within the 12-file cap). Focused profile/collaboration persistence/composition suite passed (7 files, 23 tests); `pnpm typecheck`, `pnpm architecture` (133 modules/437 dependencies) and `git diff --check` passed. No applications/marketplace/moderation repository, SQL, row validator or product behavior changed; no credentials, remote resources, Telegram or production actions touched.
 
 #### CF1-04B — Decouple remaining feature persistence
 

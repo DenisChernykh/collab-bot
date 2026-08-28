@@ -10,7 +10,8 @@ import {
 	type CollaborationDraftInput,
 	type CollaborationRecord,
 } from "../domain/collaboration.js";
-import type { DatabaseBoundary } from "../../../platform/database/database-boundary.js";
+import { resolveSqlDatabase, type SqlDatabaseInput } from "../../../platform/database/node-sql-database.js";
+import type { SqlDatabase } from "../../../shared/application/ports/sql-database.js";
 
 interface CollaborationRow {
 	id?: unknown;
@@ -43,36 +44,40 @@ export class CollaborationRepositoryError extends Error {
 }
 
 export class SqliteCollaborationRepository implements CollaborationRepository {
-	constructor(private readonly boundary: DatabaseBoundary) {}
+	private readonly database: SqlDatabase;
+
+	constructor(source: SqlDatabaseInput) {
+		this.database = resolveSqlDatabase(source);
+	}
 
 	async findDraftByTelegramUserId(telegramUserId: string): Promise<CollaborationRecord | undefined> {
-		const rows = await this.boundary.query<CollaborationRow>(this.selectSql("c.status = 'draft' AND p.telegram_user_id = ?"), [telegramUserId]);
+		const rows = await this.database.query<CollaborationRow>(this.selectSql("c.status = 'draft' AND p.telegram_user_id = ?"), [telegramUserId]);
 		return rows[0] === undefined ? undefined : this.readAggregate(rows[0]);
 	}
 
 	async findDraftByIdForTelegramUser(telegramUserId: string, collaborationId: string): Promise<CollaborationRecord | undefined> {
-		const rows = await this.boundary.query<CollaborationRow>(this.selectSql("c.status = 'draft' AND c.id = ? AND p.telegram_user_id = ?"), [collaborationId, telegramUserId]);
+		const rows = await this.database.query<CollaborationRow>(this.selectSql("c.status = 'draft' AND c.id = ? AND p.telegram_user_id = ?"), [collaborationId, telegramUserId]);
 		return rows[0] === undefined ? undefined : this.readAggregate(rows[0]);
 	}
 
 	async findByIdForTelegramUser(telegramUserId: string, collaborationId: string): Promise<CollaborationRecord | undefined> {
-		const rows = await this.boundary.query<CollaborationRow>(this.selectSql("c.id = ? AND p.telegram_user_id = ?"), [collaborationId, telegramUserId]);
+		const rows = await this.database.query<CollaborationRow>(this.selectSql("c.id = ? AND p.telegram_user_id = ?"), [collaborationId, telegramUserId]);
 		return rows[0] === undefined ? undefined : this.readAggregate(rows[0]);
 	}
 
 	async findById(collaborationId: string): Promise<CollaborationRecord | undefined> {
-		const rows = await this.boundary.query<CollaborationRow>(this.selectSql("c.id = ?"), [collaborationId]);
+		const rows = await this.database.query<CollaborationRow>(this.selectSql("c.id = ?"), [collaborationId]);
 		return rows[0] === undefined ? undefined : this.readAggregate(rows[0]);
 	}
 
 	async createDraft(telegramUserId: string, now: number): Promise<CollaborationRecord> {
-		return this.boundary.withTransaction(async () => {
-			const profileRows = await this.boundary.query<{ id?: unknown }>("SELECT id FROM profiles WHERE telegram_user_id = ? AND status = 'active'", [telegramUserId]);
+		return this.database.withTransaction(async () => {
+			const profileRows = await this.database.query<{ id?: unknown }>("SELECT id FROM profiles WHERE telegram_user_id = ? AND status = 'active'", [telegramUserId]);
 			const profileId = profileRows[0]?.id;
 			if (typeof profileId !== "string") throw new CollaborationRepositoryError("active profile is required");
 			const id = generateUuid();
 			try {
-				await this.boundary.execute(
+				await this.database.execute(
 					"INSERT INTO collaborations (id, public_token, author_profile_id, format, target_profile_type, title, offer_text, expectation_text, slots_total, response_deadline_at, event_date_local, city_code, status, version, projection_revision, created_at, updated_at) VALUES (?, NULL, ?, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'draft', 1, 0, ?, ?)",
 					[id, profileId, now, now],
 				);
@@ -87,11 +92,11 @@ export class SqliteCollaborationRepository implements CollaborationRepository {
 	}
 
 	async replaceDraft(telegramUserId: string, collaborationId: string, input: CollaborationDraftInput, now: number): Promise<CollaborationRecord> {
-		return this.boundary.withTransaction(async () => {
+		return this.database.withTransaction(async () => {
 			const existing = await this.findDraftByIdForTelegramUser(telegramUserId, collaborationId);
 			if (existing === undefined) throw new CollaborationRepositoryError("owned collaboration draft was not found");
 			const complete = input.format !== undefined && input.targetProfileType !== undefined && input.topics !== undefined && input.title !== undefined && input.offerText !== undefined && input.expectationText !== undefined && input.slotsTotal !== undefined && input.responseDeadlineAt !== undefined;
-			await this.boundary.execute(
+			await this.database.execute(
 				"UPDATE collaborations SET format = ?, target_profile_type = ?, title = ?, offer_text = ?, expectation_text = ?, slots_total = ?, response_deadline_at = ?, event_date_local = ?, city_code = ?, updated_at = ? WHERE id = ? AND status = 'draft' AND author_profile_id = (SELECT p.id FROM profiles p WHERE p.telegram_user_id = ? AND p.status = 'active')",
 				[
 					input.format ?? null,
@@ -108,8 +113,8 @@ export class SqliteCollaborationRepository implements CollaborationRepository {
 					telegramUserId,
 				],
 			);
-			await this.boundary.execute("DELETE FROM collaboration_topics WHERE collaboration_id = ?", [collaborationId]);
-			for (const topic of input.topics ?? []) await this.boundary.execute("INSERT INTO collaboration_topics (collaboration_id, topic) VALUES (?, ?)", [collaborationId, topic]);
+			await this.database.execute("DELETE FROM collaboration_topics WHERE collaboration_id = ?", [collaborationId]);
+			for (const topic of input.topics ?? []) await this.database.execute("INSERT INTO collaboration_topics (collaboration_id, topic) VALUES (?, ?)", [collaborationId, topic]);
 			const updated = await this.findDraftByIdForTelegramUser(telegramUserId, collaborationId);
 			if (updated === undefined) throw new CollaborationRepositoryError("updated collaboration draft could not be reloaded");
 			return updated;
@@ -117,8 +122,8 @@ export class SqliteCollaborationRepository implements CollaborationRepository {
 	}
 
 	async deleteDraft(telegramUserId: string, collaborationId: string): Promise<boolean> {
-		return this.boundary.withTransaction(async () => {
-			const result = await this.boundary.execute(
+		return this.database.withTransaction(async () => {
+			const result = await this.database.execute(
 				"DELETE FROM collaborations WHERE id = ? AND status = 'draft' AND author_profile_id = (SELECT p.id FROM profiles p WHERE p.telegram_user_id = ? AND p.status = 'active')",
 				[collaborationId, telegramUserId],
 			) as { changes?: number };
@@ -132,7 +137,7 @@ export class SqliteCollaborationRepository implements CollaborationRepository {
 
 	private async readAggregate(row: CollaborationRow): Promise<CollaborationRecord> {
 		const base = readBase(row);
-		const topicRows = await this.boundary.query<TopicRow>("SELECT topic FROM collaboration_topics WHERE collaboration_id = ? ORDER BY topic", [base.id]);
+		const topicRows = await this.database.query<TopicRow>("SELECT topic FROM collaboration_topics WHERE collaboration_id = ? ORDER BY topic", [base.id]);
 		return { ...base, topics: topicRows.map((topic) => parseTopic(topic.topic)) };
 	}
 }

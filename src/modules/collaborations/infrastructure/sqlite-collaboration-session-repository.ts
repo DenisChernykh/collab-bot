@@ -1,5 +1,6 @@
 import type { WizardAdmission } from "../../../shared/application/ports/wizard-admission.js";
-import type { DatabaseBoundary } from "../../../platform/database/database-boundary.js";
+import { resolveSqlDatabase, type SqlDatabaseInput } from "../../../platform/database/node-sql-database.js";
+import type { SqlDatabase } from "../../../shared/application/ports/sql-database.js";
 import { SqliteWizardAdmission } from "../../../platform/database/wizard-admission.js";
 import type { CollaborationSessionRepository, CollaborationSessionRecord } from "../application/ports/collaboration-session-repository.js";
 import type { CollaborationDraftState } from "../domain/collaboration.js";
@@ -14,13 +15,17 @@ interface SessionRow {
 }
 
 export class SqliteCollaborationSessionRepository implements CollaborationSessionRepository {
+	private readonly database: SqlDatabase;
+
 	constructor(
-		private readonly boundary: DatabaseBoundary,
-		private readonly admission: WizardAdmission = new SqliteWizardAdmission(boundary),
-	) {}
+		source: SqlDatabaseInput,
+		private readonly admission: WizardAdmission = new SqliteWizardAdmission(source),
+	) {
+		this.database = resolveSqlDatabase(source);
+	}
 
 	async findActive(telegramUserId: string, now: number): Promise<CollaborationSessionRecord | undefined> {
-		const rows = await this.boundary.query<SessionRow>(
+		const rows = await this.database.query<SessionRow>(
 			"SELECT telegram_user_id, collaboration_id, state_json, revision, expires_at, updated_at FROM collaboration_sessions WHERE telegram_user_id = ? AND expires_at > ?",
 			[telegramUserId, now],
 		);
@@ -38,9 +43,9 @@ export class SqliteCollaborationSessionRepository implements CollaborationSessio
 
 	async save(record: CollaborationSessionRecord): Promise<void> {
 		if (!isSessionRow({ telegram_user_id: record.telegramUserId, collaboration_id: record.collaborationId, state_json: JSON.stringify(record.state), revision: record.revision, expires_at: record.expiresAt, updated_at: record.updatedAt }, record.telegramUserId)) throw new Error("invalid collaboration session record");
-		await this.boundary.withTransaction(async () => {
+		await this.database.withTransaction(async () => {
 			await this.admission.assertAvailable("collaboration", record.telegramUserId, record.updatedAt);
-			await this.boundary.execute(
+			await this.database.execute(
 				`INSERT INTO collaboration_sessions (telegram_user_id, collaboration_id, flow_type, step, state_json, revision, expires_at, updated_at)
 				 VALUES (?, ?, 'collaboration', ?, ?, ?, ?, ?)
 				 ON CONFLICT(telegram_user_id) DO UPDATE SET collaboration_id = excluded.collaboration_id, flow_type = 'collaboration', step = excluded.step, state_json = excluded.state_json, revision = excluded.revision, expires_at = excluded.expires_at, updated_at = excluded.updated_at`,
@@ -50,7 +55,7 @@ export class SqliteCollaborationSessionRepository implements CollaborationSessio
 	}
 
 	async delete(telegramUserId: string): Promise<void> {
-		await this.boundary.execute("DELETE FROM collaboration_sessions WHERE telegram_user_id = ?", [telegramUserId]);
+		await this.database.execute("DELETE FROM collaboration_sessions WHERE telegram_user_id = ?", [telegramUserId]);
 	}
 }
 

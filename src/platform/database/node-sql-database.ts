@@ -1,6 +1,12 @@
 import type { SqlDatabase, SqlExecuteResult, SqlValue } from "../../shared/application/ports/sql-database.js";
 import { DatabaseBoundary } from "./database-boundary.js";
 
+export type SqlDatabaseInput = SqlDatabase | DatabaseBoundary;
+
+export function resolveSqlDatabase(input: SqlDatabaseInput): SqlDatabase {
+	return input instanceof DatabaseBoundary ? new NodeSqlDatabase(input) : input;
+}
+
 /** Runtime-neutral repository facade backed by the serialized node:sqlite boundary. */
 export class NodeSqlDatabase implements SqlDatabase {
 	constructor(private readonly boundary: DatabaseBoundary) {}

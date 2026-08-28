@@ -4,7 +4,8 @@ import type {
 	ProfileSessionState,
 } from "../application/ports/profile-session-repository.js";
 import type { WizardAdmission } from "../../../shared/application/ports/wizard-admission.js";
-import type { DatabaseBoundary } from "../../../platform/database/database-boundary.js";
+import { resolveSqlDatabase, type SqlDatabaseInput } from "../../../platform/database/node-sql-database.js";
+import type { SqlDatabase } from "../../../shared/application/ports/sql-database.js";
 import { SqliteWizardAdmission } from "../../../platform/database/wizard-admission.js";
 
 interface SessionRow {
@@ -16,13 +17,17 @@ interface SessionRow {
 }
 
 export class SqliteProfileSessionRepository implements ProfileSessionRepository {
+	private readonly database: SqlDatabase;
+
 	constructor(
-		private readonly boundary: DatabaseBoundary,
-		private readonly admission: WizardAdmission = new SqliteWizardAdmission(boundary),
-	) {}
+		source: SqlDatabaseInput,
+		private readonly admission: WizardAdmission = new SqliteWizardAdmission(source),
+	) {
+		this.database = resolveSqlDatabase(source);
+	}
 
 	async findActive(telegramUserId: string, now: number): Promise<ProfileSessionRecord | undefined> {
-		const rows = await this.boundary.query<SessionRow>(
+		const rows = await this.database.query<SessionRow>(
 			"SELECT telegram_user_id, state_json, revision, expires_at, updated_at FROM profile_sessions WHERE telegram_user_id = ? AND expires_at > ?",
 			[telegramUserId, now],
 		);
@@ -49,9 +54,9 @@ export class SqliteProfileSessionRepository implements ProfileSessionRepository 
 		}, record.telegramUserId)) {
 			throw new Error("invalid profile session record");
 		}
-		await this.boundary.withTransaction(async () => {
+		await this.database.withTransaction(async () => {
 			await this.admission.assertAvailable("profile", record.telegramUserId, record.updatedAt);
-			await this.boundary.execute(
+			await this.database.execute(
 				`INSERT INTO profile_sessions (telegram_user_id, flow_type, step, state_json, revision, expires_at, updated_at)
 				 VALUES (?, 'profile', ?, ?, ?, ?, ?)
 				 ON CONFLICT(telegram_user_id) DO UPDATE SET flow_type = 'profile', step = excluded.step, state_json = excluded.state_json, revision = excluded.revision, expires_at = excluded.expires_at, updated_at = excluded.updated_at`,
@@ -61,7 +66,7 @@ export class SqliteProfileSessionRepository implements ProfileSessionRepository 
 	}
 
 	async delete(telegramUserId: string): Promise<void> {
-		await this.boundary.execute("DELETE FROM profile_sessions WHERE telegram_user_id = ?", [telegramUserId]);
+		await this.database.execute("DELETE FROM profile_sessions WHERE telegram_user_id = ?", [telegramUserId]);
 	}
 }
 

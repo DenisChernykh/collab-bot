@@ -12,6 +12,7 @@ import { hashCanonicalInput } from "../../platform/crypto/canonical-input-hash.j
 import { webCryptoCapabilities } from "../../platform/crypto/capabilities.js";
 import { RandomClaimTokenGenerator } from "../../platform/crypto/claim-token.js";
 import { NodeOpaqueTokenCodec } from "../../platform/crypto/ingress-codecs.js";
+import { NodeSqlDatabase } from "../../platform/database/node-sql-database.js";
 import { SqliteCallbackActionRepository } from "../../platform/database/callback-action-repository.js";
 import type { DatabaseBoundary } from "../../platform/database/database-boundary.js";
 import { SqliteDurableCommandStore } from "../../platform/database/durable-command-repository.js";
@@ -59,19 +60,20 @@ export function assertBotIdentity(
 export function composeBotApplication(options: BotApplicationCompositionOptions): ComposedBotApplication {
 	const { bot, boundary, clock } = options;
 	const crypto = webCryptoCapabilities;
+	const database = new NodeSqlDatabase(boundary);
 	const userRepository = new SqliteTelegramUserRepository(boundary);
 	const transactionRunner = new DatabaseBoundaryTransactionRunner(boundary);
 	const capability = { canPublish: false, reason: "showcase preflight has not run" as string | null };
 	const outboxStore = new SqliteOutboxDeliveryRepository(boundary);
 	const profilesFeature = createProfilesFeature({
-		boundary,
+		database,
 		transactions: transactionRunner,
 		clock,
 		deadline: new SystemProviderDeadline(),
 		telegramBot: bot,
 	});
 	const collaborationsFeature = createCollaborationsFeature({
-		boundary,
+		database,
 		transactions: transactionRunner,
 		clock,
 		crypto,
