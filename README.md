@@ -4,7 +4,7 @@
 
 P0 and S0–S4 are complete, including the separately authorized real S4 journey and manual-launch handoff. FUT-01 is implemented locally as a one-time best-effort Telegram audience snapshot; its local/fake evidence does not establish live Telegram count accuracy. The post-launch R1/R2 maintainability work and R3 top-level ownership transition are complete without changing the product boundary.
 
-The project targets a fast manual first launch by one developer. It is not a hosted, scale-ready or always-on service.
+The project targets a fast manual first launch by one developer. The legacy foreground runtime is not a hosted, scale-ready or always-on service. CF1 additionally prepares a local-only Cloudflare-compatible candidate; that candidate is not a deployment or production-readiness claim.
 
 ## Sources of truth
 
@@ -29,7 +29,7 @@ FUT-01 does not verify ownership, reach, authenticity or audience quality. It pe
 
 ## Intended technical shape
 
-The approved shape is a new independent TypeScript project: one manually managed modular Node.js process with `Telegram Bot API → grammY adapter → application/domain → SQLite`. It intentionally excludes HTTP API, Mini App, web application, PostgreSQL, Redis, BullMQ, Docker, and Giveaway Bot integration.
+The approved local rollback shape is a new independent TypeScript project: one manually managed modular Node.js process with `Telegram Bot API → grammY adapter → application/domain → SQLite`. CF1 adds a second, local-only adapter shape — `Telegram webhook → Worker → singleton SQLite Durable Object → the same application/domain graph` — without changing the PRD journey or creating a hosted resource. D1, Queues, PostgreSQL, Redis, BullMQ, Docker, and Giveaway Bot integration remain outside CF1–CF3 unless a later plan explicitly authorizes them.
 
 The repository contains this foreground runtime, but it contains no real credentials and does not establish a deployed Telegram identity or operational resource by itself.
 

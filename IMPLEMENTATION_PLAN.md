@@ -44,7 +44,7 @@
 | R1 — Post-launch maintainability | `completed` | 14 | Те же пользовательские контракты с feature-owned кодом и проверяемыми границами |
 | R2 — Complete feature-first layout | `completed` | 31 | Активные feature implementations принадлежат пяти модулям; shared cross-feature/platform code отделён, legacy paths отсутствуют |
 | R3 — Honest top-level ownership | `completed` | 14 | Корень `src` отражает реальные owners: modules, shared kernel, platform adapters и runtime composition |
-| CF1 — Cloudflare-compatible local runtime | `pending` | 10 | Тот же бот проходит workerd/SQLite Durable Object gates локально; production polling остаётся доступным для rollback |
+| CF1 — Cloudflare-compatible local runtime | `in_progress` | 13 | Тот же бот проходит workerd/SQLite Durable Object gates локально; production polling остаётся доступным для rollback |
 | CF2 — Free Cloudflare staging | `pending` | 4 | Отдельный staging Worker и dev-бот проходят hosted webhook/alarm smoke без production traffic |
 | CF3 — Production cutover | `pending` | 4 | Данные перенесены, production webhook включён и hosted journey подтверждён с явным rollback boundary |
 
@@ -67,7 +67,7 @@ P0-01 → P0-02
   → R2-14A → R2-14B → R2-14C → R2-14D → R2-14E → R2-15
   → R3-00 → R3-01 → R3-02A → R3-02B → R3-02C → R3-03 → R3-04
   → R3-05A → R3-05B → R3-05C → R3-06 → R3-07A → R3-07B → R3-08
-  → CF1-00 → CF1-01 → CF1-02 → CF1-03 → CF1-04 → CF1-05 → CF1-06 → CF1-07 → CF1-08 → CF1-09
+  → CF1-00 → CF1-01 → CF1-02A → CF1-02B → CF1-02C → CF1-03 → CF1-04A → CF1-04B → CF1-05 → CF1-06 → CF1-07 → CF1-08 → CF1-09
   → CF2-00 → CF2-01 → CF2-02 → CF2-03
   → CF3-00 → CF3-01 → CF3-02 → CF3-03
 ```
@@ -1412,7 +1412,7 @@ Free-only является stop condition: никакой unit не включа
 
 #### CF1-00 — Зафиксировать Cloudflare technical contract
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Заменить устаревший long-polling/LaunchAgent target в Technical Design на dual local/Cloudflare contract, не меняя PRD journey.
 - **Dependencies:** `R3-08` completed.
 - **Read first:** PRD §1, §3.3, §6, §13–16, §19–20; TD §1–3, §7, §10–13, §15–20, §23; CF target/free boundary above.
@@ -1421,6 +1421,7 @@ Free-only является stop condition: никакой unit не включа
 - **Invariants:** product policy and `LFR-*`/`LAC-*` remain unchanged; D1 is not described as globally unsuitable or as an automatic TMA/web migration; hosted/24x7 is not claimed before CF3 evidence.
 - **Verification:** document contradiction scan for `long polling`, `DatabaseSync`, LaunchAgent, backup and production-ready claims; relative links; `git diff --check`.
 - **Exit criteria:** sources agree on the target and proof boundaries; one commit `CF1-00: define Cloudflare runtime contract`.
+- **Evidence:** Commit SHA: `SELF`. Preflight confirmed clean `main` at `c4c5bfbc5f9696b63e0acf89182990017c2237fb`, matching `origin/main`, Node `v24.18.0` and pnpm `11.15.1`. Updated README and Technical Design to distinguish the legacy Node/SQLite rollback runtime from the local-only Worker → singleton SQLite Durable Object candidate; documented no-login/no-deploy/no-production boundary and alarm/webhook topology. Updated the executable registry to 13 CF1 units and split CF1-02 into A/B/C and CF1-04 into A/B; corrected the Durable Object migration-history reference to canonical `__app_migrations`. `git diff --check` passed; contradiction scan found no stale `_sql_schema_migrations`, unsplit CF1-02/04 registry references or ten-unit count. No source, dependency, credential, Telegram, Cloudflare or remote files were touched.
 
 #### CF1-01 — Add workerd toolchain and empty Worker harness
 
@@ -1435,23 +1436,47 @@ Free-only является stop condition: никакой unit не включа
 - **Verification:** `pnpm test:cloudflare`; existing `pnpm check`; bundle/startup-size inspection; secret scan.
 - **Exit criteria:** empty Worker + SQLite-backed DO boot under workerd; one commit `CF1-01: establish local workerd harness`.
 
-#### CF1-02 — Remove Node-only primitives from application code
+#### CF1-02A — Establish portable crypto primitives
 
 - **Status:** `pending`
-- **Objective:** Make IDs, random tokens and SHA-256 available through runtime-neutral ports/adapters while preserving every serialized format.
+- **Objective:** Make UUID, secure random bytes/tokens and SHA-256 available through runtime-neutral ports/adapters while preserving every serialized format.
 - **Dependencies:** `CF1-01`.
-- **Scope:** direct `node:crypto` imports currently inside feature/application/presentation code; injected UUID/random/token/hash capabilities; Worker/Web Crypto implementation and deterministic test doubles.
-- **Do not touch:** token lengths/alphabets, callback/deep-link formats, command input canonicalization, SQL or user copy.
-- **Invariants:** existing stored hashes and tokens remain valid; cryptographic randomness remains cryptographically secure; no weak `Math.random` fallback.
-- **Tests first:** golden hashes/token regexes and deterministic injected-ID tests before replacing imports.
-- **Verification:** focused crypto/command/publication tests; `rg` proves Node built-ins remain only in explicit Node CLI/adapters; architecture/typecheck.
-- **Exit criteria:** application/modules are Worker-portable; one commit `CF1-02: make runtime primitives Worker portable`.
+- **Scope:** exact `@noble/hashes@2.4.0` dependency; provider-neutral crypto ports; Web Crypto and pure-JS SHA-256 implementations; deterministic test doubles and golden primitives tests.
+- **Do not touch:** feature constructors, token lengths/alphabets, callback/deep-link formats, command input canonicalization, SQL or user copy.
+- **Invariants:** existing stored hashes and tokens remain valid; cryptographic randomness remains secure; no weak `Math.random` fallback; Node-only imports stay out of shared/application code.
+- **Tests first:** golden hashes/token regexes and deterministic crypto capability tests before wiring consumers.
+- **Verification:** focused crypto tests; package/version lock check; `rg` proves shared ports have no Node built-ins; typecheck.
+- **Exit criteria:** runtime-neutral crypto capabilities exist with compatibility golden tests; one commit `CF1-02A: establish portable crypto primitives`.
+
+#### CF1-02B — Inject crypto into profile and discovery flows
+
+- **Status:** `pending`
+- **Objective:** Move profiles, collaborations and marketplace generation/token/hash decisions onto the portable capabilities.
+- **Dependencies:** `CF1-02A`.
+- **Scope:** feature application/presentation factories and adapters for profile, collaboration and marketplace flows; preserve callback/deep-link tokens, generation strings, rendered hashes and serialized formats.
+- **Do not touch:** applications/moderation consumers, SQL text, public copy or token formats.
+- **Invariants:** persisted values and replay identity remain byte-compatible; deterministic tests receive explicit doubles; no feature imports `node:crypto`.
+- **Tests first:** profile/publication/discovery golden and injected-capability tests.
+- **Verification:** focused integration/E2E suites, architecture and import scan.
+- **Exit criteria:** profile and discovery flows are Worker-portable; one commit `CF1-02B: inject portable crypto into profile and discovery flows`.
+
+#### CF1-02C — Inject crypto into application decisions
+
+- **Status:** `pending`
+- **Objective:** Move applications and moderation decisions onto injected UUID/token capabilities and preserve Node composition.
+- **Dependencies:** `CF1-02B`.
+- **Scope:** applications/moderation feature factories, decision/callback token consumers, Node composition wiring and deterministic test doubles.
+- **Do not touch:** profile/collaboration/marketplace consumers, SQL text, command semantics or public copy.
+- **Invariants:** decision receipts, callback hashes and generated IDs remain compatible; `node:crypto` remains only in explicit Node/test-owned adapters.
+- **Tests first:** application/moderation decision tests with deterministic crypto doubles.
+- **Verification:** focused integration/E2E, `pnpm architecture`, typecheck and exact `node:crypto` import scan.
+- **Exit criteria:** all application decision flows are Worker-portable; one commit `CF1-02C: inject portable crypto into application decisions`.
 
 #### CF1-03 — Introduce a runtime-neutral SQL contract
 
 - **Status:** `pending`
 - **Objective:** Separate repository-facing SQL/transaction APIs from the concrete `node:sqlite` connection without changing SQL behavior.
-- **Dependencies:** `CF1-02`.
+- **Dependencies:** `CF1-02C`.
 - **Scope:** `SqlDatabase`/result/parameter/transaction contracts; adapt Node `DatabaseBoundary`, transaction runner and shared platform repositories first.
 - **Do not touch:** migration SQL/checksums, repository queries, transaction nesting/rollback semantics or feature behavior.
 - **Invariants:** current Node path remains serialized and rollback-only on nested failure; Telegram calls remain outside transaction.
@@ -1459,23 +1484,34 @@ Free-only является stop condition: никакой unit не включа
 - **Verification:** database/ingress/outbox focused tests; `pnpm db:verify`; typecheck/architecture.
 - **Exit criteria:** shared persistence depends on interface, not `DatabaseSync`; one commit `CF1-03: establish portable SQL boundary`.
 
-#### CF1-04 — Cut feature repositories to the SQL contract
+#### CF1-04A — Decouple profile and collaboration persistence
 
 - **Status:** `pending`
-- **Objective:** Move all profile/collaboration/marketplace/application/moderation repositories and factories from the concrete Node boundary to the portable contract.
+- **Objective:** Move profiles and collaborations repositories/factories from the concrete Node boundary to the portable SQL contract.
 - **Dependencies:** `CF1-03`.
-- **Scope:** feature repository constructor types, feature factory types and composition wiring; split before editing if the unit exceeds the repository file-count boundary.
-- **Do not touch:** SQL text, read-model ordering, row validators, public feature APIs or current Node runtime behavior.
-- **Tests first:** existing repository/composition suites are the characterization gate; add only a missing contract assertion discovered during cutover.
-- **Verification:** all integration suites; fake E2E; architecture; exact import scan for concrete Node boundary outside Node composition/tests.
-- **Exit criteria:** one object graph can receive either SQL implementation; one commit `CF1-04: decouple features from Node SQLite`.
+- **Scope:** profile/collaboration repository constructor types, feature factory wiring and shared repositories directly required by these flows.
+- **Do not touch:** applications/marketplace/moderation repositories, SQL text, read-model ordering, row validators, public feature APIs or current Node runtime behavior.
+- **Tests first:** existing profile/collaboration integration and composition suites are the characterization gate.
+- **Verification:** focused profile/collaboration suites, architecture, typecheck and concrete-boundary import scan.
+- **Exit criteria:** profile/collaboration object graphs receive any `SqlDatabase`; one commit `CF1-04A: decouple profile and collaboration persistence`.
+
+#### CF1-04B — Decouple remaining feature persistence
+
+- **Status:** `pending`
+- **Objective:** Move applications, marketplace, moderation, shared repositories and runtime composition to the portable SQL contract.
+- **Dependencies:** `CF1-04A`.
+- **Scope:** remaining repository constructor types, factories and Node composition; after cutover `DatabaseBoundary` is allowed only in Node composition, migrations/CLI and Node tests.
+- **Do not touch:** SQL text, read-model ordering, row validators, public feature APIs or current Node behavior.
+- **Tests first:** applications/marketplace/moderation characterization suites plus composition gate.
+- **Verification:** all integration suites, fake E2E, architecture and exact import scan for concrete Node boundary.
+- **Exit criteria:** one complete object graph receives either SQL implementation; one commit `CF1-04B: decouple remaining features from Node SQLite`.
 
 #### CF1-05 — Implement Durable Object SQLite and migrations
 
 - **Status:** `pending`
 - **Objective:** Run the authoritative schema and callback-transactions on `ctx.storage.sql` with equivalent atomicity.
-- **Dependencies:** `CF1-04`.
-- **Scope:** Durable Object SQL adapter, `storage.transaction()` runner, bundled/precomputed migration manifest, `_sql_schema_migrations` history, constructor initialization through `blockConcurrencyWhile`, local integrity/foreign-key verification adapted to supported SQL.
+- **Dependencies:** `CF1-04B`.
+- **Scope:** Durable Object SQL adapter, `storage.transaction()` runner, bundled/precomputed migration manifest, the existing canonical `__app_migrations` history table, constructor initialization through `blockConcurrencyWhile`, local integrity/foreign-key verification adapted to supported SQL.
 - **Do not touch:** product tables/constraints unless a workerd compatibility test demonstrates a concrete incompatibility; no remote object.
 - **Invariants:** migration checksum drift fails closed; failed migration/command rolls back; receipt + business state + outbox commit atomically; schema can initialize from empty and reopen idempotently.
 - **Tests first:** fresh schema, reopen, failed migration, nested rollback, last-slot race and duplicate update under `cloudflare:test`.

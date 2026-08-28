@@ -21,7 +21,7 @@
 
 Документ не реализует приложение и не изменяет продуктовый scope. При противоречии с [PRD](./PRD.md) приоритет имеет PRD.
 
-В MVP отсутствуют HTTP API, Mini App, веб-приложение, PostgreSQL, Redis, BullMQ, Docker и интеграция с Giveaway Bot.
+В legacy MVP отсутствуют HTTP API, Mini App, веб-приложение, PostgreSQL, Redis, BullMQ, Docker и интеграция с Giveaway Bot. CF1 добавляет только local-only Cloudflare runtime harness; hosted resources, deploy, production webhook and production Telegram remain outside this stage.
 
 Далее `Giveaway Bot` означает действующий бот розыгрышей из repository `gift-bot`; это один продукт, а не два разных бота.
 
@@ -50,7 +50,7 @@ Heartbeat/status storage, scheduled cleanup/retention, exact Unix-socket admissi
 
 Приложение является модульным монолитом в одном Node.js-процессе:
 
-`Telegram Bot API → grammY adapter → application/domain → SQLite`.
+Legacy rollback runtime: `Telegram Bot API → grammY adapter → application/domain → SQLite`. CF1 adds a local-only candidate: `Telegram webhook → Worker → singleton SQLite Durable Object → the same application/domain graph`.
 
 «Бизнес-логика отдельно от Telegram» означает разделение по портам и слоям, а не отдельный сетевой backend-процесс.
 
@@ -61,7 +61,8 @@ Heartbeat/status storage, scheduled cleanup/retention, exact Unix-socket admissi
 | Node.js | `>=24.18.0 <25` |
 | pnpm | `>=11.15.1 <12`; packageManager `pnpm@11.15.1` |
 | TypeScript | ESM, strict; ветка `5.9.x` |
-| Telegram | `grammy 1.45.x`, long polling |
+| Telegram legacy adapter | `grammy 1.45.x`, long polling |
+| Cloudflare candidate | Wrangler/workerd + SQLite Durable Object, local only in CF1 |
 | Persistence/schema | параметризованный raw SQL; SQL migrations + typed rows/mappers |
 | SQLite | встроенный `node:sqlite` / `DatabaseSync` |
 | Dates | `date-fns 4.x` и `date-fns-tz 3.x` |
@@ -127,17 +128,30 @@ src/cli/bot.ts
   ├── отдельный collaboration-bot.sqlite
   └── shared outbox/delivery runner
           │ sendMessage / editMessage / deleteMessage
-          ▼
+      ▼
       Telegram users + Showcase channel
 ```
 
-Публикация канала начинается в `collaborations`, сохраняет intent в общем outbox и после commit выполняется delivery runner через grammY transport. Всё работает в одном Node.js process; отдельного HTTP/backend process нет.
+CF1's local Cloudflare topology is an adapter around the same application graph:
+
+```text
+Telegram webhook
+  ▼
+local Worker → singleton `CollaborationBotState` Durable Object
+                  ├── SQLite storage + storage transactions
+                  ├── existing application/domain graph
+                  └── one durable alarm for the outbox
+```
+
+The Worker and Durable Object are local-only under `wrangler dev`. No account login, deploy, remote binding, production webhook, or production database is part of CF1. The existing Node process and SQLite remain the explicit rollback path until a separately authorized hosted/production stage proves a cutover.
+
+Публикация канала начинается в `collaborations`, сохраняет intent в общем outbox и после commit выполняется delivery runner через grammY transport. В legacy rollback runtime всё работает в одном Node.js process; отдельного HTTP/backend process там нет. CF1's local candidate uses the Worker as a thin HTTP ingress and keeps business execution inside the singleton Durable Object.
 
 Long polling не требует публичного HTTPS, домена или reverse proxy и подходит для одного малонагруженного instance: [grammY — long polling](https://grammy.dev/guide/deployment-types#long-polling-vs-webhooks).
 
 ### 3.2. Process roles
 
-В MVP существует один process role `app`. Bootstrap и lifecycle выполняют:
+В legacy Node runtime существует один process role `app`. Bootstrap и lifecycle выполняют:
 
 1. загружает и валидирует конфигурацию;
 2. проверяет private DB path, открывает SQLite и собирает один object graph;
@@ -150,7 +164,7 @@ Long polling не требует публичного HTTPS, домена или
 
 `process-runner` возвращает один и тот же stop flow для SIGINT/SIGTERM и не запускает повторное закрытие ресурсов. Configure выполняет migrations → `getMe`; showcase preflight относится к `start`, а не к configure.
 
-Отдельный migrator process и worker в MVP отсутствуют. Миграции также доступны явной командой для update-flow.
+Отдельный migrator process и worker в legacy Node runtime отсутствуют. Миграции также доступны явной командой для update-flow. Cloudflare's local candidate has no permanent process: `wrangler dev` hosts a Worker and Durable Object, and the DO alarm replaces the Node delivery loop only inside that candidate.
 
 ### 3.3. Later: automated availability boundary
 
@@ -873,7 +887,7 @@ Read query формирует один SQL predicate из каноничной p
 - graceful shutdown вызывает `bot.stop()`, затем самостоятельно ждёт application in-flight tracker до закрытия DB, поскольку `bot.stop()` не ожидает завершения middleware: [grammY Bot API](https://grammy.dev/ref/core/bot);
 - duplicate update безопасен благодаря `processed_updates`.
 
-Long polling не является worker discovery: отдельный process не стартует автоматически.
+Long polling не является worker discovery: отдельный process не стартует автоматически. Для CF1 это только legacy rollback ingress; local Worker receives webhook requests and does not start or contact the Node polling process.
 
 ### 10.2. Handler contract
 
