@@ -22,7 +22,7 @@ import {
 	parseProfileType,
 	parseTargetProfileType,
 	parseTopic,
-} from "../../../domain/value-objects/enums.js";
+} from "../../../shared/domain/value-objects/enums.js";
 import type { DatabaseBoundary } from "../../../infrastructure/database/database-boundary.js";
 
 interface TopicRow { topic?: unknown }

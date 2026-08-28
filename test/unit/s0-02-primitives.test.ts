@@ -17,7 +17,7 @@ import {
 	parseProfileType,
 	parseTargetProfileType,
 	parseTopic,
-} from "../../src/domain/value-objects/enums.js";
+} from "../../src/shared/domain/value-objects/enums.js";
 import { type Clock } from "../../src/application/ports/clock.js";
 import { FakeClock } from "../support/fake-clock.js";
 import {

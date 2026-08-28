@@ -15,7 +15,7 @@ import {
 	type CollaborationWizardStep,
 } from "../domain/collaboration.js";
 import type { Clock } from "../../../application/ports/clock.js";
-import { DomainValidationError } from "../../../domain/value-objects/enums.js";
+import { DomainValidationError } from "../../../shared/domain/value-objects/enums.js";
 
 export class CollaborationProfileRequiredError extends Error {
 	constructor() { super("active profile is required before creating a collaboration"); this.name = "CollaborationProfileRequiredError"; }

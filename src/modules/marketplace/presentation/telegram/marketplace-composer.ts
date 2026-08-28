@@ -1,6 +1,6 @@
 import { Composer, InlineKeyboard, type Context } from "grammy";
 
-import { DomainValidationError, type CollaborationFormat, type Topic } from "../../../../domain/value-objects/enums.js";
+import { DomainValidationError, type CollaborationFormat, type Topic } from "../../../../shared/domain/value-objects/enums.js";
 import {
 	COLLABORATION_FORMAT_LABELS,
 	renderCollaborationCard,

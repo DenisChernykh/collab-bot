@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { DomainValidationError } from "../../src/domain/value-objects/enums.js";
+import { DomainValidationError } from "../../src/shared/domain/value-objects/enums.js";
 import {
 	renderCollaborationCard,
 	validateCollaborationDraftInput,

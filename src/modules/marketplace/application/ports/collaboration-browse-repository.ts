@@ -1,4 +1,4 @@
-import type { CollaborationFormat, ProfileType, Topic } from "../../../../domain/value-objects/enums.js";
+import type { CollaborationFormat, ProfileType, Topic } from "../../../../shared/domain/value-objects/enums.js";
 import type { CollaborationRecord } from "../../../collaborations/application/index.js";
 
 export interface BrowseFilters {

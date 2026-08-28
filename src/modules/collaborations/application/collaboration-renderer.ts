@@ -1,4 +1,4 @@
-import { DomainValidationError, type CollaborationFormat, type TargetProfileType, type Topic } from "../../../domain/value-objects/enums.js";
+import { DomainValidationError, type CollaborationFormat, type TargetProfileType, type Topic } from "../../../shared/domain/value-objects/enums.js";
 import { MAX_TELEGRAM_MESSAGE_UTF16_LENGTH, type CollaborationRecord } from "../domain/collaboration.js";
 import type { CollaborationDraftInput } from "../domain/collaboration.js";
 

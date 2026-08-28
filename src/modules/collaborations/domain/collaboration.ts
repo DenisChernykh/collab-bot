@@ -9,7 +9,7 @@ import {
 	type CollaborationStatus,
 	type TargetProfileType,
 	type Topic,
-} from "../../../domain/value-objects/enums.js";
+} from "../../../shared/domain/value-objects/enums.js";
 import {
 	deadlineAtEndOfLocalDay,
 	formatEventDate,

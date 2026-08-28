@@ -12,7 +12,7 @@ import {
 	parseProfileType,
 	parseTopic,
 	type Topic,
-} from "../../../domain/value-objects/enums.js";
+} from "../../../shared/domain/value-objects/enums.js";
 import type { DatabaseBoundary } from "../../../infrastructure/database/database-boundary.js";
 
 interface ProfileRow {

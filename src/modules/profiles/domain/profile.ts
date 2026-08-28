@@ -6,7 +6,7 @@ import {
 	type PlatformType,
 	type ProfileType,
 	type Topic,
-} from "../../../domain/value-objects/enums.js";
+} from "../../../shared/domain/value-objects/enums.js";
 
 export const PROFILE_CITY = "ekaterinburg" as const;
 

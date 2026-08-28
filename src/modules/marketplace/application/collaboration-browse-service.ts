@@ -16,7 +16,7 @@ import {
 	type CollaborationFormat,
 	type ProfileType,
 	type Topic,
-} from "../../../domain/value-objects/enums.js";
+} from "../../../shared/domain/value-objects/enums.js";
 
 export const BROWSE_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 const BROWSE_SESSION_CLEANUP_LIMIT = 100;

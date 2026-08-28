@@ -8,7 +8,7 @@ import {
 	type CollaborationFormat,
 	type CollaborationStatus,
 	type Topic,
-} from "../../../../domain/value-objects/enums.js";
+} from "../../../../shared/domain/value-objects/enums.js";
 
 export const COLLABORATION_FORMAT_LABELS: Record<CollaborationFormat, string> = {
 	advertising_integration: "Рекламная интеграция",

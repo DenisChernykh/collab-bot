@@ -22,7 +22,7 @@ import {
 	type PlatformType,
 	type ProfileType,
 	type Topic,
-} from "../../../../domain/value-objects/enums.js";
+} from "../../../../shared/domain/value-objects/enums.js";
 import {
 	PROFILE_LINK_CHOICE_HINT,
 	PROFILE_LINK_PROMPT,

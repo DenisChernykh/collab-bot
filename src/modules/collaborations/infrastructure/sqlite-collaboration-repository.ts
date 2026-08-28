@@ -5,7 +5,7 @@ import {
 	parseCollaborationStatus,
 	parseTargetProfileType,
 	parseTopic,
-} from "../../../domain/value-objects/enums.js";
+} from "../../../shared/domain/value-objects/enums.js";
 import {
 	type CollaborationDraftInput,
 	type CollaborationRecord,

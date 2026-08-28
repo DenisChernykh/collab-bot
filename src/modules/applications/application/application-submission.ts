@@ -5,7 +5,7 @@ import { OutboxDeliveryService } from "../../../application/outbox/outbox-servic
 import type { Clock } from "../../../application/ports/clock.js";
 import type { OutboxDeliveryStore } from "../../../application/ports/outbox-delivery-store.js";
 import type { TransactionRunner } from "../../../application/ports/transaction-runner.js";
-import type { ProfileType, Topic } from "../../../domain/value-objects/enums.js";
+import type { ProfileType, Topic } from "../../../shared/domain/value-objects/enums.js";
 import {
 	APPLICATION_TERMS_VERSION,
 	type ApplicationEligibility,

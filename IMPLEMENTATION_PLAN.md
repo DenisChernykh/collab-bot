@@ -1205,17 +1205,18 @@ src/
 
 #### R3-01 — Move shared domain vocabulary
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Move the only cross-feature domain vocabulary to `shared/domain`.
 - **Dependencies:** `R3-00`.
 - **Scope:** move `domain/value-objects/enums.ts`, switch exact consumers, delete empty root `domain`.
 - **Do not touch:** enum values, validation, feature-owned domain or behavior.
 - **Verification:** exact old-path scan; domain/unit tests; typecheck; architecture.
 - **Exit criteria:** no `src/domain`; one commit `R3-01: move shared domain vocabulary`.
+- **Completion evidence:** Commit SHA: `SELF`; moved the byte-identical shared enums, parsers and `DomainValidationError` to `src/shared/domain/value-objects/enums.ts`, switched all twenty source/test consumers and removed the empty root domain tree. The wider-than-normal file count is one exact import-only cutover of a single vocabulary owner; enum values, validation and feature behavior are unchanged. Exact old-root/path scan PASS; focused primitive/collaboration-domain tests PASS (2 files, 15 tests); typecheck PASS; architecture PASS (127 modules, 415 dependencies); `git diff --check` PASS. No schema, dependency, credential, real Telegram, production or remote mutation.
 
 #### R3-02A — Move shared core application ports
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Establish `shared/application/ports` with framework-free core contracts.
 - **Dependencies:** `R3-01`.
 - **Scope:** clock, transaction, provider-deadline, claim-token, ingress-crypto and wizard-admission ports plus exact consumers.

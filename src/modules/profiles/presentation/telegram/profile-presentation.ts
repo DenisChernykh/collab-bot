@@ -4,7 +4,7 @@ import type {
 	ProfileSessionRecord,
 	ProfileSessionState,
 } from "../../application/ports/profile-session-repository.js";
-import type { ProfileType, Topic } from "../../../../domain/value-objects/enums.js";
+import type { ProfileType, Topic } from "../../../../shared/domain/value-objects/enums.js";
 
 export const PROFILE_LINK_PROMPT = "Добавьте публичную площадку. Она будет видна другим пользователям до принятия отклика.";
 export const PROFILE_LINK_CHOICE_HINT = "Выберите личный Telegram-профиль или Telegram-канал. Для другой публичной площадки нажмите «Указать другую ссылку».";

@@ -12,7 +12,7 @@ import { renderCollaborationCard } from "../../application/collaboration-rendere
 import type { CollaborationSessionRecord } from "../../application/ports/collaboration-session-repository.js";
 import type { CollaborationDraftInput, CollaborationWizardStep } from "../../domain/collaboration.js";
 import type { ProfileSessionRecord } from "../../../profiles/application/index.js";
-import { DomainValidationError } from "../../../../domain/value-objects/enums.js";
+import { DomainValidationError } from "../../../../shared/domain/value-objects/enums.js";
 import {
 	collaborationCallbackInput,
 	collaborationKeyboard,

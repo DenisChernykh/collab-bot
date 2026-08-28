@@ -6,7 +6,7 @@ import type {
 	ProfileType,
 	TargetProfileType,
 	Topic,
-} from "../../../domain/value-objects/enums.js";
+} from "../../../shared/domain/value-objects/enums.js";
 
 export const APPLICATION_TERMS_VERSION = 1 as const;
 
