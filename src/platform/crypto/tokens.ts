@@ -1,7 +1,7 @@
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { base64UrlEncode, webCryptoCapabilities } from "./capabilities.js";
 
 export function generateUuid(): string {
-	return randomUUID();
+	return webCryptoCapabilities.uuid();
 }
 
 export function generatePublicToken(): string {
@@ -13,9 +13,9 @@ export function generateCallbackToken(): string {
 }
 
 function generate128BitToken(): string {
-	return randomBytes(16).toString("base64url");
+	return base64UrlEncode(webCryptoCapabilities.randomBytes(16));
 }
 
 export function hashOpaqueToken(token: string): string {
-	return createHash("sha256").update(token, "utf8").digest("hex");
+	return webCryptoCapabilities.hashUtf8(token);
 }

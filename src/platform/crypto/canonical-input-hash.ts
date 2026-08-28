@@ -1,7 +1,6 @@
-import { createHash } from "node:crypto";
-
 import { canonicalizeInput, type CanonicalInput } from "../../shared/application/commands/canonical-input.js";
+import { webCryptoCapabilities } from "./capabilities.js";
 
 export function hashCanonicalInput(input: CanonicalInput): string {
-	return createHash("sha256").update(canonicalizeInput(input), "utf8").digest("hex");
+	return webCryptoCapabilities.hashUtf8(canonicalizeInput(input));
 }

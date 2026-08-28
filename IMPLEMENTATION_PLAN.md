@@ -1439,7 +1439,7 @@ Free-only является stop condition: никакой unit не включа
 
 #### CF1-02A — Establish portable crypto primitives
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Make UUID, secure random bytes/tokens and SHA-256 available through runtime-neutral ports/adapters while preserving every serialized format.
 - **Dependencies:** `CF1-01`.
 - **Scope:** exact `@noble/hashes@2.4.0` dependency; provider-neutral crypto ports; Web Crypto and pure-JS SHA-256 implementations; deterministic test doubles and golden primitives tests.
@@ -1448,6 +1448,7 @@ Free-only является stop condition: никакой unit не включа
 - **Tests first:** golden hashes/token regexes and deterministic crypto capability tests before wiring consumers.
 - **Verification:** focused crypto tests; package/version lock check; `rg` proves shared ports have no Node built-ins; typecheck.
 - **Exit criteria:** runtime-neutral crypto capabilities exist with compatibility golden tests; one commit `CF1-02A: establish portable crypto primitives`.
+- **Evidence:** Commit SHA: `SELF`. Preflight confirmed clean predecessor `ea6e61313aca0fae85bca4e531b05ac241037a40`, Node `v24.18.0`, pnpm `11.15.1` and unique Task-ID. Added exact `@noble/hashes@2.4.0` and its minimum-release-age allowlist entry. Added provider-neutral `CryptoCapabilities`, Web Crypto-backed secure UUID/random bytes, pure-JS SHA-256 and base64url/hex encoding; preserved the existing `generateUuid`, 128-bit token and hash APIs without `node:crypto` imports in `src/platform/crypto`. Focused unit suite passed (14 tests including empty/text golden hashes, UUID/token alphabets and lengths, deterministic injected randomness and invalid lengths); Cloudflare bundle smoke passed (3 tests) proving the primitives load in workerd. `pnpm typecheck`, `pnpm cloudflare:typecheck` and `pnpm architecture` passed (131 modules/417 dependencies). No feature consumers were rewired in this unit; no SQL/copy/public formats changed; no credentials or external resources touched.
 
 #### CF1-02B — Inject crypto into profile and discovery flows
 

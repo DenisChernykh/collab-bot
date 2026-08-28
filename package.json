@@ -28,6 +28,7 @@
 		"check": "pnpm lint && pnpm architecture && pnpm typecheck && pnpm test:unit && pnpm test:integration && pnpm test:runtime && pnpm build"
 	},
 	"dependencies": {
+		"@noble/hashes": "2.4.0",
 		"date-fns": "4.4.0",
 		"date-fns-tz": "3.2.0",
 		"grammy": "1.45.1"
