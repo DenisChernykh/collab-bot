@@ -9,6 +9,7 @@ import type { Clock } from "../../shared/application/ports/clock.js";
 import { registerTelegramRouter } from "../telegram/telegram-router.js";
 import type { AppConfig } from "../../config/parse-config.js";
 import { hashCanonicalInput } from "../../platform/crypto/canonical-input-hash.js";
+import { webCryptoCapabilities } from "../../platform/crypto/capabilities.js";
 import { RandomClaimTokenGenerator } from "../../platform/crypto/claim-token.js";
 import { NodeOpaqueTokenCodec } from "../../platform/crypto/ingress-codecs.js";
 import { SqliteCallbackActionRepository } from "../../platform/database/callback-action-repository.js";
@@ -57,6 +58,7 @@ export function assertBotIdentity(
 
 export function composeBotApplication(options: BotApplicationCompositionOptions): ComposedBotApplication {
 	const { bot, boundary, clock } = options;
+	const crypto = webCryptoCapabilities;
 	const userRepository = new SqliteTelegramUserRepository(boundary);
 	const transactionRunner = new DatabaseBoundaryTransactionRunner(boundary);
 	const capability = { canPublish: false, reason: "showcase preflight has not run" as string | null };
@@ -72,6 +74,7 @@ export function composeBotApplication(options: BotApplicationCompositionOptions)
 		boundary,
 		transactions: transactionRunner,
 		clock,
+		crypto,
 		outboxStore,
 		capability,
 		channelChatId: options.config.showcaseChannelId,
@@ -82,6 +85,7 @@ export function composeBotApplication(options: BotApplicationCompositionOptions)
 		boundary,
 		transactions: transactionRunner,
 		clock,
+		crypto,
 	});
 	const applicationsFeature = createApplicationsFeature({
 		boundary,

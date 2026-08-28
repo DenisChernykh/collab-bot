@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { SqliteTelegramUserRepository } from "../../src/platform/database/telegram-user-repository.js";
 import { DatabaseBoundaryTransactionRunner } from "../../src/platform/database/transaction-runner.js";
+import { webCryptoCapabilities } from "../../src/platform/crypto/capabilities.js";
 import { FakeClock } from "../support/fake-clock.js";
 import { createMarketplaceFeature } from "../../src/modules/marketplace/index.js";
 import { withFreshMigratedDatabase } from "../support/migrated-database.js";
@@ -19,6 +20,7 @@ describe("R2-08 marketplace composition", () => {
 				boundary,
 				transactions: new DatabaseBoundaryTransactionRunner(boundary),
 				clock,
+				crypto: webCryptoCapabilities,
 			});
 
 			const page = await feature.browse.openFeed("200");
@@ -26,6 +28,7 @@ describe("R2-08 marketplace composition", () => {
 				boundary,
 				transactions: new DatabaseBoundaryTransactionRunner(boundary),
 				clock,
+				crypto: webCryptoCapabilities,
 			});
 			const resumed = await restarted.browse.openFeed("200");
 

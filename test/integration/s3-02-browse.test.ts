@@ -14,6 +14,7 @@ import { DatabaseBoundary } from "../../src/platform/database/database-boundary.
 import { SqliteCollaborationBrowseRepository } from "../../src/modules/marketplace/infrastructure/sqlite-collaboration-browse-repository.js";
 import { MigrationRunner, MigrationSource } from "../../src/platform/database/migrations.js";
 import { DatabaseBoundaryTransactionRunner } from "../../src/platform/database/transaction-runner.js";
+import { webCryptoCapabilities } from "../../src/platform/crypto/capabilities.js";
 import { FakeClock } from "../support/fake-clock.js";
 
 const migrationsPath = fileURLToPath(new URL("../../migrations/", import.meta.url));
@@ -286,6 +287,7 @@ function browseService(boundary: DatabaseBoundary, clock: FakeClock): Collaborat
 		new SqliteCollaborationBrowseRepository(boundary),
 		new DatabaseBoundaryTransactionRunner(boundary),
 		clock,
+		webCryptoCapabilities,
 	);
 }
 

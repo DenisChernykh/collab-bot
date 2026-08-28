@@ -17,6 +17,7 @@ import { SqliteDurableCommandStore } from "../../src/platform/database/durable-c
 import { MigrationRunner, MigrationSource } from "../../src/platform/database/migrations.js";
 import { SqliteOutboxDeliveryRepository } from "../../src/platform/outbox/outbox-delivery-repository.js";
 import { DatabaseBoundaryTransactionRunner } from "../../src/platform/database/transaction-runner.js";
+import { webCryptoCapabilities } from "../../src/platform/crypto/capabilities.js";
 import { FakeTelegramTransport } from "../support/fake-telegram-transport.js";
 import { FakeClock } from "../support/fake-clock.js";
 import { ApplicationService } from "../../src/modules/applications/application/application-feature.js";
@@ -412,6 +413,7 @@ describe("S3-03 application submission", () => {
 				new SqliteCollaborationBrowseRepository(fixture.boundary),
 				new DatabaseBoundaryTransactionRunner(fixture.boundary),
 				fixture.clock,
+				webCryptoCapabilities,
 			).openFeed(USERS.applicant);
 			expect(page.card?.id).toBe(CARDS.eligible);
 			expect(page.card?.id).not.toBe(CARDS.applied);

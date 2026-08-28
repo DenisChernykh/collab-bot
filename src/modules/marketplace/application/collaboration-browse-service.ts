@@ -1,6 +1,5 @@
-import { randomBytes } from "node:crypto";
-
 import type { Clock } from "../../../shared/application/ports/clock.js";
+import type { CryptoCapabilities } from "../../../shared/application/ports/crypto.js";
 import type { TransactionRunner } from "../../../shared/application/ports/transaction-runner.js";
 import type {
 	BrowseCollaborationRecord,
@@ -47,6 +46,7 @@ export class CollaborationBrowseService {
 		private readonly repository: CollaborationBrowseRepository,
 		private readonly transactions: TransactionRunner,
 		private readonly clock: Clock,
+		private readonly crypto: CryptoCapabilities,
 	) {}
 
 	openFeed(telegramUserId: string): Promise<BrowsePage> {
@@ -54,7 +54,7 @@ export class CollaborationBrowseService {
 			const now = clockMilliseconds(this.clock);
 			const stored = await this.repository.findSession(telegramUserId);
 			await this.repository.deleteExpiredSessions(now, BROWSE_SESSION_CLEANUP_LIMIT);
-			const current = stored !== undefined && stored.expiresAt > now ? stored : freshSession(telegramUserId, now);
+			const current = stored !== undefined && stored.expiresAt > now ? stored : freshSession(telegramUserId, now, this.crypto);
 			return this.selectAndSave(current, now);
 		});
 	}
@@ -204,10 +204,10 @@ export class CollaborationBrowseService {
 	}
 }
 
-function freshSession(telegramUserId: string, now: number): BrowseSessionRecord {
+function freshSession(telegramUserId: string, now: number, crypto: CryptoCapabilities): BrowseSessionRecord {
 	return {
 		telegramUserId,
-		generation: randomBytes(8).toString("hex"),
+		generation: crypto.randomHex(8),
 		filters: { targetProfileType: null, format: null, topic: null },
 		cursor: null,
 		revision: 0,

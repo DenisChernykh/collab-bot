@@ -1465,7 +1465,7 @@ Free-only является stop condition: никакой unit не включа
 
 #### CF1-02C — Inject crypto into marketplace discovery and runtime routing
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Move marketplace/discovery decisions onto injected crypto capabilities and complete the runtime composition/routing slice needed by those consumers.
 - **Dependencies:** `CF1-02B`.
 - **Scope:** marketplace/discovery application/composition consumers, Telegram routing and Node runtime wiring required to pass the portable capability; deterministic test doubles.
@@ -1474,6 +1474,7 @@ Free-only является stop condition: никакой unit не включа
 - **Tests first:** marketplace/discovery integration and fake journey tests with deterministic crypto doubles.
 - **Verification:** focused integration/E2E, `pnpm architecture`, typecheck and exact `node:crypto` import scan.
 - **Exit criteria:** marketplace/discovery and their runtime routing are Worker-portable; one commit `CF1-02C: inject portable crypto into marketplace discovery`.
+- **Evidence:** Commit SHA: `SELF`. The restored C slice contains exactly 6 source/test files: `src/modules/marketplace/application/collaboration-browse-service.ts`, `src/modules/marketplace/composition/create-marketplace-feature.ts`, `src/runtime/composition/bot-application.ts`, `test/integration/r2-08-marketplace-composition.test.ts`, `test/integration/s3-02-browse.test.ts`, and `test/integration/s3-03-application.test.ts`; the router crypto handoff is already committed in CF1-02B and is not duplicated. `CollaborationBrowseService` now receives portable crypto for browse-session generations; marketplace composition and Node runtime pass one shared capability instance; characterization tests use the same capability without changing SQL, query order, browse tokens or public copy. Focused suite passed (3 files, 15 tests); `pnpm typecheck`, `pnpm architecture` (131 modules/423 dependencies), `git diff --cached --check` and exact `node:crypto` scan passed. No application/moderation implementation changed; the S3-03 test change only supplies the new browse dependency. No credentials, remote resources, Telegram or production actions touched.
 
 #### CF1-02D — Inject crypto into application decisions
 
