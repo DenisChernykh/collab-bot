@@ -32,13 +32,13 @@ import {
 	generatePublicToken,
 	generateUuid,
 	hashOpaqueToken,
-} from "../../src/infrastructure/crypto/tokens.js";
+} from "../../src/platform/crypto/tokens.js";
 import {
 	SafeLogger,
 	serializeSafeError,
 	type SafeLogEntry,
 	type SafeLogFields,
-} from "../../src/infrastructure/logging/safe-logger.js";
+} from "../../src/platform/logging/safe-logger.js";
 
 describe("canonical enums", () => {
 	it("accepts every PRD value and rejects aliases or unknown values", () => {

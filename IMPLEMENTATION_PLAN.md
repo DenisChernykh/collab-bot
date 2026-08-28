@@ -1271,17 +1271,18 @@ src/
 
 #### R3-05A — Move platform primitives
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Rename shared technical implementations from generic infrastructure to capability-oriented platform owners.
 - **Dependencies:** `R3-04`.
 - **Scope:** crypto, logging, Telegram transport and time adapters under `platform`; switch consumers.
 - **Do not touch:** crypto/token formats, logging redaction, provider deadlines or grammY behavior.
 - **Verification:** primitive/transport tests; typecheck; architecture; old-path scan.
 - **Exit criteria:** four platform capabilities use target paths; one commit `R3-05A: move platform primitives`.
+- **Completion evidence:** Commit SHA: `SELF`; moved eight unchanged crypto, safe-logging, grammY transport and system-time/provider-deadline implementations under `platform/{crypto,logging,telegram,time}`, switched every consumer and made the still-unmoved migration adapter's temporary platform-time dependency explicit. Formats, redaction and provider behavior are unchanged. Typecheck PASS; architecture PASS (127 modules, 415 dependencies); focused primitives/crypto/transport/delivery tests PASS (4 files, 38 tests); old capability paths and `git diff --check` PASS. No SQL, schema, dependency, credential, real Telegram, production or remote mutation.
 
 #### R3-05B — Move shared database adapters
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Move the shared SQLite boundary and non-outbox repositories to `platform/database`.
 - **Dependencies:** `R3-05A`.
 - **Scope:** database boundary, migrations, transaction runner, ingress/durable/user/wizard repositories and exact consumers.

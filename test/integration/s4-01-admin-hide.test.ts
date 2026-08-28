@@ -11,7 +11,7 @@ import { OutboxDeliveryService } from "../../src/shared/application/outbox/outbo
 import type { ClaimTokenGenerator } from "../../src/shared/application/ports/claim-token.js";
 import type { ProviderDeadline } from "../../src/shared/application/ports/provider-deadline.js";
 import { TelegramTransportError } from "../../src/shared/application/ports/telegram-transport.js";
-import { hashCanonicalInput } from "../../src/infrastructure/crypto/canonical-input-hash.js";
+import { hashCanonicalInput } from "../../src/platform/crypto/canonical-input-hash.js";
 import { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
 import { SqliteDurableCommandStore } from "../../src/infrastructure/database/durable-command-repository.js";
 import { MigrationRunner, MigrationSource } from "../../src/infrastructure/database/migrations.js";

@@ -23,14 +23,14 @@ import { SqliteTelegramUserRepository } from "../../src/infrastructure/database/
 import { SqliteCallbackActionRepository } from "../../src/infrastructure/database/callback-action-repository.js";
 import { SqliteDurableCommandStore } from "../../src/infrastructure/database/durable-command-repository.js";
 import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/database/transaction-runner.js";
-import { NodeOpaqueTokenCodec, Sha256CanonicalInputHasher } from "../../src/infrastructure/crypto/ingress-codecs.js";
+import { NodeOpaqueTokenCodec, Sha256CanonicalInputHasher } from "../../src/platform/crypto/ingress-codecs.js";
 import { CallbackActionStoreCorruptError } from "../../src/shared/application/ports/callback-action-store.js";
 import { IngressRetentionService } from "../../src/infrastructure/database/ingress-retention.js";
 import { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
 import { MigrationRunner, MigrationSource } from "../../src/infrastructure/database/migrations.js";
 import { FakeClock } from "../support/fake-clock.js";
-import { hashCanonicalInput } from "../../src/infrastructure/crypto/canonical-input-hash.js";
-import { hashOpaqueToken } from "../../src/infrastructure/crypto/tokens.js";
+import { hashCanonicalInput } from "../../src/platform/crypto/canonical-input-hash.js";
+import { hashOpaqueToken } from "../../src/platform/crypto/tokens.js";
 
 const canonicalMigrationsPath = fileURLToPath(new URL("../../migrations/", import.meta.url));
 const DAY_MS = 24 * 60 * 60 * 1000;

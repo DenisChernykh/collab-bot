@@ -3,7 +3,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import type { Clock } from "../../shared/application/ports/clock.js";
-import { SystemClock } from "../time/system-clock.js";
+import { SystemClock } from "../../platform/time/system-clock.js";
 import { DatabaseBoundary, type DatabaseContext } from "./database-boundary.js";
 
 const MIGRATION_FILENAME = /^(\d{4})_([a-z][a-z0-9_-]*)\.sql$/;

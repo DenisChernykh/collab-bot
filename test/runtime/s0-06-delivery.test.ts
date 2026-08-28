@@ -27,7 +27,7 @@ import { SqliteOutboxDeliveryRepository } from "../../src/infrastructure/databas
 import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/database/transaction-runner.js";
 import { FakeTelegramTransport } from "../support/fake-telegram-transport.js";
 import { FakeClock } from "../support/fake-clock.js";
-import { SystemProviderDeadline } from "../../src/infrastructure/time/provider-deadline.js";
+import { SystemProviderDeadline } from "../../src/platform/time/provider-deadline.js";
 
 const migrationsPath = fileURLToPath(new URL("../../migrations/", import.meta.url));
 const sendPayload = { version: 1 as const, method: "send" as const, text: "runtime synthetic body" };

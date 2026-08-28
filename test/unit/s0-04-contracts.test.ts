@@ -10,7 +10,7 @@ import {
 	serializeSafeResult,
 	type SafeResult,
 } from "../../src/shared/application/commands/safe-result.js";
-import { hashCanonicalInput } from "../../src/infrastructure/crypto/canonical-input-hash.js";
+import { hashCanonicalInput } from "../../src/platform/crypto/canonical-input-hash.js";
 
 describe("S0-04 pure contracts", () => {
 	it("keeps command context actor-tagged and runner identities explicit", () => {

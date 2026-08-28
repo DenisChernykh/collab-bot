@@ -12,7 +12,7 @@ import type { OutboxDeliveryStore } from "../../src/shared/application/ports/out
 import type { ProviderDeadline } from "../../src/shared/application/ports/provider-deadline.js";
 import { TelegramTransportError } from "../../src/shared/application/ports/telegram-transport.js";
 import { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
-import { hashCanonicalInput } from "../../src/infrastructure/crypto/canonical-input-hash.js";
+import { hashCanonicalInput } from "../../src/platform/crypto/canonical-input-hash.js";
 import { SqliteDurableCommandStore } from "../../src/infrastructure/database/durable-command-repository.js";
 import { MigrationRunner, MigrationSource } from "../../src/infrastructure/database/migrations.js";
 import { SqliteOutboxDeliveryRepository } from "../../src/infrastructure/database/outbox-delivery-repository.js";

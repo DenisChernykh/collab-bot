@@ -4,7 +4,7 @@ import type { Clock } from "../shared/application/ports/clock.js";
 import type { AppConfig } from "../config/parse-config.js";
 import { DatabaseBoundary } from "../infrastructure/database/database-boundary.js";
 import { MigrationRunner, MigrationSource } from "../infrastructure/database/migrations.js";
-import { SystemClock } from "../infrastructure/time/system-clock.js";
+import { SystemClock } from "../platform/time/system-clock.js";
 import { composeBotApplication } from "./bot-application.js";
 import { createBotRuntimeLifecycle, type BotRuntimeLifecycle } from "./bot-lifecycle.js";
 import { loadConfigFromEnvFile } from "./env-file-config.js";

@@ -1,4 +1,4 @@
-import { generateUuid } from "../../../infrastructure/crypto/tokens.js";
+import { generateUuid } from "../../../platform/crypto/tokens.js";
 import type { ProfileRepository } from "../application/ports/profile-repository.js";
 import type { ProfileAudienceWriter } from "../application/profile-audience-service.js";
 import type {

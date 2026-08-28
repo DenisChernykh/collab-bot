@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
 import { MigrationRunner, MigrationSource } from "../../src/infrastructure/database/migrations.js";
 import { DurableCommandExecutor } from "../../src/shared/application/commands/command-executor.js";
-import { hashCanonicalInput } from "../../src/infrastructure/crypto/canonical-input-hash.js";
+import { hashCanonicalInput } from "../../src/platform/crypto/canonical-input-hash.js";
 import { SqliteDurableCommandStore } from "../../src/infrastructure/database/durable-command-repository.js";
 import { DatabaseBoundaryTransactionRunner } from "../../src/infrastructure/database/transaction-runner.js";
 import { FakeClock } from "../support/fake-clock.js";

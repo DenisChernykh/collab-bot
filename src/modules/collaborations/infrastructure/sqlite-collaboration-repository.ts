@@ -1,4 +1,4 @@
-import { generateUuid } from "../../../infrastructure/crypto/tokens.js";
+import { generateUuid } from "../../../platform/crypto/tokens.js";
 import type { CollaborationRepository } from "../application/ports/collaboration-repository.js";
 import {
 	parseCollaborationFormat,
