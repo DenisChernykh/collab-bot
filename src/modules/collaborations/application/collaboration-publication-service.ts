@@ -1,7 +1,6 @@
-import { createHash, randomBytes, randomUUID } from "node:crypto";
-
 import { OutboxDeliveryService } from "../../../shared/application/outbox/outbox-service.js";
 import type { Clock } from "../../../shared/application/ports/clock.js";
+import type { CryptoCapabilities } from "../../../shared/application/ports/crypto.js";
 import type { OutboxDeliveryStore } from "../../../shared/application/ports/outbox-delivery-store.js";
 import type { TransactionRunner } from "../../../shared/application/ports/transaction-runner.js";
 import { isDeadlineDue, isMutationAllowed } from "../domain/deadline.js";
@@ -38,6 +37,7 @@ export class CollaborationPublicationService {
 		private readonly capability: ShowcaseCapability,
 		private readonly channelChatId: string,
 		private readonly botUsername: string,
+		private readonly crypto: CryptoCapabilities,
 	) { this.outbox = new OutboxDeliveryService(outboxStore, transactions, clock); }
 
 	async publish(telegramUserId: string, collaborationId: string): Promise<PublishCollaborationResult> {
@@ -51,10 +51,10 @@ export class CollaborationPublicationService {
 				return { collaborationId, status: current.status as PublishCollaborationResult["status"], ...(existing.lastDeliveryId === null ? {} : { deliveryId: existing.lastDeliveryId }) };
 			}
 			if (current.status !== "draft" || current.publicToken !== null || current.responseDeadlineAt === null || !isMutationAllowed(now, current.responseDeadlineAt) || current.format === null || current.targetProfileType === null || current.topics.length === 0 || current.title === null || current.offerText === null || current.expectationText === null || current.slotsTotal === null) throw new CollaborationNotPublishableError();
-			const token = randomBytes(16).toString("base64url");
+			const token = this.crypto.randomBase64Url(16);
 			const renderedText = renderCollaborationCard(current);
-			const renderedHash = createHash("sha256").update(renderedText, "utf8").digest("hex");
-			const deliveryId = randomUUID();
+			const renderedHash = this.crypto.hashUtf8(renderedText);
+			const deliveryId = this.crypto.uuid();
 			const url = `https://t.me/${this.botUsername}?start=c_${token}`;
 			await this.publications.markPublishing(collaborationId, token, now);
 			await this.outbox.createWithinTransaction({ id: deliveryId, idempotencyKey: `collaboration:${collaborationId}:channel_send:1`, kind: "channel_send", recipientChatId: this.channelChatId, payload: { version: 1, method: "send", text: renderedText, replyMarkup: { inline_keyboard: [[{ text: "Открыть карточку", url }]] } } });
@@ -95,7 +95,7 @@ export class CollaborationPublicationService {
 				await this.transactions.withTransaction(async () => {
 					if (!(await this.publications.markExpired(publication.collaborationId, delivery.messageId!, outcomeAt))) return;
 					const terminalText = renderCollaborationCard(collaboration, { expired: true });
-					await this.outbox.createWithinTransaction({ id: randomUUID(), idempotencyKey: `collaboration:${publication.collaborationId}:channel_edit:expired:v1`, kind: "channel_edit", recipientChatId: publication.channelChatId, messageId: delivery.messageId!, payload: { version: 1, method: "edit", text: terminalText, replyMarkup: { inline_keyboard: [] } } });
+					await this.outbox.createWithinTransaction({ id: this.crypto.uuid(), idempotencyKey: `collaboration:${publication.collaborationId}:channel_edit:expired:v1`, kind: "channel_edit", recipientChatId: publication.channelChatId, messageId: delivery.messageId!, payload: { version: 1, method: "edit", text: terminalText, replyMarkup: { inline_keyboard: [] } } });
 				});
 			} else await this.publications.markOutcome(publication.collaborationId, "published", delivery.messageId, null, outcomeAt);
 		} else if (delivery.status === "permanent_failed" || delivery.status === "ambiguous" || delivery.status === "cancelled") {

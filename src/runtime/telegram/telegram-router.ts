@@ -5,6 +5,7 @@ import type { CanonicalInput } from "../../shared/application/commands/canonical
 import type { DurableCommandExecutor } from "../../shared/application/commands/command-executor.js";
 import type { CallbackActionService } from "../../shared/application/commands/callback-action.js";
 import type { Clock } from "../../shared/application/ports/clock.js";
+import type { CryptoCapabilities } from "../../shared/application/ports/crypto.js";
 import type { TelegramUserWriter } from "../../shared/application/ports/telegram-user-writer.js";
 import {
 	applicationStartCallback,
@@ -40,6 +41,7 @@ import {
 } from "../../modules/profiles/index.js";
 import { registerDurableTelegramIngress } from "./durable-telegram-ingress.js";
 import { routeTelegramText } from "./telegram-routing.js";
+import { webCryptoCapabilities } from "../../platform/crypto/capabilities.js";
 
 const AUDIENCE_SNAPSHOT_UNAVAILABLE = "Аудиторию Telegram определить не удалось; профиль сохранён, число можно указать позже в «Мой профиль».";
 
@@ -52,6 +54,7 @@ export interface TelegramRouterOptions {
 	};
 	readonly durableCommandExecutor: DurableCommandExecutor;
 	readonly clock: Clock;
+	readonly crypto?: CryptoCapabilities;
 	readonly helpContact: string;
 	readonly requestIdFactory?: () => number;
 	readonly collaborationDraftService?: CollaborationDraftService;
@@ -67,6 +70,7 @@ export interface RegisteredTelegramRouter {
 }
 
 export function registerTelegramRouter(bot: Bot, options: TelegramRouterOptions): RegisteredTelegramRouter {
+	const crypto = options.crypto ?? webCryptoCapabilities;
 	const marketplaceFeature = createMarketplaceTelegramFeature({
 		...(options.collaborationBrowseService === undefined ? {} : { browseService: options.collaborationBrowseService }),
 		applicationStartCallback,
@@ -111,6 +115,7 @@ export function registerTelegramRouter(bot: Bot, options: TelegramRouterOptions)
 		profileService: options.profileService,
 		sessionRepository: options.sessionRepository,
 		clock: options.clock,
+		crypto,
 		...(options.requestIdFactory === undefined ? {} : { requestIdFactory: options.requestIdFactory }),
 		...(options.applicationService === undefined ? {} : { applicationService: options.applicationService }),
 		menuKeyboard: () => menuKeyboard(options),

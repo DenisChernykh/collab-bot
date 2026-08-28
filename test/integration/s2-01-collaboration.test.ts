@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import { DatabaseBoundary } from "../../src/platform/database/database-boundary.js";
 import { MigrationRunner, MigrationSource } from "../../src/platform/database/migrations.js";
 import { DatabaseBoundaryTransactionRunner } from "../../src/platform/database/transaction-runner.js";
+import { webCryptoCapabilities } from "../../src/platform/crypto/capabilities.js";
 import { SqliteTelegramUserRepository } from "../../src/platform/database/telegram-user-repository.js";
 import { FakeClock } from "../support/fake-clock.js";
 import { CollaborationDraftService } from "../../src/modules/collaborations/index.js";
@@ -130,6 +131,7 @@ function createService(boundary: DatabaseBoundary, clock: FakeClock): Collaborat
 		new SqliteCollaborationSessionRepository(boundary),
 		new DatabaseBoundaryTransactionRunner(boundary),
 		clock,
+		webCryptoCapabilities,
 		new SqliteProfileSessionRepository(boundary),
 	);
 }

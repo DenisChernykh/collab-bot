@@ -1,9 +1,8 @@
-import { randomBytes, randomInt } from "node:crypto";
-
 import { Composer, InlineKeyboard, Keyboard, type Context } from "grammy";
 
 import type { ApplicationFailureCode, ApplicationsFeatureApi } from "../../../applications/index.js";
 import type { Clock } from "../../../../shared/application/ports/clock.js";
+import type { CryptoCapabilities } from "../../../../shared/application/ports/crypto.js";
 import {
 	PROFILE_SESSION_TTL_MS,
 	PROFILE_SESSION_VERSION,
@@ -70,6 +69,7 @@ export interface ProfileTelegramFeatureOptions {
 	readonly profileService: ProfileService;
 	readonly sessionRepository: ProfileSessionRepository;
 	readonly clock: Clock;
+	readonly crypto: CryptoCapabilities;
 	readonly requestIdFactory?: () => number;
 	readonly applicationService?: Pick<ApplicationsFeatureApi, "checkEligibility" | "submit">;
 	readonly menuKeyboard: () => InlineKeyboard;
@@ -190,7 +190,7 @@ export function createProfileTelegramFeature(options: ProfileTelegramFeatureOpti
 		startApplicationMessage: async (ctx, userId, continuation) => {
 			const saved = await saveState(options, userId, {
 				version: PROFILE_SESSION_VERSION,
-				generation: createSessionGeneration(),
+				generation: options.crypto.randomHex(8),
 				step: "application_message",
 				draft: { audienceAutofill: "allow" },
 				continuation,
@@ -200,7 +200,7 @@ export function createProfileTelegramFeature(options: ProfileTelegramFeatureOpti
 		startQuickApplicationProfile: async (ctx, userId, continuation) => {
 			const saved = await saveState(options, userId, {
 				version: PROFILE_SESSION_VERSION,
-				generation: createSessionGeneration(),
+				generation: options.crypto.randomHex(8),
 				step: "type",
 				draft: { description: null, topics: [], audienceAutofill: "allow" },
 				continuation,
@@ -647,7 +647,7 @@ async function startOrResume(
 	};
 	const saved = await saveState(options, userId, {
 		version: PROFILE_SESSION_VERSION,
-		generation: createSessionGeneration(),
+		generation: options.crypto.randomHex(8),
 		step: "type",
 		draft,
 		...(continuation === undefined ? {} : { continuation }),
@@ -828,11 +828,11 @@ function parseProfileMutationCallback(data: string): ProfileMutationCallback | u
 }
 
 function requestIdFactory(options: ProfileTelegramFeatureOptions): () => number {
-	return options.requestIdFactory ?? (() => randomInt(1, 2_147_483_647));
-}
-
-function createSessionGeneration(): string {
-	return randomBytes(8).toString("hex");
+	return options.requestIdFactory ?? (() => {
+		const bytes = options.crypto.randomBytes(4);
+		const value = (((bytes[0] ?? 0) * 0x1000000) + ((bytes[1] ?? 0) * 0x10000) + ((bytes[2] ?? 0) * 0x100) + (bytes[3] ?? 0)) >>> 0;
+		return (value % 2_147_483_646) + 1;
+	});
 }
 
 function sessionToken(session: ProfileSessionRecord): ProfileSessionToken {

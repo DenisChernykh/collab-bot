@@ -3,6 +3,7 @@ import type { UserFromGetMe, Update } from "grammy/types";
 import { describe, expect, it } from "vitest";
 
 import type { Clock } from "../../src/shared/application/ports/clock.js";
+import { webCryptoCapabilities } from "../../src/platform/crypto/capabilities.js";
 import {
 	createProfileTelegramFeature,
 	type ProfileInput,
@@ -105,6 +106,7 @@ async function createHarness(): Promise<{
 		profileService,
 		sessionRepository: sessions,
 		clock: { now: () => new Date(NOW) } satisfies Clock,
+		crypto: webCryptoCapabilities,
 		requestIdFactory: () => 12345,
 		applicationService: { checkEligibility: async () => ({ ok: true }) } as never,
 		menuKeyboard: () => new InlineKeyboard().text("Menu", "menu:home"),

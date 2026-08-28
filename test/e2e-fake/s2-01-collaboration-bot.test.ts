@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 
 import { DurableCommandExecutor } from "../../src/shared/application/commands/command-executor.js";
 import { hashCanonicalInput } from "../../src/platform/crypto/canonical-input-hash.js";
+import { webCryptoCapabilities } from "../../src/platform/crypto/capabilities.js";
 import { DatabaseBoundary } from "../../src/platform/database/database-boundary.js";
 import { SqliteDurableCommandStore } from "../../src/platform/database/durable-command-repository.js";
 import { MigrationRunner, MigrationSource } from "../../src/platform/database/migrations.js";
@@ -135,7 +136,7 @@ describe("S2-01 fake collaboration wizard", () => {
 function buildBot(boundary: DatabaseBoundary, clock: FakeClock, fake: FakeTelegramApi): Bot {
 	const transactionRunner = new DatabaseBoundaryTransactionRunner(boundary);
 	const profileSessions = new SqliteProfileSessionRepository(boundary);
-	const service = new CollaborationDraftService(new SqliteCollaborationRepository(boundary), new SqliteCollaborationSessionRepository(boundary), transactionRunner, clock, profileSessions);
+	const service = new CollaborationDraftService(new SqliteCollaborationRepository(boundary), new SqliteCollaborationSessionRepository(boundary), transactionRunner, clock, webCryptoCapabilities, profileSessions);
 	const bot = new Bot("fake-token", { client: { fetch: fake.fetch } });
 	registerTelegramRouter(bot, {
 		profileService: new ProfileService(new SqliteProfileRepository(boundary), transactionRunner, clock),

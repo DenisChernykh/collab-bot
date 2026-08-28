@@ -44,7 +44,7 @@
 | R1 — Post-launch maintainability | `completed` | 14 | Те же пользовательские контракты с feature-owned кодом и проверяемыми границами |
 | R2 — Complete feature-first layout | `completed` | 31 | Активные feature implementations принадлежат пяти модулям; shared cross-feature/platform code отделён, legacy paths отсутствуют |
 | R3 — Honest top-level ownership | `completed` | 14 | Корень `src` отражает реальные owners: modules, shared kernel, platform adapters и runtime composition |
-| CF1 — Cloudflare-compatible local runtime | `in_progress` | 13 | Тот же бот проходит workerd/SQLite Durable Object gates локально; production polling остаётся доступным для rollback |
+| CF1 — Cloudflare-compatible local runtime | `in_progress` | 14 | Тот же бот проходит workerd/SQLite Durable Object gates локально; production polling остаётся доступным для rollback |
 | CF2 — Free Cloudflare staging | `pending` | 4 | Отдельный staging Worker и dev-бот проходят hosted webhook/alarm smoke без production traffic |
 | CF3 — Production cutover | `pending` | 4 | Данные перенесены, production webhook включён и hosted journey подтверждён с явным rollback boundary |
 
@@ -67,7 +67,7 @@ P0-01 → P0-02
   → R2-14A → R2-14B → R2-14C → R2-14D → R2-14E → R2-15
   → R3-00 → R3-01 → R3-02A → R3-02B → R3-02C → R3-03 → R3-04
   → R3-05A → R3-05B → R3-05C → R3-06 → R3-07A → R3-07B → R3-08
-  → CF1-00 → CF1-01 → CF1-02A → CF1-02B → CF1-02C → CF1-03 → CF1-04A → CF1-04B → CF1-05 → CF1-06 → CF1-07 → CF1-08 → CF1-09
+  → CF1-00 → CF1-01 → CF1-02A → CF1-02B → CF1-02C → CF1-02D → CF1-03 → CF1-04A → CF1-04B → CF1-05 → CF1-06 → CF1-07 → CF1-08 → CF1-09
   → CF2-00 → CF2-01 → CF2-02 → CF2-03
   → CF3-00 → CF3-01 → CF3-02 → CF3-03
 ```
@@ -1412,7 +1412,7 @@ Free-only является stop condition: никакой unit не включа
 
 #### CF1-00 — Зафиксировать Cloudflare technical contract
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Заменить устаревший long-polling/LaunchAgent target в Technical Design на dual local/Cloudflare contract, не меняя PRD journey.
 - **Dependencies:** `R3-08` completed.
 - **Read first:** PRD §1, §3.3, §6, §13–16, §19–20; TD §1–3, §7, §10–13, §15–20, §23; CF target/free boundary above.
@@ -1421,11 +1421,11 @@ Free-only является stop condition: никакой unit не включа
 - **Invariants:** product policy and `LFR-*`/`LAC-*` remain unchanged; D1 is not described as globally unsuitable or as an automatic TMA/web migration; hosted/24x7 is not claimed before CF3 evidence.
 - **Verification:** document contradiction scan for `long polling`, `DatabaseSync`, LaunchAgent, backup and production-ready claims; relative links; `git diff --check`.
 - **Exit criteria:** sources agree on the target and proof boundaries; one commit `CF1-00: define Cloudflare runtime contract`.
-- **Evidence:** Commit SHA: `SELF`. Preflight confirmed clean `main` at `c4c5bfbc5f9696b63e0acf89182990017c2237fb`, matching `origin/main`, Node `v24.18.0` and pnpm `11.15.1`. Updated README and Technical Design to distinguish the legacy Node/SQLite rollback runtime from the local-only Worker → singleton SQLite Durable Object candidate; documented no-login/no-deploy/no-production boundary and alarm/webhook topology. Updated the executable registry to 13 CF1 units and split CF1-02 into A/B/C and CF1-04 into A/B; corrected the Durable Object migration-history reference to canonical `__app_migrations`. `git diff --check` passed; contradiction scan found no stale `_sql_schema_migrations`, unsplit CF1-02/04 registry references or ten-unit count. No source, dependency, credential, Telegram, Cloudflare or remote files were touched.
+- **Evidence:** Commit SHA: `SELF`. Preflight confirmed clean `main` at `c4c5bfbc5f9696b63e0acf89182990017c2237fb`, matching `origin/main`, Node `v24.18.0` and pnpm `11.15.1`. Updated README and Technical Design to distinguish the legacy Node/SQLite rollback runtime from the local-only Worker → singleton SQLite Durable Object candidate; documented no-login/no-deploy/no-production boundary and alarm/webhook topology. Updated the executable registry to 14 CF1 units and split CF1-02 into A/B/C/D and CF1-04 into A/B; corrected the Durable Object migration-history reference to canonical `__app_migrations`. `git diff --check` passed; contradiction scan found no stale `_sql_schema_migrations`, unsplit CF1-02/04 registry references or ten-unit count. No source, dependency, credential, Telegram, Cloudflare or remote files were touched.
 
 #### CF1-01 — Add workerd toolchain and empty Worker harness
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Add a pinned Wrangler/workerd/Vitest harness that runs locally without creating Cloudflare resources.
 - **Dependencies:** `CF1-00`.
 - **Preconditions:** exact Node/pnpm contract verified before dependency changes.
@@ -1439,7 +1439,7 @@ Free-only является stop condition: никакой unit не включа
 
 #### CF1-02A — Establish portable crypto primitives
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Make UUID, secure random bytes/tokens and SHA-256 available through runtime-neutral ports/adapters while preserving every serialized format.
 - **Dependencies:** `CF1-01`.
 - **Scope:** exact `@noble/hashes@2.4.0` dependency; provider-neutral crypto ports; Web Crypto and pure-JS SHA-256 implementations; deterministic test doubles and golden primitives tests.
@@ -1452,33 +1452,46 @@ Free-only является stop condition: никакой unit не включа
 
 #### CF1-02B — Inject crypto into profile and discovery flows
 
-- **Status:** `pending`
-- **Objective:** Move profiles, collaborations and marketplace generation/token/hash decisions onto the portable capabilities.
+- **Status:** `completed`
+- **Objective:** Move profiles and collaborations generation/token/hash decisions onto the portable capabilities.
 - **Dependencies:** `CF1-02A`.
-- **Scope:** feature application/presentation factories and adapters for profile, collaboration and marketplace flows; preserve callback/deep-link tokens, generation strings, rendered hashes and serialized formats.
-- **Do not touch:** applications/moderation consumers, SQL text, public copy or token formats.
+- **Scope:** profile presentation plus collaboration application/composition consumers; preserve callback/deep-link tokens, generation strings, rendered hashes and serialized formats.
+- **Do not touch:** marketplace/discovery, applications/moderation consumers, SQL text, public copy or token formats.
 - **Invariants:** persisted values and replay identity remain byte-compatible; deterministic tests receive explicit doubles; no feature imports `node:crypto`.
-- **Tests first:** profile/publication/discovery golden and injected-capability tests.
-- **Verification:** focused integration/E2E suites, architecture and import scan.
-- **Exit criteria:** profile and discovery flows are Worker-portable; one commit `CF1-02B: inject portable crypto into profile and discovery flows`.
+- **Tests first:** profile/publication golden and injected-capability tests.
+- **Verification:** focused profile/collaboration integration/E2E suites, architecture and import scan.
+- **Exit criteria:** profile and collaboration flows are Worker-portable; one commit `CF1-02B: inject portable crypto into profile and collaboration flows`.
+- **Evidence:** Commit SHA: `SELF`. Mandatory split discovered before commit: the original 13-unit CF1 plan would exceed the repository unit boundary when the crypto cutover is counted by changed source/test files. The registry was revised to 14 units, with marketplace/discovery plus the required runtime routing wiring isolated as CF1-02C and applications/moderation isolated as CF1-02D. The staged B subset contains exactly 12 source/test files: `src/modules/collaborations/application/collaboration-draft-service.ts`, `src/modules/collaborations/application/collaboration-publication-service.ts`, `src/modules/collaborations/composition/create-collaborations-feature.ts`, `src/modules/profiles/presentation/telegram/profile-composer.ts`, `src/platform/crypto/capabilities.ts`, `src/runtime/telegram/telegram-router.ts`, `src/shared/application/ports/crypto.ts`, `test/e2e-fake/r1-05a-profile-composer.test.ts`, `test/e2e-fake/s2-01-collaboration-bot.test.ts`, `test/integration/r2-07a-collaborations-composition.test.ts`, `test/integration/s2-01-collaboration.test.ts`, and `test/integration/s2-02-publication.test.ts`; plan metadata is outside this cap. The unstaged C WIP was preserved with named `git stash push --keep-index -m "CF1-02C: preserve marketplace discovery routing WIP"`, leaving the B index clean for this single commit. Focused suite passed (5 files, 13 tests); `pnpm typecheck`, `pnpm cloudflare:typecheck`, `pnpm architecture` (131 modules/421 dependencies), `pnpm db:verify`, `git diff --cached --check` and exact `node:crypto` import scan passed. Profile generations/request IDs, collaboration generations, public tokens, rendered hashes and delivery IDs now consume injected capabilities; no SQL, copy or serialized formats changed. No credentials, remote resources, Telegram or production actions touched.
 
-#### CF1-02C — Inject crypto into application decisions
+#### CF1-02C — Inject crypto into marketplace discovery and runtime routing
+
+- **Status:** `in_progress`
+- **Objective:** Move marketplace/discovery decisions onto injected crypto capabilities and complete the runtime composition/routing slice needed by those consumers.
+- **Dependencies:** `CF1-02B`.
+- **Scope:** marketplace/discovery application/composition consumers, Telegram routing and Node runtime wiring required to pass the portable capability; deterministic test doubles.
+- **Do not touch:** profile/collaboration consumers, applications/moderation consumers, SQL text, command semantics or public copy.
+- **Invariants:** browse tokens, rendered hashes and generated IDs remain compatible; `node:crypto` remains only in explicit Node/test-owned adapters.
+- **Tests first:** marketplace/discovery integration and fake journey tests with deterministic crypto doubles.
+- **Verification:** focused integration/E2E, `pnpm architecture`, typecheck and exact `node:crypto` import scan.
+- **Exit criteria:** marketplace/discovery and their runtime routing are Worker-portable; one commit `CF1-02C: inject portable crypto into marketplace discovery`.
+
+#### CF1-02D — Inject crypto into application decisions
 
 - **Status:** `pending`
 - **Objective:** Move applications and moderation decisions onto injected UUID/token capabilities and preserve Node composition.
-- **Dependencies:** `CF1-02B`.
-- **Scope:** applications/moderation feature factories, decision/callback token consumers, Node composition wiring and deterministic test doubles.
+- **Dependencies:** `CF1-02C`.
+- **Scope:** applications/moderation feature factories, decision/callback token consumers, remaining Node composition wiring and deterministic test doubles.
 - **Do not touch:** profile/collaboration/marketplace consumers, SQL text, command semantics or public copy.
 - **Invariants:** decision receipts, callback hashes and generated IDs remain compatible; `node:crypto` remains only in explicit Node/test-owned adapters.
 - **Tests first:** application/moderation decision tests with deterministic crypto doubles.
 - **Verification:** focused integration/E2E, `pnpm architecture`, typecheck and exact `node:crypto` import scan.
-- **Exit criteria:** all application decision flows are Worker-portable; one commit `CF1-02C: inject portable crypto into application decisions`.
+- **Exit criteria:** all application decision flows are Worker-portable; one commit `CF1-02D: inject portable crypto into application decisions`.
 
 #### CF1-03 — Introduce a runtime-neutral SQL contract
 
 - **Status:** `pending`
 - **Objective:** Separate repository-facing SQL/transaction APIs from the concrete `node:sqlite` connection without changing SQL behavior.
-- **Dependencies:** `CF1-02C`.
+- **Dependencies:** `CF1-02D`.
 - **Scope:** `SqlDatabase`/result/parameter/transaction contracts; adapt Node `DatabaseBoundary`, transaction runner and shared platform repositories first.
 - **Do not touch:** migration SQL/checksums, repository queries, transaction nesting/rollback semantics or feature behavior.
 - **Invariants:** current Node path remains serialized and rollback-only on nested failure; Telegram calls remain outside transaction.

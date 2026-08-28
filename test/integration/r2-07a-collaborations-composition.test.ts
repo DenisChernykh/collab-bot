@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { SqliteOutboxDeliveryRepository } from "../../src/platform/outbox/outbox-delivery-repository.js";
 import { SqliteTelegramUserRepository } from "../../src/platform/database/telegram-user-repository.js";
 import { DatabaseBoundaryTransactionRunner } from "../../src/platform/database/transaction-runner.js";
+import { webCryptoCapabilities } from "../../src/platform/crypto/capabilities.js";
 import { FakeClock } from "../support/fake-clock.js";
 import { SystemProviderDeadline } from "../../src/platform/time/provider-deadline.js";
 import { createCollaborationsFeature } from "../../src/modules/collaborations/index.js";
@@ -38,6 +39,7 @@ describe("R2-07A collaborations composition", () => {
 				boundary,
 				transactions,
 				clock,
+				crypto: webCryptoCapabilities,
 				outboxStore: new SqliteOutboxDeliveryRepository(boundary),
 				capability: { canPublish: false, reason: "test" },
 				channelChatId: "-100123",

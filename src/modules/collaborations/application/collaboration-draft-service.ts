@@ -1,6 +1,5 @@
-import { randomBytes } from "node:crypto";
-
 import type { TransactionRunner } from "../../../shared/application/ports/transaction-runner.js";
+import type { CryptoCapabilities } from "../../../shared/application/ports/crypto.js";
 import type { ProfileSessionRepository } from "../../profiles/application/index.js";
 import type { CollaborationRepository } from "./ports/collaboration-repository.js";
 import type { CollaborationSessionRecord, CollaborationSessionRepository } from "./ports/collaboration-session-repository.js";
@@ -41,6 +40,7 @@ export class CollaborationDraftService {
 		private readonly sessions: CollaborationSessionRepository,
 		private readonly transactionRunner: TransactionRunner,
 		private readonly clock: Clock,
+		private readonly crypto: CryptoCapabilities,
 		private readonly profileSessions?: ProfileSessionRepository,
 	) {}
 
@@ -59,7 +59,7 @@ export class CollaborationDraftService {
 			let session = await this.sessions.findActive(telegramUserId, now);
 			if (session !== undefined && session.collaborationId !== draft.id) throw new CollaborationWizardConflictError();
 			if (session === undefined) {
-				const state: CollaborationDraftState = { version: COLLABORATION_SESSION_VERSION, generation: randomBytes(8).toString("hex"), step: firstStep(draft), ...draftToInput(draft) };
+				const state: CollaborationDraftState = { version: COLLABORATION_SESSION_VERSION, generation: this.crypto.randomHex(8), step: firstStep(draft), ...draftToInput(draft) };
 				session = await this.saveSession({ telegramUserId, collaborationId: draft.id, state, revision: 1, expiresAt: now + COLLABORATION_SESSION_TTL_MS, updatedAt: now });
 			}
 			return { draft, session, resumed };

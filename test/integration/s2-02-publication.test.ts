@@ -11,6 +11,7 @@ import { DatabaseBoundary } from "../../src/platform/database/database-boundary.
 import { MigrationRunner, MigrationSource } from "../../src/platform/database/migrations.js";
 import { SqliteOutboxDeliveryRepository } from "../../src/platform/outbox/outbox-delivery-repository.js";
 import { DatabaseBoundaryTransactionRunner } from "../../src/platform/database/transaction-runner.js";
+import { webCryptoCapabilities } from "../../src/platform/crypto/capabilities.js";
 import { SqliteTelegramUserRepository } from "../../src/platform/database/telegram-user-repository.js";
 import { FakeTelegramTransport } from "../support/fake-telegram-transport.js";
 import { FakeClock } from "../support/fake-clock.js";
@@ -61,7 +62,7 @@ describe("S2-02 showcase publication", () => {
 			const transactions = new DatabaseBoundaryTransactionRunner(boundary);
 			const collaborations = new SqliteCollaborationRepository(boundary);
 			const sessions = new SqliteCollaborationSessionRepository(boundary);
-			const draftService = new CollaborationDraftService(collaborations, sessions, transactions, clock);
+			const draftService = new CollaborationDraftService(collaborations, sessions, transactions, clock, webCryptoCapabilities);
 			let current = await draftService.start("100");
 			current = await draftService.saveStep("100", current.session, { format: "joint_content" }, "target_profile_type");
 			current = await draftService.saveStep("100", current.session, { targetProfileType: "blogger" }, "topics");
@@ -75,7 +76,7 @@ describe("S2-02 showcase publication", () => {
 			const outbox = new SqliteOutboxDeliveryRepository(boundary);
 			const capability = { canPublish: true, reason: null as string | null };
 			const publications = new SqliteCollaborationPublicationRepository(boundary);
-			const service = new CollaborationPublicationService(collaborations, publications, sessions, outbox, transactions, clock, capability, "-1001", "collab_bot");
+			const service = new CollaborationPublicationService(collaborations, publications, sessions, outbox, transactions, clock, capability, "-1001", "collab_bot", webCryptoCapabilities);
 			const published = await service.publish("100", current.draft.id);
 			expect(published.status).toBe("publishing");
 			const duplicate = await service.publish("100", current.draft.id);
@@ -149,7 +150,7 @@ async function preparePublication(boundary: DatabaseBoundary, clock: FakeClock):
 	const transactions = new DatabaseBoundaryTransactionRunner(boundary);
 	const collaborations = new SqliteCollaborationRepository(boundary);
 	const sessions = new SqliteCollaborationSessionRepository(boundary);
-	const drafts = new CollaborationDraftService(collaborations, sessions, transactions, clock);
+	const drafts = new CollaborationDraftService(collaborations, sessions, transactions, clock, webCryptoCapabilities);
 	let current = await drafts.start("100");
 	current = await drafts.saveStep("100", current.session, { format: "joint_content" }, "target_profile_type");
 	current = await drafts.saveStep("100", current.session, { targetProfileType: "blogger" }, "topics");
@@ -161,7 +162,7 @@ async function preparePublication(boundary: DatabaseBoundary, clock: FakeClock):
 	current = await drafts.saveStep("100", current.session, { responseDeadlineDate: "20.11.2023" }, "event_date");
 	current = await drafts.saveStep("100", current.session, { eventDateLocal: "25.11.2023" }, "preview");
 	const outbox = new SqliteOutboxDeliveryRepository(boundary);
-	const service = new CollaborationPublicationService(collaborations, new SqliteCollaborationPublicationRepository(boundary), sessions, outbox, transactions, clock, { canPublish: true, reason: null }, "-1001", "collab_bot");
+	const service = new CollaborationPublicationService(collaborations, new SqliteCollaborationPublicationRepository(boundary), sessions, outbox, transactions, clock, { canPublish: true, reason: null }, "-1001", "collab_bot", webCryptoCapabilities);
 	const published = await service.publish("100", current.draft.id);
 	return { service, outbox, collaborations, collaborationId: current.draft.id, deliveryId: published.deliveryId! };
 }
