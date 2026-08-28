@@ -84,4 +84,51 @@ describe("CF1-05 Durable Object SQLite contract", () => {
 			);
 		});
 	});
+
+	it("materializes an execute cursor before reading rowsWritten", async () => {
+		let materialized = false;
+		let rowsWrittenRead = false;
+		const database = new CloudflareSqlDatabase({
+			sql: {
+				exec: () => ({
+					toArray: () => {
+						materialized = true;
+						return [];
+					},
+					get rowsWritten() {
+						rowsWrittenRead = true;
+						if (!materialized) throw new Error("rowsWritten read before cursor materialization");
+						return 3;
+					},
+				}),
+			},
+			transaction: async (work) => work(),
+		});
+
+		expect(await database.execute("INSERT INTO contract_rows VALUES (1, 'one')")).toEqual({ changes: 3 });
+		expect(materialized).toBe(true);
+		expect(rowsWrittenRead).toBe(true);
+	});
+
+	it("normalizes indexed execute hits and misses to logical SQLite changes", async () => {
+		const stub = env.COLLABORATION_STATE.get(
+			env.COLLABORATION_STATE.idFromName("cf1-05-execute-change-normalization"),
+		);
+		await stub.fetch("https://local/__cf1/schema");
+		await runInDurableObject(stub, async (_instance, state) => {
+			const database = new CloudflareSqlDatabase(state.storage);
+			await database.execute(
+				"INSERT INTO command_receipts (command_id, source, telegram_update_id, input_hash, status, result_json, created_at, completed_at) VALUES (?, 'telegram', ?, ?, 'in_progress', NULL, ?, NULL)",
+				["cf1-05-change-hit", 9501, "a".repeat(64), 1_700_000_000_000],
+			);
+			expect(await database.execute(
+				"UPDATE command_receipts SET status = 'completed', result_json = ?, completed_at = ? WHERE command_id = ? AND status = 'in_progress'",
+				[JSON.stringify({ version: 1, outcome: "completed" }), 1_700_000_000_001, "cf1-05-change-hit"],
+			)).toEqual({ changes: 1 });
+			expect(await database.execute(
+				"UPDATE command_receipts SET status = 'completed' WHERE command_id = ? AND status = 'in_progress'",
+				["cf1-05-change-miss"],
+			)).toEqual({ changes: 0 });
+		});
+	});
 });

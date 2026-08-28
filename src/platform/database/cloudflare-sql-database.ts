@@ -28,7 +28,11 @@ export class CloudflareSqlDatabase implements SqlDatabase {
 
 	async execute(sql: string, parameters: readonly SqlValue[] = []): Promise<{ readonly changes: number }> {
 		const cursor = this.storage.sql.exec(sql, ...parameters.map(toCloudflareBinding));
-		return { changes: cursor.rowsWritten };
+		cursor.toArray();
+		const rowsWritten = cursor.rowsWritten;
+		if (rowsWritten === 0) return { changes: 0 };
+		const logicalChanges = this.storage.sql.exec("SELECT changes() AS changes").toArray()[0]?.changes;
+		return { changes: typeof logicalChanges === "number" ? logicalChanges : rowsWritten };
 	}
 
 	async withTransaction<T>(work: () => T | PromiseLike<T>): Promise<T> {

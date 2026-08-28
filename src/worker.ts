@@ -58,6 +58,8 @@ export class CollaborationBotState implements DurableObject {
 	private application: ReturnType<typeof composeBotApplication> | undefined;
 	private cachedPreflight: PreflightCache | undefined;
 	private preflightPromise: Promise<void> | undefined;
+	private identityReady = false;
+	private identityPromise: Promise<void> | undefined;
 
 	constructor(state: DurableObjectState, environment: CloudflareEnvironment) {
 		this.state = state;
@@ -69,6 +71,8 @@ export class CollaborationBotState implements DurableObject {
 			await this.ensurePreflightTable();
 			const storedPreflight = await this.readPreflightCache();
 			this.cachedPreflight = storedPreflight !== undefined
+				&& storedPreflight.canPublish
+				&& storedPreflight.reason === null
 				&& this.hasPreflightConfiguration()
 				&& this.matchesCurrentConfig(storedPreflight)
 				? storedPreflight
@@ -104,8 +108,19 @@ export class CollaborationBotState implements DurableObject {
 		const pathname = new URL(request.url).pathname;
 		if (request.method === "GET" && pathname === "/__cf1/ready") {
 			await this.ready;
-			await this.scheduleNextAlarm();
-			return json({ status: "ready", durableObject: "CollaborationBotState" });
+			try {
+				await this.ensurePreflight();
+				await this.scheduleNextAlarm();
+				const capability = this.application?.showcaseCapability() ?? { canPublish: false, reason: "handler_unavailable" };
+				return json({
+					status: this.hasPreflightConfiguration() && !(capability.canPublish && capability.reason === null) ? "degraded" : "ready",
+					identity: this.hasPreflightConfiguration() ? "verified" : "unconfigured",
+					showcase: capability,
+					durableObject: "CollaborationBotState",
+				});
+			} catch {
+				return json({ status: "not_ready", reason: "preflight_failed" }, 503);
+			}
 		}
 		if (pathname === "/__cf1/state/export" || pathname === "/__cf1/state/import") {
 			await this.ready;
@@ -191,8 +206,19 @@ export class CollaborationBotState implements DurableObject {
 	}
 
 	private async ensurePreflight(): Promise<void> {
-		if (this.cachedPreflight !== undefined && this.matchesCurrentConfig(this.cachedPreflight)) return;
 		if (!this.hasPreflightConfiguration()) return;
+		await this.ensureIdentity();
+		if (this.cachedPreflight === undefined) {
+			const storedPreflight = await this.readPreflightCache();
+			this.cachedPreflight = storedPreflight !== undefined
+				&& storedPreflight.canPublish
+				&& storedPreflight.reason === null
+				&& this.matchesCurrentConfig(storedPreflight)
+				? storedPreflight
+				: undefined;
+		}
+		if (this.cachedPreflight !== undefined && this.matchesCurrentConfig(this.cachedPreflight)) return;
+		this.cachedPreflight = undefined;
 		if (this.preflightPromise !== undefined) return this.preflightPromise;
 		this.preflightPromise = this.runPreflight().finally(() => {
 			this.preflightPromise = undefined;
@@ -202,7 +228,6 @@ export class CollaborationBotState implements DurableObject {
 
 	private async runPreflight(): Promise<void> {
 		if (this.application === undefined) throw new Error("handler_unavailable");
-		await this.application.lifecycle.initializeIdentity();
 		await this.application.lifecycle.preflightShowcase();
 		const capability = this.application.showcaseCapability();
 		const cache: PreflightCache = {
@@ -213,7 +238,11 @@ export class CollaborationBotState implements DurableObject {
 			canPublish: capability.canPublish,
 			reason: capability.reason,
 		};
-		if (cache.reason === "showcase preflight failed") return;
+		if (!cache.canPublish || cache.reason !== null) {
+			await this.database.execute(`DELETE FROM ${PREFLIGHT_TABLE}`);
+			this.cachedPreflight = undefined;
+			return;
+		}
 		await this.database.withTransaction(async () => {
 			await this.database.execute(`DELETE FROM ${PREFLIGHT_TABLE}`);
 			await this.database.execute(
@@ -232,8 +261,21 @@ export class CollaborationBotState implements DurableObject {
 		this.cachedPreflight = cache;
 	}
 
+	private async ensureIdentity(): Promise<void> {
+		if (this.identityReady) return;
+		if (this.identityPromise !== undefined) return this.identityPromise;
+		if (this.application === undefined) throw new Error("handler_unavailable");
+		this.identityPromise = this.application.lifecycle.initializeIdentity().then(() => {
+			this.identityReady = true;
+		}).finally(() => {
+			this.identityPromise = undefined;
+		});
+		return this.identityPromise;
+	}
+
 	private async scheduleNextAlarm(): Promise<void> {
-		const canPublish = this.application?.showcaseCapability().canPublish === true;
+		const capability = this.application?.showcaseCapability();
+		const canPublish = capability?.canPublish === true && capability.reason === null;
 		const rows = await this.database.query<{ scheduled_at: number | null }>(
 			`SELECT MIN(
 				CASE
