@@ -2,7 +2,8 @@ import type {
 	DurableCommandReceipt,
 	DurableCommandStore,
 } from "../../shared/application/ports/durable-command-store.js";
-import type { DatabaseBoundary } from "./database-boundary.js";
+import { resolveSqlDatabase, type SqlDatabaseInput } from "./node-sql-database.js";
+import type { SqlDatabase } from "../../shared/application/ports/sql-database.js";
 
 interface ReceiptRow {
 	command_id?: unknown;
@@ -14,7 +15,11 @@ interface ReceiptRow {
 }
 
 export class SqliteDurableCommandStore implements DurableCommandStore {
-	constructor(private readonly boundary: DatabaseBoundary) {}
+	private readonly boundary: SqlDatabase;
+
+	constructor(source: SqlDatabaseInput) {
+		this.boundary = resolveSqlDatabase(source);
+	}
 
 	async findReceipt(commandId: string): Promise<DurableCommandReceipt | undefined> {
 		const rows = await this.boundary.query<ReceiptRow>(

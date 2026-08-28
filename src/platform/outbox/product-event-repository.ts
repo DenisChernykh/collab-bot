@@ -10,7 +10,8 @@ import {
 	ProductEventStoreIdConflictError,
 } from "../../shared/application/ports/product-event-store.js";
 import { serializeSafeAttributes } from "../../shared/application/outbox/product-event-service.js";
-import type { DatabaseBoundary } from "../database/database-boundary.js";
+import { resolveSqlDatabase, type SqlDatabaseInput } from "../database/node-sql-database.js";
+import type { SqlDatabase } from "../../shared/application/ports/sql-database.js";
 
 interface ProductEventRow {
 	event_id?: unknown;
@@ -25,7 +26,11 @@ interface ProductEventRow {
 }
 
 export class SqliteProductEventRepository implements ProductEventStore {
-	constructor(private readonly boundary: DatabaseBoundary) {}
+	private readonly boundary: SqlDatabase;
+
+	constructor(source: SqlDatabaseInput) {
+		this.boundary = resolveSqlDatabase(source);
+	}
 
 	async findByIdempotencyKey(idempotencyKey: string): Promise<ProductEventRecord | undefined> {
 		const rows = await this.boundary.query<ProductEventRow>(

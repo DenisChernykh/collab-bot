@@ -15,7 +15,8 @@ import {
 	parseDeliveryPayload,
 	serializeDeliveryPayload,
 } from "../../shared/application/outbox/delivery-payload.js";
-import type { DatabaseBoundary } from "../database/database-boundary.js";
+import { resolveSqlDatabase, type SqlDatabaseInput } from "../database/node-sql-database.js";
+import type { SqlDatabase } from "../../shared/application/ports/sql-database.js";
 
 interface OutboxRow {
 	id?: unknown;
@@ -37,7 +38,11 @@ interface OutboxRow {
 }
 
 export class SqliteOutboxDeliveryRepository implements OutboxDeliveryStore {
-	constructor(private readonly boundary: DatabaseBoundary) {}
+	private readonly boundary: SqlDatabase;
+
+	constructor(source: SqlDatabaseInput) {
+		this.boundary = resolveSqlDatabase(source);
+	}
 
 	async findById(id: string): Promise<OutboxDeliveryRecord | undefined> {
 		return this.find("id", id);

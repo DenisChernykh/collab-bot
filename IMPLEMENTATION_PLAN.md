@@ -1528,7 +1528,7 @@ Free-only является stop condition: никакой unit не включа
 
 #### CF1-04C — Decouple shared persistence from Node SQLite
 
-- **Status:** `pending`
+- **Status:** `completed`
 - **Objective:** Move shared callback, durable-command, ingress-retention, Telegram-user, transaction, outbox-delivery and product-event adapters to the portable SQL contract.
 - **Dependencies:** `CF1-04B`.
 - **Scope:** exactly seven shared platform adapter files; preserve SQL text, FIFO/transaction semantics, retention counts, outbox status/fencing/retry behavior and product-event ordering.
@@ -1537,6 +1537,7 @@ Free-only является stop condition: никакой unit не включа
 - **Tests first:** shared callback/durable/retention/outbox/product-event characterization suites through the Node adapter.
 - **Verification:** focused shared persistence suites, `pnpm check`, `pnpm db:verify`, architecture and exact concrete-boundary import scan.
 - **Exit criteria:** shared persistence consumes `SqlDatabase`; one commit `CF1-04C: decouple shared persistence from Node SQLite`.
+- **Evidence:** Commit SHA: `SELF`. The mandatory pre-commit split was restored and verified after CF1-04B: the shared slice contains exactly seven source files — `src/platform/database/callback-action-repository.ts`, `src/platform/database/durable-command-repository.ts`, `src/platform/database/ingress-retention.ts`, `src/platform/database/telegram-user-repository.ts`, `src/platform/database/transaction-runner.ts`, `src/platform/outbox/outbox-delivery-repository.ts` and `src/platform/outbox/product-event-repository.ts` — with no source/test file outside this subset. The named `CF1-04C: preserve shared persistence WIP` stash was restored, its plan/runtime conflicts were resolved in favor of committed CF1-04B plus the seven shared files, the restored diff was verified, and only that named stash was dropped; the user backup stash remained intact. All seven adapters now consume `SqlDatabase` internally through the existing Node adapter while preserving SQL, result normalization, transaction/cleanup semantics, outbox status/fencing/retry behavior and public contracts. Focused shared suite passed (6 files, 54 tests); `pnpm check` passed (lint 0 errors with two pre-existing generated-file warnings, architecture 133 modules/450 dependencies, typecheck, unit 14 files/75 tests, integration 19 files/88 tests, runtime 7 files/47 tests and build); `pnpm db:verify` passed; concrete `DatabaseBoundary` references remain only in Node composition/bootstrap, migrations/CLI and the Node adapter; forbidden `node:crypto` scan across `src/shared` and `src/modules` passed; cached source/test count was exactly 7 and both cached/working-tree `git diff --check` passed. No credentials, remote resources, Telegram or production actions touched.
 
 #### CF1-05 — Implement Durable Object SQLite and migrations
 

@@ -3,10 +3,15 @@ import type {
 	TelegramUserRecord,
 } from "../../shared/application/ports/telegram-user-lookup.js";
 import type { TelegramUserSnapshot, TelegramUserWriter } from "../../shared/application/ports/telegram-user-writer.js";
-import type { DatabaseBoundary } from "./database-boundary.js";
+import { resolveSqlDatabase, type SqlDatabaseInput } from "./node-sql-database.js";
+import type { SqlDatabase } from "../../shared/application/ports/sql-database.js";
 
 export class SqliteTelegramUserRepository implements TelegramUserLookup, TelegramUserWriter {
-	constructor(private readonly boundary: DatabaseBoundary) {}
+	private readonly boundary: SqlDatabase;
+
+	constructor(source: SqlDatabaseInput) {
+		this.boundary = resolveSqlDatabase(source);
+	}
 
 	async findByTelegramUserId(telegramUserId: string): Promise<TelegramUserRecord | undefined> {
 		const rows = await this.boundary.query<{ telegram_user_id?: unknown; status?: unknown }>(

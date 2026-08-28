@@ -3,7 +3,8 @@ import type {
 	CallbackActionStore,
 } from "../../shared/application/ports/callback-action-store.js";
 import { CallbackActionStoreCorruptError as CorruptError } from "../../shared/application/ports/callback-action-store.js";
-import type { DatabaseBoundary } from "./database-boundary.js";
+import { resolveSqlDatabase, type SqlDatabaseInput } from "./node-sql-database.js";
+import type { SqlDatabase } from "../../shared/application/ports/sql-database.js";
 
 interface ActionRow {
 	token_hash?: unknown;
@@ -18,7 +19,11 @@ interface ActionRow {
 }
 
 export class SqliteCallbackActionRepository implements CallbackActionStore {
-	constructor(private readonly boundary: DatabaseBoundary) {}
+	private readonly boundary: SqlDatabase;
+
+	constructor(source: SqlDatabaseInput) {
+		this.boundary = resolveSqlDatabase(source);
+	}
 
 	async findByTokenHash(tokenHash: string): Promise<CallbackActionRecord | undefined> {
 		const rows = await this.boundary.query<ActionRow>(
