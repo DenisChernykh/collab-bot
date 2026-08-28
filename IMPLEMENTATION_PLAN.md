@@ -1594,7 +1594,7 @@ Free-only является stop condition: никакой unit не включа
 
 #### CF1-09 — Preserve real local Telegram development and close CF1
 
-- **Status:** `pending`
+- **Status:** `completed`
 - **Objective:** Keep a convenient real-Telegram local path while proving all application logic executes in local workerd/DO, not a second database implementation.
 - **Dependencies:** `CF1-08`.
 - **Scope:** tiny long-polling relay using a separate development bot token and development showcase channel; relay posts raw updates to local Worker; `.dev.vars.example`, commands/runbook, full Cloudflare fake gate and one blocker-limited stage review.
@@ -1602,6 +1602,7 @@ Free-only является stop condition: никакой unit не включа
 - **Invariants:** relay contains no business logic/database; the same token is never used simultaneously for webhook and `getUpdates`; local secrets remain ignored.
 - **Verification:** `pnpm check`; `pnpm test:e2e:fake`; `pnpm test:cloudflare`; `pnpm db:verify`; local transfer rehearsal; bundle/startup inspection; secret scan. Real dev-bot smoke remains a separate explicit authorization.
 - **Exit criteria:** CF1 completed locally, legacy `pnpm start` still available for rollback, no remote mutation; one commit `CF1-09: close local Cloudflare migration candidate`.
+- **Evidence:** Commit SHA: `SELF`. Preflight confirmed clean predecessor `262527e2ea8fe974a112bdb495cfb3f5b5a9348b`, Node `v24.18.0`, pnpm `11.15.1` and unique Task-ID. Test-first RED reproduced the missing relay module; the focused contract then passed (2 tests). Added the Node-only `cloudflare:relay` CLI and package command: it requires a private 0600 env file, a loopback local Worker URL, a separate development bot token, and the webhook secret; it calls only Telegram `getUpdates` with explicit `message`/`callback_query` updates, forwards each raw JSON update sequentially to the local webhook, advances offset only after `204`, retries with bounded backoff and handles SIGINT/SIGTERM. It has no application decisions, database access, `setWebhook`, or raw-update logging. Added ignored local-variable guidance with conscious development bot/channel names and a runbook covering local workerd startup, protected diagnostics, same-token ingress exclusivity, clean shutdown and unchanged `pnpm start` rollback. `pnpm check` passed (lint 0 errors with the two pre-existing generated-config warnings, architecture 141 modules/476 dependencies, typecheck, unit 15 files/77 tests, integration 20 files/90 tests, runtime 7 files/47 tests and build); `pnpm test:e2e:fake` passed (8 files/33 tests); `pnpm test:cloudflare` passed (5 files/13 tests); `pnpm db:verify`, `pnpm cloudflare:types:check`, `pnpm cloudflare:migrations:check`, `git diff --check`, compiled relay bundle inspection and credential/PII scan passed. Real Telegram development-bot smoke, webhook configuration, BotFather, Cloudflare login/deploy/remote mutation and production DB were not performed. Changed two source/test files (`src/cli/cloudflare-relay.ts`, `test/unit/cf1-09-relay.test.ts`); package, `.dev.vars.example`, README, runbook and plan metadata are additional. Legacy `pnpm start` remains present for rollback.
 
 ### CF2 — Free Cloudflare staging
 

@@ -1,0 +1,19 @@
+# Local-only values for the collaboration-bot Worker and its development relay.
+# Copy to an ignored .dev.vars file, set mode 0600, and replace every marker.
+# BOT_TOKEN and RELAY_BOT_TOKEN intentionally refer to the same development bot,
+# which must be separate from any production bot identity.
+DEPLOYMENT_ENVIRONMENT=local
+STATE_IMPORT_ENABLED=false
+BOT_TOKEN=replace-with-development-bot-token
+RELAY_BOT_TOKEN=replace-with-development-bot-token
+TELEGRAM_WEBHOOK_SECRET=replace-with-development-webhook-secret
+OPERATIONS_TOKEN=replace-with-development-operations-token
+EXPECTED_BOT_ID=replace-with-development-bot-id
+EXPECTED_BOT_USERNAME=collaboration_bot_development
+ADMIN_TELEGRAM_IDS=replace-with-development-admin-id
+SHOWCASE_CHANNEL_ID=replace-with-development-showcase-channel-id
+SHOWCASE_CHANNEL_USERNAME=collaboration_showcase_development
+HELP_CONTACT=@collaboration_bot_support
+LOCAL_WORKER_URL=http://127.0.0.1:8787
+RELAY_POLL_TIMEOUT_SECONDS=25
+RELAY_RETRY_DELAY_MS=1000

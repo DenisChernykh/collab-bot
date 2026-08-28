@@ -88,6 +88,8 @@ The executable registry is [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md). A u
 
 No push, remote setup, pull request, merge, deployment, credential use, production mutation, or real Telegram action is implied by a stage command unless separately authorized.
 
+The local Cloudflare Worker and development-bot relay procedure is documented in [the CF1 local runbook](docs/CF1_LOCAL_RUNBOOK.md). It is a local-only rehearsal; the legacy foreground runtime remains the rollback path.
+
 ## Foreground operations
 
 Use Node and pnpm versions allowed by `package.json`, keep the real env file outside Git with restrictive file permissions, and run from the repository root.
