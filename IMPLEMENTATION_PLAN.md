@@ -43,7 +43,7 @@
 | FUT — Telegram audience snapshot | `completed` | 1 | Best-effort снимок аудитории Telegram после сохранения профиля |
 | R1 — Post-launch maintainability | `completed` | 14 | Те же пользовательские контракты с feature-owned кодом и проверяемыми границами |
 | R2 — Complete feature-first layout | `completed` | 31 | Активные feature implementations принадлежат пяти модулям; shared cross-feature/platform code отделён, legacy paths отсутствуют |
-| R3 — Honest top-level ownership | `in_progress` | 14 | Корень `src` отражает реальные owners: modules, shared kernel, platform adapters и runtime composition |
+| R3 — Honest top-level ownership | `completed` | 14 | Корень `src` отражает реальные owners: modules, shared kernel, platform adapters и runtime composition |
 
 ```text
 P0-01 → P0-02
@@ -139,6 +139,19 @@ P0-01 → P0-02
 | R2-14D | `e1f3ae7f0f1c500d6c0371bfc0f5b99044235551` | second FakeClock consumer cohort |
 | R2-14E | `ccdc3a6c57e2464b6543e22ef90a3d22c9bc2bce` | removed final test-only production path |
 | R2-15 | `6a4a6f142c7cd95a4c81f473af2ca7ec135a935f` | closed and documented the feature-first transition |
+| R3-00 | `a85c815d52474fa779483b71c9a5c26a861b549d` | decision-complete top-level ownership stage |
+| R3-01 | `78e2d561ba03bcb6d74d32ea76fff9e3af455761` | shared domain vocabulary ownership |
+| R3-02A | `d1c3d3cd3aa1934204deebef94b9794753e49975` | shared core application ports |
+| R3-02B | `8c59f211f9f15132b0b953b9d33dbdc9764c2d00` | shared durable-effect ports |
+| R3-02C | `772aa530eb8811c6be431e98b3a3ac18f38eb7dc` | shared Telegram ports |
+| R3-03 | `e390e5ef0ed87c147f6e7bc0c25f52fff5d0195f` | shared command policies |
+| R3-04 | `934477075c83da03248bb1afd452c1cc658adb89` | complete shared application ownership |
+| R3-05A | `15d36eb180b772df9fa86407a596088fa4da7866` | platform primitive adapters |
+| R3-05B | `03cd93304cde5158af73eff06a382e7e18fea36d` | platform database adapters |
+| R3-05C | `c75564b234f0420b6a04715b08764ac314ff4568` | platform outbox adapters |
+| R3-06 | `5562c5bfb2cca0863588b0e44e6d98a6d57fc39d` | runtime-owned global Telegram shell |
+| R3-07A | `f2f7fe6f11af159da26dfcc006a76b8e25b4b973` | grouped runtime bootstrap and lifecycle |
+| R3-07B | `5ed4b1c36571efece0022fa5493aaaca8f7b4018` | grouped runtime composition |
 
 `product_events` уже существует как foundation primitive из `S0-05`, но первый запуск не обязан писать события или строить funnel. Удалять рабочий committed код ради rebaseline не требуется.
 
@@ -1337,7 +1350,7 @@ src/
 
 #### R3-08 — Enforce and document the completed tree
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Make the target executable, synchronize docs and close R3 on complete evidence.
 - **Dependencies:** `R3-07B`.
 - **Scope:** rewrite architecture rules for `shared/platform/runtime`, update README and TD, authoritative ledger, exact tree/import audit and one blocker-limited critical review.
@@ -1345,6 +1358,7 @@ src/
 - **Invariants:** top-level source directories are exactly `modules`, `shared`, `platform`, `runtime`, `config`, `cli`; modules use only public cross-feature surfaces; shared imports neither platform nor runtime; platform imports neither modules nor runtime; no source imports tests.
 - **Verification:** `pnpm architecture`; `pnpm check`; `pnpm test:e2e:fake`; `pnpm db:verify`; exact old-root/empty-dir/dependency scans; `git diff --check`.
 - **Exit criteria:** R3 completed and documented; one commit `R3-08: close top-level ownership transition`.
+- **Completion evidence:** Commit SHA: `SELF`; rewrote dependency-cruiser policy around the real `shared/platform/runtime` boundaries, migrated its three layer fixtures, synchronized README and TD 0.8, and recorded authoritative R3 commits. Exact top-level audit returns only `cli`, `config`, `modules`, `platform`, `runtime`, `shared`; no legacy or empty source directories, old source/test import paths, source-to-test edges, runtime deep-feature imports or shared/platform outward edges remain. Full R3 source diff contains only file moves and import-specifier changes after rename normalization; package, lockfile, SQL migrations, behavior and public feature APIs are unchanged. The first aggregate run correctly failed only on old architecture fixtures; after one scoped fixture update, focused policy tests PASS (5). Final `pnpm check` PASS (architecture 127 modules/415 dependencies, 69 unit, 88 integration, 47 runtime, lint/typecheck/build); `pnpm test:e2e:fake` PASS (33); `pnpm db:verify` PASS; `git diff --check` PASS. A separate final blocker-limited critical pass found no credential/private-contact exposure, authoritative-data change, duplicate business/Telegram effect, broken core journey or unrunnable candidate; because current execution rules prohibited agent delegation, this pass was performed by the implementing agent and is not represented as an independent second-agent review. No credential, real Telegram, production, remote, push, PR or deploy mutation.
 - **Stop conditions:** any behavior/schema/dependency change, non-green aggregate gate or unresolved blocker.
 
 ## 7. Git и evidence

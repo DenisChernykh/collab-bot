@@ -2,7 +2,7 @@
 
 ## Status
 
-P0 and S0–S4 are complete, including the separately authorized real S4 journey and manual-launch handoff. FUT-01 is implemented locally as a one-time best-effort Telegram audience snapshot; its local/fake evidence does not establish live Telegram count accuracy. The post-launch R1 maintainability stage and R2 feature-first physical transition are complete without changing the product boundary.
+P0 and S0–S4 are complete, including the separately authorized real S4 journey and manual-launch handoff. FUT-01 is implemented locally as a one-time best-effort Telegram audience snapshot; its local/fake evidence does not establish live Telegram count accuracy. The post-launch R1/R2 maintainability work and R3 top-level ownership transition are complete without changing the product boundary.
 
 The project targets a fast manual first launch by one developer. It is not a hosted, scale-ready or always-on service.
 
@@ -47,24 +47,40 @@ src/
     composition/            one factory that wires the feature
     index.ts                public runtime/presentation feature API
     application/index.ts    narrow cross-feature application API, when needed
-  application/              shared command, outbox and platform-port contracts
-  domain/                   only genuinely shared value objects
-  infrastructure/           shared SQLite, crypto, logging, time and Telegram adapters
-  presentation/telegram/    cross-feature durable ingress and routing
-  runtime/                  process composition and lifecycle
+  shared/
+    domain/                 framework-free shared vocabulary
+    application/
+      commands/             durable command and safe-result policies
+      outbox/               delivery/event policies and runners
+      ports/                provider-neutral contracts implemented by adapters
+  platform/
+    database/               shared SQLite boundary, migrations and repositories
+    outbox/                 SQLite delivery and event adapters
+    crypto/                 hash, token and ingress-codec implementations
+    logging/                redacting process logger
+    telegram/               grammY outbound transport
+    time/                   system clock and provider deadline
+  runtime/
+    telegram/               cross-feature durable ingress and routing
+    composition/            application object graph and showcase preflight
+    lifecycle/              polling, worker, drain and process signals
+    bootstrap/              env/private-path startup preparation
+    bot-runtime.ts          narrow established runtime facade
   config/                   environment parsing and validation
   cli/                      executable entrypoints
 ```
 
 Not every feature must have every subdirectory. For example, `marketplace` is a read model and `applications` primarily coordinates existing profile and collaboration state, so neither gets a decorative `domain/` layer without rules it actually owns. Test doubles live under `test/support`, outside production source.
 
-The root Telegram presentation layer owns cross-feature orchestration: global route precedence, private-chat and actor-snapshot guards, callback acknowledgement, one durable envelope for ordinary updates, reply buffering, and the post-commit audience action. Product decisions and feature rendering stay in the mounted feature composers. The former `src/bot` tree and parallel legacy feature paths no longer exist.
+`shared` is the framework-free internal kernel, not a second set of feature implementations. It declares cross-feature command/outbox policies and provider-neutral ports; `platform` points inward and implements those ports. `runtime` is the only global application shell. This dependency direction is enforced directly and does not need a NestJS container: feature factories and `runtime/composition` provide explicit constructor injection.
 
-Runtime object composition, lifecycle, process signals, environment loading and private-path preparation are separate boundaries, while the delivery worker owns its own loop lifecycle.
+`runtime/telegram` owns cross-feature orchestration: global route precedence, private-chat and actor-snapshot guards, callback acknowledgement, one durable envelope for ordinary updates, reply buffering, and the post-commit audience action. Product decisions and feature rendering stay in the mounted feature composers. The former root `application`, `domain`, `infrastructure`, `presentation` and `src/bot` trees no longer exist.
+
+Runtime object composition, Telegram ingress, lifecycle, process signals, environment loading and private-path preparation are explicit subdirectories, while the delivery worker owns its own loop lifecycle. `runtime/bot-runtime.ts` is intentionally retained as a narrow stable facade, not as another implementation owner.
 
 Executable dependency-graph rules enforce layer directions and reject cycles. Production-like tests reuse explicit helpers for fresh migrated SQLite databases, feature composition, prepared fake runtimes and Telegram updates without hiding start, stop or restart behavior.
 
-Immutable SQL migrations are the canonical schema and history. Production repositories use parameterized raw SQL with repository-local typed rows and mappers. This project keeps raw SQL because its persistence work is dominated by explicit transactions, lifecycle guards and cross-table projections already expressed and tested in SQL. The unused Drizzle schema/client did not replace those responsibilities; it duplicated schema ownership and mapping, so it was removed instead of retaining two persistence models. An ORM should be reconsidered only if it becomes the single canonical model and measurably simplifies current repository work.
+Immutable SQL migrations are the canonical schema and history. Repositories under feature infrastructure and `platform` use parameterized raw SQL with repository-local typed rows and mappers. This project keeps raw SQL because its persistence work is dominated by explicit transactions, lifecycle guards and cross-table projections already expressed and tested in SQL. The unused Drizzle schema/client did not replace those responsibilities; it duplicated schema ownership and mapping, so it was removed instead of retaining two persistence models. An ORM should be reconsidered only if it becomes the single canonical model and measurably simplifies current repository work.
 
 ## Execution
 

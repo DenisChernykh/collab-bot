@@ -1,7 +1,7 @@
 # Collaboration Bot — Technical Design
 
 - Статус: `Approved for solo-launch implementation`
-- Версия: `0.7`
+- Версия: `0.8`
 - Дата: `2026-08-28`
 - Product source of truth: `docs/PRD.md`
 
@@ -116,12 +116,13 @@ Telegram Bot API
   │ getUpdates
   ▼
 src/cli/bot.ts
-  → runtime/bot-bootstrap
-  → runtime/bot-application
+  → runtime/bootstrap/bot-bootstrap
+  → runtime/composition/bot-application
       ├── пять feature factories через modules/<feature>/index.ts
-      ├── presentation/telegram router + durable ingress
-      ├── shared SQLite/crypto/time/logging adapters
-      └── bot-lifecycle + delivery worker
+      ├── runtime/telegram router + durable ingress
+      ├── shared application policies + ports
+      ├── platform SQLite/crypto/time/logging/grammY adapters
+      └── runtime/lifecycle + delivery worker
   │
   ├── отдельный collaboration-bot.sqlite
   └── shared outbox/delivery runner
@@ -187,18 +188,21 @@ SLA и high availability не заявляются.
 cli/config
     │
     ▼
-runtime composition ───────────────┐
-    │                              │
-    ├── modules/<feature>/index.ts │
-    ├── presentation/telegram      │
-    └── shared application ports   │
-                                   ▼
-modules/<feature>              infrastructure
-    presentation/telegram      shared platform adapters
+runtime/bootstrap → runtime/composition ─────────┐
+                     │                           │
+                     ├── modules/<feature>/index.ts
+                     ├── runtime/telegram        │
+                     └── shared application      │
+                                                 ▼
+modules/<feature>                            platform
+    presentation/telegram                    shared adapters
     composition
     infrastructure
     application
     domain (when owned)
+                     ▲                           │
+                     └──────── shared ───────────┘
+                              application/domain
 ```
 
 Физическая структура следует business ownership, а слои повторяются внутри feature только тогда, когда у него есть соответствующая ответственность:
@@ -213,11 +217,25 @@ src/
     composition/            factory полного feature slice
     index.ts                public runtime/presentation feature API
     application/index.ts    узкий cross-feature application API, если нужен
-  application/              общие command/outbox/platform contracts
-  domain/                   только общие value objects
-  infrastructure/           общие DB/crypto/logging/time/Telegram adapters
-  presentation/telegram/    cross-feature durable ingress и routing
-  runtime/                  object graph, lifecycle и workers
+  shared/
+    domain/                 общая framework-free лексика
+    application/
+      commands/             durable command и safe-result policies
+      outbox/               delivery/event policies и runners
+      ports/                provider-neutral contracts
+  platform/
+    database/               shared SQLite boundary, migrations и repositories
+    outbox/                 SQLite delivery/event adapters
+    crypto/                 hashing, tokens и ingress codecs
+    logging/                safe logger
+    telegram/               grammY outbound transport
+    time/                   system clock и provider deadline
+  runtime/
+    telegram/               cross-feature durable ingress и routing
+    composition/            object graph и showcase preflight
+    lifecycle/              worker, polling/drain и process signals
+    bootstrap/              env/private-path startup preparation
+    bot-runtime.ts          узкий стабильный facade
   config/                   env parsing/validation
   cli/                      executable entrypoints
 ```
@@ -226,14 +244,16 @@ src/
 
 Правила:
 
-- `domain` не импортирует grammY, SQLite, process/env или Telegram types;
-- `application` импортирует domain и объявляет порты;
-- feature `infrastructure` реализует owned ports, а верхнеуровневый `infrastructure` — только общие platform ports;
+- `shared/domain` и feature `domain` не импортируют grammY, SQLite, process/env или Telegram types;
+- `shared/application` содержит только framework-free command/outbox policies и provider-neutral ports; он не импортирует modules, platform или runtime;
+- feature `application` импортирует domain/shared contracts и объявляет owned ports;
+- feature `infrastructure` реализует owned ports, а `platform` реализует общие shared ports;
 - feature Telegram presentation вызывает application API, но не импортирует SQLite adapters;
-- runtime и root presentation импортируют feature только через `src/modules/<feature>/index.ts`; межмодульный application-код может использовать также узкий `application/index.ts`, но не остальные internal files;
+- runtime импортирует feature только через `src/modules/<feature>/index.ts`; межмодульный application-код может использовать также узкий `application/index.ts`, но не остальные internal files;
 - runtime создаёт каждую feature factory один раз и владеет lifecycle;
-- верхнеуровневый Telegram router монтирует feature composers и владеет global route order, actor snapshot/private-chat guards, callback ack, durable reply buffering и post-commit audience action, но не принимает продуктовых решений;
-- `src/bot` и параллельные legacy feature paths отсутствуют;
+- `runtime/telegram` монтирует feature composers и владеет global route order, actor snapshot/private-chat guards, callback ack, durable reply buffering и post-commit audience action, но не принимает продуктовых решений;
+- explicit factories и `runtime/composition` выполняют constructor injection без NestJS/DI container;
+- корневые `src/application`, `src/domain`, `src/infrastructure`, `src/presentation`, прежний `src/bot` и параллельные legacy feature paths отсутствуют;
 - произвольная запись в таблицы другого модуля запрещена; исключения ниже явно назначают transaction owner для двух cross-aggregate command workflows;
 - специально объявленный CQRS read adapter может читать чужие authoritative tables, не становясь владельцем их commands или data;
 - Telegram handlers не принимают продуктовые решения.
@@ -250,22 +270,22 @@ src/
 
 Остальные владельцы являются общими слоями, а не каталогами feature-модулей:
 
-- root `application` содержит durable commands, outbox/delivery и shared platform ports;
-- root `infrastructure` реализует общие DB/crypto/time/logging/Telegram adapters;
-- root `presentation/telegram` отвечает за cross-feature ingress/routing;
-- `runtime` собирает object graph, lifecycle и delivery worker;
+- `shared/application` содержит durable commands, outbox/delivery policies и общие ports;
+- `platform` реализует общие DB/crypto/time/logging/Telegram adapters;
+- `runtime/telegram` отвечает за cross-feature ingress/routing;
+- `runtime/{bootstrap,composition,lifecycle}` разделяет startup, object graph и lifecycle/worker;
 - channel publication принадлежит `collaborations` вместе с shared outbox/delivery, direct notifications — shared outbox/delivery;
 - `product_events` пока существует только как deferred foundation primitive; production analytics module/funnel не собран.
 
 ### 4.3. Межмодульные зависимости
 
-- runtime и root Telegram presentation используют только root `modules/<feature>/index.ts`; framework-free межмодульные contracts доступны через узкие `application/index.ts`.
+- runtime Telegram/composition используют только root `modules/<feature>/index.ts`; framework-free межмодульные contracts доступны через узкие `application/index.ts`.
 - части `domain` и `application` модуля `collaborations` не знают grammY и не вызывают Bot API; grammY принадлежит presentation/composition этого же feature.
 - `marketplace` — явное CQRS-исключение: его read adapter может одним SQL-query соединять profiles, collaborations, applications и actor visibility для актуальной выборки. Модуль не изменяет чужие aggregates и записывает только свою `browse_sessions` projection state.
 - `applications` — command-side transaction owner отклика и решения автора: его repository атомарно изменяет application и связанные collaboration/projection/outbox states, требуемые этим workflow. Остальные модули не получают общего права писать в эти таблицы.
 - `collaborations` владеет publication state/rendering; shared outbox/delivery runner выполняет send/edit/delete вне SQLite transaction.
 - `moderation` — узкое command-side cross-aggregate исключение: один `AdminModerationRepository` внутри общей transaction может обновить требуемые collaboration/application/publication states, outbox и audit. Эта граница владеет атомарностью admin-команды и не является разрешением произвольно писать в чужие таблицы из других модулей.
-- ни один feature не импортирует `runtime`/`cli`; dependency graph запрещает cycles, deep cross-feature imports и нарушение направлений слоёв.
+- ни один feature не импортирует `runtime`/`cli`; `shared` не импортирует `platform`/`runtime`; `platform` не импортирует modules/runtime; dependency graph запрещает cycles, deep cross-feature imports и нарушение направлений слоёв.
 
 ## 5. Application interfaces
 
@@ -832,13 +852,13 @@ Read query формирует один SQL predicate из каноничной p
 
 ## 10. Telegram ingress
 
-Root presentation остаётся после удаления `src/bot`, потому что это владелец cross-feature orchestration, а не ещё один бизнес-модуль:
+`runtime/telegram` остаётся отдельным от feature presentation, потому что это глобальный adapter/composition shell cross-feature orchestration, а не ещё один бизнес-модуль:
 
 - `telegram-router.ts` создаёт и монтирует пять feature composers, задаёт global text/callback order, private-chat/actor-snapshot guards, callback acknowledgement, reply buffering и post-commit audience action;
 - `telegram-routing.ts` фиксирует text precedence: moderation → start/deep link → help → collaboration → applications/marketplace → profile/unknown fallbacks;
 - `durable-telegram-ingress.ts` классифицирует message, обычный callback и opaque `cb_*` callback;
 - message и обычный callback проходят `DurableCommandExecutor`; opaque `cb_*` направляется в applications `CallbackActionService` с собственной durable one-shot семантикой;
-- feature composers отвечают за свои команды, callbacks, rendering и continuation, а root router не принимает product decisions.
+- feature composers отвечают за свои команды, callbacks, rendering и continuation, а runtime router не принимает product decisions.
 
 ### 10.1. Long polling
 
@@ -1545,7 +1565,7 @@ S3 checkpoint выполняет steps 1–6 и restart-проверку: это
 - command receipts/processed updates;
 - существующий outbox/delivery ledger с claim fencing/provider deadline;
 - принятый в `S0-05` schema-only `product_events` primitive без обязательной записи событий или funnel query;
-- production clock/token generators в root infrastructure; `FakeClock` только в `test/support`;
+- production clock/token generators в `platform`; `FakeClock` только в `test/support`;
 - базовые architecture tests.
 
 Не добавлять в S0 новую product-event policy/emission, runtime health singleton/heartbeat, cleanup scheduler, Unix socket, LaunchAgent или backup tooling. Уже принятый `product_events` schema primitive не делает product analytics обязательной. Базовый shutdown создаётся только вместе с первым реальным bot runtime, когда у него появляется текущий consumer.
