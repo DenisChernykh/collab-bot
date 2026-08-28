@@ -53,11 +53,13 @@ export async function createBotRuntime(options: BotRuntimeOptions): Promise<BotR
 			migrate: () => new MigrationRunner(source, clock).migrate(boundary),
 			...(options.logSink === undefined ? {} : { logSink: options.logSink }),
 		});
+		if (application.boundary === undefined) throw new Error("node bot runtime requires a database boundary");
+		const nodeBoundary = application.boundary as DatabaseBoundary;
 		lifecycle = createBotRuntimeLifecycle(application.lifecycle);
 		await lifecycle.configure();
 		return {
 			bot: application.bot,
-			boundary: application.boundary,
+			boundary: nodeBoundary,
 			start: lifecycle.start,
 			stop: lifecycle.stop,
 			shutdown: lifecycle.shutdown,

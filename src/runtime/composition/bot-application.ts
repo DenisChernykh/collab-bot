@@ -6,6 +6,7 @@ import { RequireActiveActor } from "../../shared/application/commands/require-ac
 import { DeliveryRunner } from "../../shared/application/outbox/delivery-runner.js";
 import { OUTBOX_DELIVERY_KINDS } from "../../shared/application/ports/outbox-delivery-store.js";
 import type { Clock } from "../../shared/application/ports/clock.js";
+import type { SqlDatabase } from "../../shared/application/ports/sql-database.js";
 import { registerTelegramRouter } from "../telegram/telegram-router.js";
 import type { AppConfig } from "../../config/parse-config.js";
 import { hashCanonicalInput } from "../../platform/crypto/canonical-input-hash.js";
@@ -14,7 +15,7 @@ import { RandomClaimTokenGenerator } from "../../platform/crypto/claim-token.js"
 import { NodeOpaqueTokenCodec } from "../../platform/crypto/ingress-codecs.js";
 import { NodeSqlDatabase } from "../../platform/database/node-sql-database.js";
 import { SqliteCallbackActionRepository } from "../../platform/database/callback-action-repository.js";
-import type { DatabaseBoundary } from "../../platform/database/database-boundary.js";
+import type { NodeSqlDatabaseSource } from "../../platform/database/node-sql-database.js";
 import { SqliteDurableCommandStore } from "../../platform/database/durable-command-repository.js";
 import { SqliteOutboxDeliveryRepository } from "../../platform/outbox/outbox-delivery-repository.js";
 import { SqliteTelegramUserRepository } from "../../platform/database/telegram-user-repository.js";
@@ -37,15 +38,19 @@ export interface BotApplicationCompositionOptions {
 	readonly config: AppConfig;
 	readonly clock: Clock;
 	readonly bot: Bot;
-	readonly boundary: DatabaseBoundary;
-	readonly migrate: () => Promise<unknown>;
+	readonly boundary?: NodeSqlDatabaseSource;
+	readonly database?: SqlDatabase;
+	readonly migrate?: () => Promise<unknown>;
+	readonly closeResources?: () => Promise<void>;
+	readonly showcaseCapability?: { readonly canPublish: boolean; readonly reason: string | null };
 	readonly logSink?: (line: string) => void;
 }
 
 export interface ComposedBotApplication {
 	readonly bot: Bot;
-	readonly boundary: DatabaseBoundary;
+	readonly boundary?: NodeSqlDatabaseSource;
 	readonly lifecycle: BotRuntimeLifecycleOperations;
+	readonly showcaseCapability: () => { readonly canPublish: boolean; readonly reason: string | null };
 }
 
 export function assertBotIdentity(
@@ -60,11 +65,15 @@ export function assertBotIdentity(
 export function composeBotApplication(options: BotApplicationCompositionOptions): ComposedBotApplication {
 	const { bot, boundary, clock } = options;
 	const crypto = webCryptoCapabilities;
-	const database = new NodeSqlDatabase(boundary);
-	const userRepository = new SqliteTelegramUserRepository(boundary);
-	const transactionRunner = new DatabaseBoundaryTransactionRunner(boundary);
-	const capability = { canPublish: false, reason: "showcase preflight has not run" as string | null };
-	const outboxStore = new SqliteOutboxDeliveryRepository(boundary);
+	const database = options.database ?? (boundary === undefined ? undefined : new NodeSqlDatabase(boundary));
+	if (database === undefined) throw new Error("bot application requires a SQL database");
+	const userRepository = new SqliteTelegramUserRepository(database);
+	const transactionRunner = new DatabaseBoundaryTransactionRunner(database);
+	const capability = {
+		canPublish: options.showcaseCapability?.canPublish ?? false,
+		reason: (options.showcaseCapability?.reason ?? "showcase preflight has not run") as string | null,
+	};
+	const outboxStore = new SqliteOutboxDeliveryRepository(database);
 	const profilesFeature = createProfilesFeature({
 		database,
 		transactions: transactionRunner,
@@ -106,12 +115,12 @@ export function composeBotApplication(options: BotApplicationCompositionOptions)
 		botUsername: options.config.expectedBotUsername,
 		adminTelegramIds: options.config.adminTelegramIds,
 	});
-	const durableCommandExecutor = new DurableCommandExecutor(transactionRunner, new SqliteDurableCommandStore(boundary), { hash: hashCanonicalInput }, clock);
+	const durableCommandExecutor = new DurableCommandExecutor(transactionRunner, new SqliteDurableCommandStore(database), { hash: hashCanonicalInput }, clock);
 	const callbackActionService = new CallbackActionService({
 		transactionRunner,
 		clock,
 		executor: durableCommandExecutor,
-		repository: new SqliteCallbackActionRepository(boundary),
+		repository: new SqliteCallbackActionRepository(database),
 		actorGuard: new RequireActiveActor(userRepository),
 		allowedActionTypes: new Set(["application.accept", "application.reject", "collaboration.close"]),
 		currentVersion: (entityId) => applicationsFeature.api.currentActionVersion(entityId),
@@ -162,7 +171,7 @@ export function composeBotApplication(options: BotApplicationCompositionOptions)
 	});
 
 	const lifecycle: BotRuntimeLifecycleOperations = {
-		migrate: async () => { await options.migrate(); },
+		migrate: async () => { await options.migrate?.(); },
 		initializeIdentity: async () => {
 			await bot.init();
 			assertBotIdentity(bot.botInfo, options.config);
@@ -181,11 +190,12 @@ export function composeBotApplication(options: BotApplicationCompositionOptions)
 		drainUpdates: async () => {
 			if (inFlight > 0) await new Promise<void>((resolveDrain) => { drainResolve = resolveDrain; });
 		},
-		closeResources: () => boundary.close(),
+		closeResources: () => options.closeResources?.() ?? boundary?.close() ?? Promise.resolve(),
 		onRuntimeReady: () => { logger.info("runtime_ready"); },
 		onPollingStarted: () => { logger.info("poll_started"); },
 		onPollingStopFailed: (error) => { logger.error("poll_stop_failed", error); },
 	};
 
-	return { bot, boundary, lifecycle };
+	const composed = { bot, lifecycle, showcaseCapability: () => ({ ...capability }) };
+	return boundary === undefined ? composed : { ...composed, boundary };
 }

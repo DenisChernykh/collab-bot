@@ -51,7 +51,7 @@ async function waitForNextCycle(signal: AbortSignal): Promise<void> {
 			resolve();
 		};
 		const timer = setTimeout(finish, DELIVERY_WORKER_DELAY_MS);
-		timer.unref?.();
+		(timer as unknown as { unref?: () => void }).unref?.();
 		signal.addEventListener("abort", finish, { once: true });
 		if (signal.aborted) finish();
 	});

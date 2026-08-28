@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { DatabaseSync } from "node:sqlite";
 
-type SqlValue = null | number | bigint | string | NodeJS.ArrayBufferView;
+import type { SqlDatabase, SqlExecuteResult, SqlValue } from "../../shared/application/ports/sql-database.js";
 
 export interface DatabaseContext {
 	readonly client: DatabaseSync;
@@ -27,7 +27,7 @@ export class TransactionRollbackOnlyError extends Error {
 	}
 }
 
-export class DatabaseBoundary {
+export class DatabaseBoundary implements SqlDatabase {
 	private readonly storage = new AsyncLocalStorage<ActiveContext>();
 	private readonly client: DatabaseSync;
 	private queueTail: Promise<void> = Promise.resolve();
@@ -62,15 +62,18 @@ export class DatabaseBoundary {
 		});
 	}
 
-	execute(sql: string, parameters: readonly SqlValue[] = []): Promise<unknown> {
-		return this.withClient(({ client }) => client.prepare(sql).run(...parameters));
+	execute(sql: string, parameters: readonly SqlValue[] = []): Promise<SqlExecuteResult> {
+		return this.withClient(({ client }) => {
+			const result = client.prepare(sql).run(...parameters);
+			return { changes: Number(result.changes ?? 0) };
+		});
 	}
 
 	query<T>(sql: string, parameters: readonly SqlValue[] = []): Promise<readonly T[]> {
 		return this.withClient(({ client }) => client.prepare(sql).all(...parameters) as T[]);
 	}
 
-	withTransaction<T>(work: (context: DatabaseContext) => T | PromiseLike<T>): Promise<T> {
+	withTransaction<T>(work: (() => T | PromiseLike<T>) | ((context: DatabaseContext) => T | PromiseLike<T>)): Promise<T> {
 		this.ensureUsable();
 		const current = this.storage.getStore();
 		if (current?.boundary === this && current.transactionDepth > 0) {

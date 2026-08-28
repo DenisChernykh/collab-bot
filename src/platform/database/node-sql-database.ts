@@ -1,23 +1,29 @@
 import type { SqlDatabase, SqlExecuteResult, SqlValue } from "../../shared/application/ports/sql-database.js";
-import { DatabaseBoundary } from "./database-boundary.js";
 
-export type SqlDatabaseInput = SqlDatabase | DatabaseBoundary;
+export interface NodeSqlDatabaseSource {
+	readonly databasePath: string;
+	query<T>(sql: string, parameters?: readonly SqlValue[]): Promise<readonly T[]>;
+	execute(sql: string, parameters?: readonly SqlValue[]): Promise<SqlExecuteResult>;
+	withTransaction<T>(work: (() => T | PromiseLike<T>) | ((context: unknown) => T | PromiseLike<T>)): Promise<T>;
+	close(): Promise<void>;
+}
+
+export type SqlDatabaseInput = SqlDatabase | NodeSqlDatabaseSource;
 
 export function resolveSqlDatabase(input: SqlDatabaseInput): SqlDatabase {
-	return input instanceof DatabaseBoundary ? new NodeSqlDatabase(input) : input;
+	return "databasePath" in input ? new NodeSqlDatabase(input) : input;
 }
 
 /** Runtime-neutral repository facade backed by the serialized node:sqlite boundary. */
 export class NodeSqlDatabase implements SqlDatabase {
-	constructor(private readonly boundary: DatabaseBoundary) {}
+	constructor(private readonly boundary: NodeSqlDatabaseSource) {}
 
 	async query<T>(sql: string, parameters: readonly SqlValue[] = []): Promise<readonly T[]> {
 		return this.boundary.query<T>(sql, parameters);
 	}
 
 	async execute(sql: string, parameters: readonly SqlValue[] = []): Promise<SqlExecuteResult> {
-		const result = await this.boundary.execute(sql, parameters) as { readonly changes?: number };
-		return { changes: result.changes ?? 0 };
+		return this.boundary.execute(sql, parameters);
 	}
 
 	async withTransaction<T>(work: () => T | PromiseLike<T>): Promise<T> {
