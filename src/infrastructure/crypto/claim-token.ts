@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 
-import type { ClaimTokenGenerator } from "../../application/ports/claim-token.js";
+import type { ClaimTokenGenerator } from "../../shared/application/ports/claim-token.js";
 
 export class RandomClaimTokenGenerator implements ClaimTokenGenerator {
 	generate(): string {

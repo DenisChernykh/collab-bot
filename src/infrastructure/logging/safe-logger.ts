@@ -1,4 +1,4 @@
-import type { Clock } from "../../application/ports/clock.js";
+import type { Clock } from "../../shared/application/ports/clock.js";
 
 export const SAFE_LOG_LEVELS = ["debug", "info", "warn", "error"] as const;
 export type SafeLogLevel = (typeof SAFE_LOG_LEVELS)[number];

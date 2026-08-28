@@ -1,5 +1,5 @@
-import type { Clock } from "../ports/clock.js";
-import type { ClaimTokenGenerator } from "../ports/claim-token.js";
+import type { Clock } from "../../shared/application/ports/clock.js";
+import type { ClaimTokenGenerator } from "../../shared/application/ports/claim-token.js";
 import type {
 	DeliveryErrorKind,
 	OutboxDeliveryKind,
@@ -11,7 +11,7 @@ import {
 	ProviderShutdownAbortError,
 	PROVIDER_DEADLINE_MS,
 	type ProviderDeadline,
-} from "../ports/provider-deadline.js";
+} from "../../shared/application/ports/provider-deadline.js";
 import {
 	TelegramTransportError,
 	type TelegramTransport,

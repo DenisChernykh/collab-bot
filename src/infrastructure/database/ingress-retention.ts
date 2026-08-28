@@ -1,4 +1,4 @@
-import type { Clock } from "../../application/ports/clock.js";
+import type { Clock } from "../../shared/application/ports/clock.js";
 import { DatabaseBoundary } from "./database-boundary.js";
 
 const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;

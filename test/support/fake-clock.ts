@@ -1,4 +1,4 @@
-import type { Clock } from "../../src/application/ports/clock.js";
+import type { Clock } from "../../src/shared/application/ports/clock.js";
 
 export class FakeClock implements Clock {
 	private currentMs: number;

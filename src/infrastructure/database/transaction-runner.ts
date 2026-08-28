@@ -1,4 +1,4 @@
-import type { TransactionRunner } from "../../application/ports/transaction-runner.js";
+import type { TransactionRunner } from "../../shared/application/ports/transaction-runner.js";
 import { DatabaseBoundary } from "./database-boundary.js";
 
 export class DatabaseBoundaryTransactionRunner implements TransactionRunner {

@@ -1,4 +1,4 @@
-import type { TransactionRunner } from "../../../application/ports/transaction-runner.js";
+import type { TransactionRunner } from "../../../shared/application/ports/transaction-runner.js";
 import type {
 	AuthorManagementView,
 	OwnApplicationSummary,

@@ -18,7 +18,7 @@ import {
 	parseTargetProfileType,
 	parseTopic,
 } from "../../src/shared/domain/value-objects/enums.js";
-import { type Clock } from "../../src/application/ports/clock.js";
+import { type Clock } from "../../src/shared/application/ports/clock.js";
 import { FakeClock } from "../support/fake-clock.js";
 import {
 	deadlineAtEndOfLocalDay,

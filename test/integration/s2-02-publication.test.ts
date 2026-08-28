@@ -5,8 +5,8 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { DeliveryRunner } from "../../src/application/outbox/delivery-runner.js";
-import type { ClaimTokenGenerator } from "../../src/application/ports/claim-token.js";
-import type { ProviderDeadline } from "../../src/application/ports/provider-deadline.js";
+import type { ClaimTokenGenerator } from "../../src/shared/application/ports/claim-token.js";
+import type { ProviderDeadline } from "../../src/shared/application/ports/provider-deadline.js";
 import { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
 import { MigrationRunner, MigrationSource } from "../../src/infrastructure/database/migrations.js";
 import { SqliteOutboxDeliveryRepository } from "../../src/infrastructure/database/outbox-delivery-repository.js";

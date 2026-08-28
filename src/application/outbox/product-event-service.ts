@@ -1,10 +1,10 @@
-import type { Clock } from "../ports/clock.js";
+import type { Clock } from "../../shared/application/ports/clock.js";
 import type { ProductEventStore } from "../ports/product-event-store.js";
 import {
 	ProductEventStoreConflictError,
 	ProductEventStoreIdConflictError,
 } from "../ports/product-event-store.js";
-import type { TransactionRunner } from "../ports/transaction-runner.js";
+import type { TransactionRunner } from "../../shared/application/ports/transaction-runner.js";
 import {
 	PRODUCT_EVENT_TYPES,
 	type ProductEventAppendRequest,

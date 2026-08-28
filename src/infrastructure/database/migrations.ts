@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import type { Clock } from "../../application/ports/clock.js";
+import type { Clock } from "../../shared/application/ports/clock.js";
 import { SystemClock } from "../time/system-clock.js";
 import { DatabaseBoundary, type DatabaseContext } from "./database-boundary.js";
 

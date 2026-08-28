@@ -3,7 +3,7 @@ import {
 	ProviderShutdownAbortError,
 	PROVIDER_DEADLINE_MS,
 	type ProviderDeadline,
-} from "../../application/ports/provider-deadline.js";
+} from "../../shared/application/ports/provider-deadline.js";
 
 export class SystemProviderDeadline implements ProviderDeadline {
 	run<T>(shutdownSignal: AbortSignal | undefined, operation: (signal: AbortSignal) => Promise<T>): Promise<T> {

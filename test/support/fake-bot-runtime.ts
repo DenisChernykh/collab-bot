@@ -2,7 +2,7 @@ import { fileURLToPath } from "node:url";
 
 import { Bot, type PollingOptions } from "grammy";
 
-import type { Clock } from "../../src/application/ports/clock.js";
+import type { Clock } from "../../src/shared/application/ports/clock.js";
 import type { AppConfig } from "../../src/config/parse-config.js";
 import type { FakeTelegramApi } from "./fake-telegram-api.js";
 import {

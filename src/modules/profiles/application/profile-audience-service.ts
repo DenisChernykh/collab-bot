@@ -1,6 +1,6 @@
-import type { Clock } from "../../../application/ports/clock.js";
-import type { ProviderDeadline } from "../../../application/ports/provider-deadline.js";
-import type { TransactionRunner } from "../../../application/ports/transaction-runner.js";
+import type { Clock } from "../../../shared/application/ports/clock.js";
+import type { ProviderDeadline } from "../../../shared/application/ports/provider-deadline.js";
+import type { TransactionRunner } from "../../../shared/application/ports/transaction-runner.js";
 import type { ProfilePlatformRecord, ProfileRecord } from "../domain/profile.js";
 import type { AudienceAutofillIntent } from "./ports/profile-session-repository.js";
 

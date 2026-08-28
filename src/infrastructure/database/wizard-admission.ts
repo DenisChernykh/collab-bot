@@ -1,4 +1,4 @@
-import type { WizardAdmission, WizardKind } from "../../application/ports/wizard-admission.js";
+import type { WizardAdmission, WizardKind } from "../../shared/application/ports/wizard-admission.js";
 import type { DatabaseBoundary } from "./database-boundary.js";
 
 export class SqliteWizardAdmission implements WizardAdmission {

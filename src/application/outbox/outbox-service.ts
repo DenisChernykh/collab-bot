@@ -1,4 +1,4 @@
-import type { Clock } from "../ports/clock.js";
+import type { Clock } from "../../shared/application/ports/clock.js";
 import type {
 	OutboxDeliveryKind,
 	OutboxDeliveryRecord,
@@ -8,7 +8,7 @@ import {
 	OUTBOX_DELIVERY_KINDS,
 	OutboxStoreConflictError,
 } from "../ports/outbox-delivery-store.js";
-import type { TransactionRunner } from "../ports/transaction-runner.js";
+import type { TransactionRunner } from "../../shared/application/ports/transaction-runner.js";
 import {
 	parseDeliveryPayload,
 	serializeDeliveryPayload,

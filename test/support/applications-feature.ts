@@ -1,4 +1,4 @@
-import type { Clock } from "../../src/application/ports/clock.js";
+import type { Clock } from "../../src/shared/application/ports/clock.js";
 import type { OutboxDeliveryStore } from "../../src/application/ports/outbox-delivery-store.js";
 import type { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
 import { SqliteOutboxDeliveryRepository } from "../../src/infrastructure/database/outbox-delivery-repository.js";

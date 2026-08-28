@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import type { Clock } from "../../src/application/ports/clock.js";
+import type { Clock } from "../../src/shared/application/ports/clock.js";
 import { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
 import { MigrationRunner, MigrationSource } from "../../src/infrastructure/database/migrations.js";
 

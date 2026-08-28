@@ -1,11 +1,11 @@
-import type { Clock } from "../ports/clock.js";
+import type { Clock } from "../../shared/application/ports/clock.js";
 import type { CanonicalInput } from "./canonical-input.js";
-import type { CanonicalInputHasher } from "../ports/ingress-crypto.js";
+import type { CanonicalInputHasher } from "../../shared/application/ports/ingress-crypto.js";
 import type {
 	DurableCommandReceipt,
 	DurableCommandStore,
 } from "../ports/durable-command-store.js";
-import type { TransactionRunner } from "../ports/transaction-runner.js";
+import type { TransactionRunner } from "../../shared/application/ports/transaction-runner.js";
 import {
 	parseSafeResult,
 	serializeSafeResult,

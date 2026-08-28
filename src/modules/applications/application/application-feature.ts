@@ -1,6 +1,6 @@
-import type { Clock } from "../../../application/ports/clock.js";
+import type { Clock } from "../../../shared/application/ports/clock.js";
 import type { OutboxDeliveryStore } from "../../../application/ports/outbox-delivery-store.js";
-import type { TransactionRunner } from "../../../application/ports/transaction-runner.js";
+import type { TransactionRunner } from "../../../shared/application/ports/transaction-runner.js";
 import type {
 	ApplicationDecisionInput,
 	ApplicationDecisionResult,

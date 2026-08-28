@@ -4,7 +4,7 @@ import type { Update } from "grammy/types";
 import type { CanonicalInput } from "../../application/commands/canonical-input.js";
 import type { DurableCommandExecutor } from "../../application/commands/command-executor.js";
 import type { CallbackActionService } from "../../application/commands/callback-action.js";
-import type { Clock } from "../../application/ports/clock.js";
+import type { Clock } from "../../shared/application/ports/clock.js";
 import type { TelegramUserWriter } from "../../application/ports/telegram-user-writer.js";
 import {
 	applicationStartCallback,

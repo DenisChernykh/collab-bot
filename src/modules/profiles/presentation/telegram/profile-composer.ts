@@ -3,7 +3,7 @@ import { randomBytes, randomInt } from "node:crypto";
 import { Composer, InlineKeyboard, Keyboard, type Context } from "grammy";
 
 import type { ApplicationFailureCode, ApplicationsFeatureApi } from "../../../applications/index.js";
-import type { Clock } from "../../../../application/ports/clock.js";
+import type { Clock } from "../../../../shared/application/ports/clock.js";
 import {
 	PROFILE_SESSION_TTL_MS,
 	PROFILE_SESSION_VERSION,

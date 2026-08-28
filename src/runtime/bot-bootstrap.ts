@@ -1,6 +1,6 @@
 import { Bot } from "grammy";
 
-import type { Clock } from "../application/ports/clock.js";
+import type { Clock } from "../shared/application/ports/clock.js";
 import type { AppConfig } from "../config/parse-config.js";
 import { DatabaseBoundary } from "../infrastructure/database/database-boundary.js";
 import { MigrationRunner, MigrationSource } from "../infrastructure/database/migrations.js";

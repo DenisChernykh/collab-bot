@@ -5,7 +5,7 @@ import { DurableCommandExecutor } from "../application/commands/command-executor
 import { RequireActiveActor } from "../application/commands/require-active-actor.js";
 import { DeliveryRunner } from "../application/outbox/delivery-runner.js";
 import { OUTBOX_DELIVERY_KINDS } from "../application/ports/outbox-delivery-store.js";
-import type { Clock } from "../application/ports/clock.js";
+import type { Clock } from "../shared/application/ports/clock.js";
 import { registerTelegramRouter } from "../presentation/telegram/telegram-router.js";
 import type { AppConfig } from "../config/parse-config.js";
 import { hashCanonicalInput } from "../infrastructure/crypto/canonical-input-hash.js";

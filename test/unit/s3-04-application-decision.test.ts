@@ -5,7 +5,7 @@ import type {
 	OutboxDeliveryRecord,
 	OutboxDeliveryStore,
 } from "../../src/application/ports/outbox-delivery-store.js";
-import type { TransactionRunner } from "../../src/application/ports/transaction-runner.js";
+import type { TransactionRunner } from "../../src/shared/application/ports/transaction-runner.js";
 import { FakeClock } from "../support/fake-clock.js";
 
 const NOW = 1_700_000_100_000;

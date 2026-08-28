@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 
-import type { TransactionRunner } from "../../../application/ports/transaction-runner.js";
+import type { TransactionRunner } from "../../../shared/application/ports/transaction-runner.js";
 import type { ProfileSessionRepository } from "../../profiles/application/index.js";
 import type { CollaborationRepository } from "./ports/collaboration-repository.js";
 import type { CollaborationSessionRecord, CollaborationSessionRepository } from "./ports/collaboration-session-repository.js";
@@ -14,7 +14,7 @@ import {
 	type CollaborationRecord,
 	type CollaborationWizardStep,
 } from "../domain/collaboration.js";
-import type { Clock } from "../../../application/ports/clock.js";
+import type { Clock } from "../../../shared/application/ports/clock.js";
 import { DomainValidationError } from "../../../shared/domain/value-objects/enums.js";
 
 export class CollaborationProfileRequiredError extends Error {

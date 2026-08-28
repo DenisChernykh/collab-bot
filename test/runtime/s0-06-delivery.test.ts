@@ -14,13 +14,13 @@ import {
 	ProviderDeadlineExceededError,
 	ProviderShutdownAbortError,
 	type ProviderDeadline,
-} from "../../src/application/ports/provider-deadline.js";
+} from "../../src/shared/application/ports/provider-deadline.js";
 import {
 	TelegramTransportError,
 	type TelegramTransportResponse,
 } from "../../src/application/ports/telegram-transport.js";
-import type { ClaimTokenGenerator } from "../../src/application/ports/claim-token.js";
-import type { Clock } from "../../src/application/ports/clock.js";
+import type { ClaimTokenGenerator } from "../../src/shared/application/ports/claim-token.js";
+import type { Clock } from "../../src/shared/application/ports/clock.js";
 import { DatabaseBoundary } from "../../src/infrastructure/database/database-boundary.js";
 import { MigrationRunner, MigrationSource } from "../../src/infrastructure/database/migrations.js";
 import { SqliteOutboxDeliveryRepository } from "../../src/infrastructure/database/outbox-delivery-repository.js";

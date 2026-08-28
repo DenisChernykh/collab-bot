@@ -2,7 +2,7 @@ import { Bot, Composer, InlineKeyboard, type Context } from "grammy";
 import type { UserFromGetMe, Update } from "grammy/types";
 import { describe, expect, it } from "vitest";
 
-import type { Clock } from "../../src/application/ports/clock.js";
+import type { Clock } from "../../src/shared/application/ports/clock.js";
 import {
 	createProfileTelegramFeature,
 	type ProfileInput,

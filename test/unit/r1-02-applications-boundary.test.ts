@@ -11,7 +11,7 @@ import type {
 import {
 	GetPairContactQuery,
 } from "../../src/modules/applications/application/application-queries.js";
-import type { TransactionRunner } from "../../src/application/ports/transaction-runner.js";
+import type { TransactionRunner } from "../../src/shared/application/ports/transaction-runner.js";
 
 const transactionRunner: TransactionRunner = {
 	withTransaction: async <T>(work: () => T | PromiseLike<T>): Promise<T> => work(),

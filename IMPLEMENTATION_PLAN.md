@@ -1216,17 +1216,18 @@ src/
 
 #### R3-02A — Move shared core application ports
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Establish `shared/application/ports` with framework-free core contracts.
 - **Dependencies:** `R3-01`.
 - **Scope:** clock, transaction, provider-deadline, claim-token, ingress-crypto and wizard-admission ports plus exact consumers.
 - **Do not touch:** implementations, signatures or policy.
 - **Verification:** exact old-path scan; focused primitive/ingress tests; typecheck; architecture.
 - **Exit criteria:** core port imports use `shared`; one commit `R3-02A: move shared core application ports`.
+- **Completion evidence:** Commit SHA: `SELF`; moved six byte-identical core contracts (`Clock`, transaction runner, provider deadline, claim-token generator, ingress crypto and wizard admission) to `shared/application/ports` and performed one mechanical cutover across their 49 direct consumers. The deliberately broad diff is caused by the ubiquitous clock/transaction types; retaining a legacy facade would only prolong the invalid root. Signatures, implementations and policies are unchanged. Typecheck PASS; architecture PASS (127 modules, 415 dependencies); focused primitives/wizard/delivery tests PASS (3 files, 33 tests); exact old-port import scan and `git diff --check` PASS. No schema, dependency, credential, real Telegram, production or remote mutation.
 
 #### R3-02B — Move shared durable-effect ports
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Move durable command/outbox/event store contracts under the shared application kernel.
 - **Dependencies:** `R3-02A`.
 - **Scope:** callback-action, durable-command, outbox-delivery and product-event store ports plus consumers.

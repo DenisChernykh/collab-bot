@@ -3,7 +3,7 @@ import type {
 	ProfileSessionRepository,
 	ProfileSessionState,
 } from "../application/ports/profile-session-repository.js";
-import type { WizardAdmission } from "../../../application/ports/wizard-admission.js";
+import type { WizardAdmission } from "../../../shared/application/ports/wizard-admission.js";
 import type { DatabaseBoundary } from "../../../infrastructure/database/database-boundary.js";
 import { SqliteWizardAdmission } from "../../../infrastructure/database/wizard-admission.js";
 

@@ -1,13 +1,13 @@
 import { randomUUID } from "node:crypto";
 
-import type { Clock } from "../../../application/ports/clock.js";
+import type { Clock } from "../../../shared/application/ports/clock.js";
 import {
 	HIDEABLE_COLLABORATION_STATUSES,
 	type AdminModerationRepository,
 	type AdminModerationStatus,
 	type HideableCollaborationStatus,
 } from "./ports/admin-moderation-repository.js";
-import type { TransactionRunner } from "../../../application/ports/transaction-runner.js";
+import type { TransactionRunner } from "../../../shared/application/ports/transaction-runner.js";
 import type { OutboxDeliveryService } from "../../../application/outbox/outbox-service.js";
 
 const TELEGRAM_USER_ID = /^[0-9]+$/;
