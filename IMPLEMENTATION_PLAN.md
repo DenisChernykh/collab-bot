@@ -1425,7 +1425,7 @@ Free-only является stop condition: никакой unit не включа
 
 #### CF1-01 — Add workerd toolchain and empty Worker harness
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Add a pinned Wrangler/workerd/Vitest harness that runs locally without creating Cloudflare resources.
 - **Dependencies:** `CF1-00`.
 - **Preconditions:** exact Node/pnpm contract verified before dependency changes.
@@ -1435,6 +1435,7 @@ Free-only является stop condition: никакой unit не включа
 - **Tests first:** local fetch and named singleton binding smoke; no network.
 - **Verification:** `pnpm test:cloudflare`; existing `pnpm check`; bundle/startup-size inspection; secret scan.
 - **Exit criteria:** empty Worker + SQLite-backed DO boot under workerd; one commit `CF1-01: establish local workerd harness`.
+- **Evidence:** Commit SHA: `SELF`. Preflight after CF1-00 confirmed clean predecessor `5d93523f1f21455991f26799a8f9b16c56a2ad5e`, Node `v24.18.0` and pnpm `11.15.1`; no existing CF1-01 commit. Added exact `wrangler@4.127.0` and `@cloudflare/vitest-plugin@1.1.1`, enabled only the required local `workerd` build in pnpm workspace policy, and generated `worker-configuration.d.ts`. Added `wrangler.jsonc` with ES module Worker, `compatibility_date` `2026-08-28`, declarative SQLite `CollaborationBotState` export and `COLLABORATION_STATE` binding; no `nodejs_compat`. Added an empty local Worker/DO probe using singleton `idFromName("collaboration-bot-primary")`, isolated Cloudflare Vitest config, TypeScript configs, scripts and ignored `.dev.vars`/`.wrangler`. Focused `pnpm cloudflare:typecheck`, `pnpm test:cloudflare` (1 file, 2 tests), `pnpm cloudflare:types:check` and full `pnpm check` (69 unit, 88 integration, 47 runtime, architecture 128/415, build) passed. ESLint reports only two generated-file unused-disable warnings. Bundle/startup inspection used the local harness only; secret scan found no secret values. No login, deploy, remote binding, Telegram or production action.
 
 #### CF1-02A — Establish portable crypto primitives
 

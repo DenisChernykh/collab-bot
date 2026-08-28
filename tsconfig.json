@@ -21,5 +21,6 @@
 		"lib": ["ES2024"],
 		"types": ["node"]
 	},
-	"include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.ts", "eslint.config.js"]
+	"include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.ts", "eslint.config.js"],
+	"exclude": ["src/worker.ts", "test/cloudflare/**/*.ts", "worker-configuration.d.ts"]
 }

@@ -20,6 +20,11 @@
 		"start": "node dist/cli/bot.js",
 		"db:migrate": "pnpm build && node dist/cli/db-migrate.js",
 		"db:verify": "pnpm build && node dist/cli/db-verify.js",
+		"cloudflare:types": "wrangler types",
+		"cloudflare:types:check": "wrangler types --check",
+		"cloudflare:dev": "wrangler dev --local",
+		"cloudflare:typecheck": "tsc -p tsconfig.cloudflare.json --noEmit",
+		"test:cloudflare": "vitest run --config vitest.cloudflare.config.ts",
 		"check": "pnpm lint && pnpm architecture && pnpm typecheck && pnpm test:unit && pnpm test:integration && pnpm test:runtime && pnpm build"
 	},
 	"dependencies": {
@@ -28,12 +33,14 @@
 		"grammy": "1.45.1"
 	},
 	"devDependencies": {
+		"@cloudflare/vitest-plugin": "1.1.1",
 		"@eslint/js": "9.39.5",
 		"@types/node": "24.13.3",
 		"dependency-cruiser": "18.1.0",
 		"eslint": "9.39.5",
 		"typescript": "5.9.3",
 		"typescript-eslint": "8.67.0",
-		"vitest": "4.1.11"
+		"vitest": "4.1.11",
+		"wrangler": "4.127.0"
 	}
 }

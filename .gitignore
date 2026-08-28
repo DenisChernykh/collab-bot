@@ -2,6 +2,8 @@
 .env
 .env.*
 !.env.example
+.dev.vars
+.wrangler/
 
 # Private keys and certificate containers
 *.pem
