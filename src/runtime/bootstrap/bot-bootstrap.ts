@@ -1,12 +1,12 @@
 import { Bot } from "grammy";
 
-import type { Clock } from "../shared/application/ports/clock.js";
-import type { AppConfig } from "../config/parse-config.js";
-import { DatabaseBoundary } from "../platform/database/database-boundary.js";
-import { MigrationRunner, MigrationSource } from "../platform/database/migrations.js";
-import { SystemClock } from "../platform/time/system-clock.js";
-import { composeBotApplication } from "./bot-application.js";
-import { createBotRuntimeLifecycle, type BotRuntimeLifecycle } from "./bot-lifecycle.js";
+import type { Clock } from "../../shared/application/ports/clock.js";
+import type { AppConfig } from "../../config/parse-config.js";
+import { DatabaseBoundary } from "../../platform/database/database-boundary.js";
+import { MigrationRunner, MigrationSource } from "../../platform/database/migrations.js";
+import { SystemClock } from "../../platform/time/system-clock.js";
+import { composeBotApplication } from "../bot-application.js";
+import { createBotRuntimeLifecycle, type BotRuntimeLifecycle } from "../lifecycle/bot-lifecycle.js";
 import { loadConfigFromEnvFile } from "./env-file-config.js";
 import { ensurePrivateDatabasePath } from "./private-runtime-paths.js";
 

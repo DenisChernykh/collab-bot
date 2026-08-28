@@ -25,8 +25,8 @@ import { createCollaborationsFeature } from "../modules/collaborations/index.js"
 import { createMarketplaceFeature } from "../modules/marketplace/index.js";
 import { createModerationFeature } from "../modules/moderation/index.js";
 import { createProfilesFeature } from "../modules/profiles/index.js";
-import type { BotRuntimeLifecycleOperations } from "./bot-lifecycle.js";
-import { DeliveryWorker } from "./delivery-worker.js";
+import type { BotRuntimeLifecycleOperations } from "./lifecycle/bot-lifecycle.js";
+import { DeliveryWorker } from "./lifecycle/delivery-worker.js";
 import { preflightShowcase } from "./showcase-preflight.js";
 
 export const ALLOWED_UPDATES = ["message", "callback_query"] as const;

@@ -1,7 +1,7 @@
 import { fileURLToPath } from "node:url";
 
-import { createBotRuntimeFromArguments } from "../runtime/bot-bootstrap.js";
-import { runBotProcess, type BotProcessSignalSource } from "../runtime/process-runner.js";
+import { createBotRuntimeFromArguments } from "../runtime/bootstrap/bot-bootstrap.js";
+import { runBotProcess, type BotProcessSignalSource } from "../runtime/lifecycle/process-runner.js";
 
 const processSignals: BotProcessSignalSource = {
 	once: (signal, listener) => {

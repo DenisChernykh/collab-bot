@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { DeliveryWorker, type DeliveryWorkerSteps } from "../../src/runtime/delivery-worker.js";
+import { DeliveryWorker, type DeliveryWorkerSteps } from "../../src/runtime/lifecycle/delivery-worker.js";
 
 describe("R1-06A delivery worker lifecycle", () => {
 	it("runs the exact startup and cycle order, then wakes the 250ms delay on abort", async () => {

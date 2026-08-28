@@ -1315,17 +1315,18 @@ src/
 
 #### R3-07A — Group runtime bootstrap and lifecycle
 
-- **Status:** `in_progress`
+- **Status:** `completed`
 - **Objective:** Replace the flat runtime bag with explicit startup and lifecycle owners.
 - **Dependencies:** `R3-06`.
 - **Scope:** move bootstrap/env/private-path files under `runtime/bootstrap` and lifecycle/worker/process files under `runtime/lifecycle`; switch consumers.
 - **Do not touch:** startup order, signal semantics, drain/worker timing or filesystem policy.
 - **Verification:** runtime/bootstrap/lifecycle tests; typecheck; architecture; old-path scan.
 - **Exit criteria:** bootstrap/lifecycle owners are explicit; one commit `R3-07A: group runtime bootstrap and lifecycle`.
+- **Completion evidence:** Commit SHA: `SELF`; grouped bot bootstrap, env loading and private paths under `runtime/bootstrap`, and lifecycle, delivery worker and signal runner under `runtime/lifecycle`; switched CLI, runtime facade, composition and direct tests. Startup/shutdown/worker code is byte-identical apart from imports. Typecheck PASS; architecture PASS (127 modules, 415 dependencies); focused bootstrap/lifecycle/worker/process tests PASS (4 files, 17 tests); flat old paths and `git diff --check` PASS. No behavior, schema, dependency, credential, real Telegram, production or remote mutation.
 
 #### R3-07B — Group runtime composition
 
-- **Status:** `pending`
+- **Status:** `in_progress`
 - **Objective:** Put object-graph construction under `runtime/composition` while retaining one narrow runtime facade for CLI/tests.
 - **Dependencies:** `R3-07A`.
 - **Scope:** move bot application and showcase preflight to composition; adjust bot runtime/CLI imports and public facade deliberately.

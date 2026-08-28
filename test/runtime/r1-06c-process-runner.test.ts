@@ -4,11 +4,11 @@ import {
 	runBotProcess,
 	type BotProcessSignal,
 	type BotProcessSignalSource,
-} from "../../src/runtime/process-runner.js";
+} from "../../src/runtime/lifecycle/process-runner.js";
 import {
 	createBotRuntimeLifecycle,
 	type BotRuntimeLifecycleOperations,
-} from "../../src/runtime/bot-lifecycle.js";
+} from "../../src/runtime/lifecycle/bot-lifecycle.js";
 
 describe("R1-06C process runner", () => {
 	it("stops once and preserves start-after-stop failure when a signal arrives immediately after subscription", async () => {

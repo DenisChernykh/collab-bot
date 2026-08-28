@@ -5,7 +5,7 @@ import {
 	createBotRuntimeFromArguments,
 	parseBotEnvFileArguments,
 	type BotRuntime,
-} from "../../src/runtime/bot-bootstrap.js";
+} from "../../src/runtime/bootstrap/bot-bootstrap.js";
 
 describe("R1-06C bot bootstrap", () => {
 	it("accepts only the two existing env-file argument forms", () => {

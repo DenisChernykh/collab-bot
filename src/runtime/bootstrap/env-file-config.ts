@@ -1,4 +1,4 @@
-import { parseConfig, type AppConfig } from "../config/parse-config.js";
+import { parseConfig, type AppConfig } from "../../config/parse-config.js";
 import { assertPrivateEnvFile } from "./private-runtime-paths.js";
 
 export async function loadConfigFromEnvFile(envFilePath: string): Promise<AppConfig> {
