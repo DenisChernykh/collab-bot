@@ -51,6 +51,7 @@ export interface ComposedBotApplication {
 	readonly boundary?: NodeSqlDatabaseSource;
 	readonly lifecycle: BotRuntimeLifecycleOperations;
 	readonly showcaseCapability: () => { readonly canPublish: boolean; readonly reason: string | null };
+	readonly runDeliveryCycleOnce: () => Promise<unknown>;
 }
 
 export function assertBotIdentity(
@@ -161,6 +162,13 @@ export function composeBotApplication(options: BotApplicationCompositionOptions)
 	const deliveryRunner = new DeliveryRunner(outboxStore, new GrammyTelegramTransport(bot), new SystemProviderDeadline(), new RandomClaimTokenGenerator(), clock, async (result) => {
 		if (result.deliveryId !== undefined) await collaborationsFeature.publication.projectDelivery(result.deliveryId, outboxStore);
 	}, () => capability.canPublish ? OUTBOX_DELIVERY_KINDS : ["dm_send"]);
+	const runDeliveryCycleOnce = async (): Promise<unknown> => {
+		await deliveryRunner.recoverStale();
+		await collaborationsFeature.publication.projectTerminalOutcomes(outboxStore);
+		if (capability.canPublish) await collaborationsFeature.publication.cancelExpiredPrepared();
+		await applicationsFeature.projectionMaintenance.supersedeStaleProjectionDeliveries(clock.now().getTime());
+		return deliveryRunner.runOnce();
+	};
 	const deliveryWorker = new DeliveryWorker({
 		canPublish: () => capability.canPublish,
 		recoverStale: () => deliveryRunner.recoverStale(),
@@ -196,6 +204,6 @@ export function composeBotApplication(options: BotApplicationCompositionOptions)
 		onPollingStopFailed: (error) => { logger.error("poll_stop_failed", error); },
 	};
 
-	const composed = { bot, lifecycle, showcaseCapability: () => ({ ...capability }) };
+	const composed = { bot, lifecycle, runDeliveryCycleOnce, showcaseCapability: () => ({ ...capability }) };
 	return boundary === undefined ? composed : { ...composed, boundary };
 }

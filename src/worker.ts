@@ -9,6 +9,8 @@ import { SystemClock } from "./platform/time/system-clock.js";
 
 const SINGLETON_NAME = "collaboration-bot-primary";
 const PREFLIGHT_TABLE = "cf1_preflight_cache";
+const DELIVERY_STALE_AFTER_MS = 60_000;
+const ALARM_RETRY_DELAY_MS = 1_000;
 
 interface CloudflareEnvironment extends Env {
 	readonly BOT_TOKEN?: string;
@@ -76,10 +78,25 @@ export class CollaborationBotState implements DurableObject {
 		});
 	}
 
+	async alarm(): Promise<void> {
+		await this.ready;
+		try {
+			await this.ensurePreflight();
+			if (this.application === undefined) throw new Error("handler_unavailable");
+			await this.application.runDeliveryCycleOnce();
+			await this.scheduleNextAlarm();
+		} catch {
+			const runtimeConsole = (globalThis as unknown as { console?: { error(message: string): void } }).console;
+			runtimeConsole?.error(JSON.stringify({ event: "cloudflare_alarm_failed" }));
+			await this.state.storage.setAlarm(Date.now() + ALARM_RETRY_DELAY_MS);
+		}
+	}
+
 	async fetch(request: Request): Promise<Response> {
 		const pathname = new URL(request.url).pathname;
 		if (request.method === "GET" && pathname === "/__cf1/ready") {
 			await this.ready;
+			await this.scheduleNextAlarm();
 			return json({ status: "ready", durableObject: "CollaborationBotState" });
 		}
 		if (pathname === "/__cf1/state/export" || pathname === "/__cf1/state/import") {
@@ -126,6 +143,7 @@ export class CollaborationBotState implements DurableObject {
 		try {
 			await this.ensurePreflight();
 			await this.application.bot.handleUpdate(update as never);
+			await this.scheduleNextAlarm();
 		} catch {
 			return json({ error: "handler_failure" }, 500);
 		}
@@ -172,6 +190,31 @@ export class CollaborationBotState implements DurableObject {
 			);
 		});
 		this.cachedPreflight = cache;
+	}
+
+	private async scheduleNextAlarm(): Promise<void> {
+		const canPublish = this.application?.showcaseCapability().canPublish === true;
+		const rows = await this.database.query<{ scheduled_at: number | null }>(
+			`SELECT MIN(
+				CASE
+					WHEN status = 'dispatching' THEN COALESCE(dispatch_started_at + ?, ?)
+					ELSE COALESCE(next_attempt_at, created_at)
+				END
+			) AS scheduled_at
+			FROM outbox_deliveries
+			WHERE (kind = 'dm_send' OR ? = 1)
+				AND (status IN ('prepared', 'retryable_failed') OR (status = 'dispatching' AND dispatch_started_at IS NOT NULL))`,
+			[DELIVERY_STALE_AFTER_MS, Date.now() + DELIVERY_STALE_AFTER_MS, canPublish ? 1 : 0],
+		);
+		const scheduledAt = rows[0]?.scheduled_at;
+		const currentAlarm = await this.state.storage.getAlarm();
+		if (scheduledAt === null || scheduledAt === undefined) {
+			if (currentAlarm !== null) await this.state.storage.deleteAlarm();
+			return;
+		}
+		if (!Number.isSafeInteger(scheduledAt) || scheduledAt < 0) throw new Error("outbox alarm timestamp is invalid");
+		const target = Math.max(Date.now(), scheduledAt);
+		if (currentAlarm === null || currentAlarm > target) await this.state.storage.setAlarm(target);
 	}
 
 	private async ensurePreflightTable(): Promise<void> {

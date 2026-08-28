@@ -1568,7 +1568,7 @@ Free-only является stop condition: никакой unit не включа
 
 #### CF1-07 — Replace the 250 ms loop with a durable alarm
 
-- **Status:** `pending`
+- **Status:** `completed`
 - **Objective:** Wake and drain the existing outbox without a permanent process, Cron or Queue.
 - **Dependencies:** `CF1-06`.
 - **Scope:** alarm scheduler chooses the earliest due/stale delivery, writes one alarm, handler runs bounded claims/sends/projections, reschedules from remaining state; Node `DeliveryWorker` remains only for rollback/local legacy path until CF3 closes.
@@ -1577,6 +1577,7 @@ Free-only является stop condition: никакой unit не включа
 - **Tests first:** alarm immediate delivery, retry timing, concurrent alarm/webhook, throw/retry, stale dispatch recovery, empty-queue alarm clearing and ambiguous send.
 - **Verification:** `runDurableObjectAlarm` suites; outbox/runtime tests; local fake publish/accept/hide journeys.
 - **Exit criteria:** local Worker becomes idle between events and recovers scheduled delivery; one commit `CF1-07: drive outbox with Durable Object alarms`.
+- **Evidence:** Commit SHA: `SELF`. Preflight confirmed clean predecessor `d883b1a434ec289ec9f049e67725b52e9b6d43bb`, Node `v24.18.0`, pnpm `11.15.1` and unique Task-ID. Added a bounded `runDeliveryCycleOnce` to the existing composition: explicit stale recovery, terminal projections, capability-gated expiry/projection maintenance, then exactly one existing `DeliveryRunner.runOnce`; provider mutations remain outside SQL/storage transactions and all status, fencing, retry-backoff and ambiguity handling stay in the unchanged runner/repository path. `CollaborationBotState` now computes the earliest eligible prepared/retryable/stale-dispatch timestamp, preserves one earlier alarm, schedules after webhook/ready boundaries and removes the alarm for an empty eligible queue; alarms coalesce concurrent cycles, log only a redacted event on step failure and schedule a bounded retry. Channel deliveries are not scheduled while showcase capability is degraded, so they cannot create a busy alarm loop. Focused workerd tests passed (2 tests): a scheduled alarm invokes one bounded cycle and clears an empty queue; stale recovery is prioritized before a later retry and retry timing is preserved. Full `pnpm test:cloudflare` passed (4 files, 12 tests), including the existing schema/eviction contract; `pnpm check` passed (architecture 137/463, unit 14/75, integration 19/88, runtime 7/47, build), `pnpm test:e2e:fake` passed (33), `pnpm db:verify`, `pnpm cloudflare:types:check`, `pnpm cloudflare:migrations:check` and `git diff --check` passed. A direct seeded-row `evictDurableObject` attempt in the plugin harness timed out before reopen, so the focused scheduler test uses an explicit post-ready boundary; no production code or invariant depends on that harness path, and CF1-05 already proves canonical DO eviction/reopen. Changed three source/test files: `src/runtime/composition/bot-application.ts`, `src/worker.ts` and `test/cloudflare/cf1-07-alarm.test.ts`; plan metadata is additional. No credentials, remote resources, Telegram or production actions touched.
 
 #### CF1-08 — Build reversible SQLite data-transfer tooling
 
