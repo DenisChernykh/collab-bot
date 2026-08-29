@@ -56,6 +56,43 @@
 					}
 				]
 			}
+		},
+		"production": {
+			"account_id": "643464cda99dd9fb036367674d42a62c",
+			"name": "collaboration-bot-production",
+			"workers_dev": true,
+			"preview_urls": false,
+			"vars": {
+				"DEPLOYMENT_ENVIRONMENT": "production",
+				"STATE_IMPORT_ENABLED": "false",
+				"EXPECTED_BOT_ID": "8951630763",
+				"EXPECTED_BOT_USERNAME": "davay_vmeste_bot",
+				"SHOWCASE_CHANNEL_ID": "-1003941660389",
+				"SHOWCASE_CHANNEL_USERNAME": "davay_vmeste_collab",
+				"HELP_CONTACT": "@ChDenis"
+			},
+			"secrets": {
+				"required": [
+					"BOT_TOKEN",
+					"TELEGRAM_WEBHOOK_SECRET",
+					"OPERATIONS_TOKEN",
+					"ADMIN_TELEGRAM_IDS"
+				]
+			},
+			"exports": {
+				"CollaborationBotState": {
+					"type": "durable-object",
+					"storage": "sqlite"
+				}
+			},
+			"durable_objects": {
+				"bindings": [
+					{
+						"name": "COLLABORATION_STATE",
+						"class_name": "CollaborationBotState"
+					}
+				]
+			}
 		}
 	}
 }

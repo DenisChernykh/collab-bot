@@ -138,7 +138,7 @@ export class CollaborationBotState implements DurableObject {
 		if (pathname === "/__cf2/rehearsal/state/export" || pathname === "/__cf2/rehearsal/state/import") {
 			return this.handleStateTransfer(request, true);
 		}
-		if (pathname === "/__cf2/rehearsal/pitr/bookmark") {
+		if (pathname === "/__cf1/pitr/bookmark" || pathname === "/__cf2/rehearsal/pitr/bookmark") {
 			if (request.method !== "GET") return json({ error: "method_not_allowed" }, 405);
 			await this.ready;
 			try {
@@ -435,9 +435,10 @@ export default {
 			return new Response(response.body, { status: response.status, headers: response.headers });
 		}
 
-		if (url.pathname === "/ops/ready" || url.pathname === "/ops/state/export" || url.pathname === "/ops/state/import") {
+		if (url.pathname === "/ops/ready" || url.pathname === "/ops/state/export" || url.pathname === "/ops/state/import" || url.pathname === "/ops/pitr/bookmark") {
 			const runtimeEnvironment = environment as CloudflareEnvironment;
 			if (!isOperationsRequestAuthorized(request, runtimeEnvironment.OPERATIONS_TOKEN)) return json({ error: "unauthorized" }, 401);
+			if (url.pathname === "/ops/pitr/bookmark" && runtimeEnvironment.DEPLOYMENT_ENVIRONMENT !== "production") return json({ error: "pitr_unavailable" }, 403);
 			if (url.pathname === "/ops/ready"
 				&& runtimeEnvironment.DEPLOYMENT_ENVIRONMENT !== undefined
 				&& runtimeEnvironment.DEPLOYMENT_ENVIRONMENT !== "local"
