@@ -1,8 +1,8 @@
 # Collaboration Bot — Technical Design
 
 - Статус: `Approved for solo-launch implementation`
-- Версия: `0.8`
-- Дата: `2026-08-28`
+- Версия: `0.9`
+- Дата: `2026-08-30`
 - Product source of truth: `docs/PRD.md`
 
 ## 1. Назначение и границы
@@ -21,7 +21,7 @@
 
 Документ не реализует приложение и не изменяет продуктовый scope. При противоречии с [PRD](./PRD.md) приоритет имеет PRD.
 
-В legacy MVP отсутствуют HTTP API, Mini App, веб-приложение, PostgreSQL, Redis, BullMQ, Docker и интеграция с Giveaway Bot. CF1 добавляет только local-only Cloudflare runtime harness; hosted resources, deploy, production webhook and production Telegram remain outside this stage.
+В legacy MVP отсутствуют HTTP API, Mini App, веб-приложение, PostgreSQL, Redis, BullMQ, Docker и интеграция с Giveaway Bot. CF1 добавляет local-only Cloudflare runtime harness, а CF2 доказывает тот же runtime на изолированном hosted staging Worker с development bot/channel. Production deploy, production webhook, production data import и production Telegram остаются границей отдельно авторизуемого CF3.
 
 Далее `Giveaway Bot` означает действующий бот розыгрышей из repository `gift-bot`; это один продукт, а не два разных бота.
 
@@ -50,7 +50,7 @@ Heartbeat/status storage, scheduled cleanup/retention, exact Unix-socket admissi
 
 Приложение является модульным монолитом в одном Node.js-процессе:
 
-Legacy rollback runtime: `Telegram Bot API → grammY adapter → application/domain → SQLite`. CF1 adds a local-only candidate: `Telegram webhook → Worker → singleton SQLite Durable Object → the same application/domain graph`.
+Legacy rollback runtime: `Telegram Bot API → grammY adapter → application/domain → SQLite`. CF1 adds a local candidate and CF2 proves it in isolated hosted staging: `Telegram webhook → Worker → singleton SQLite Durable Object → the same application/domain graph`.
 
 «Бизнес-логика отдельно от Telegram» означает разделение по портам и слоям, а не отдельный сетевой backend-процесс.
 
@@ -62,7 +62,7 @@ Legacy rollback runtime: `Telegram Bot API → grammY adapter → application/do
 | pnpm | `>=11.15.1 <12`; packageManager `pnpm@11.15.1` |
 | TypeScript | ESM, strict; ветка `5.9.x` |
 | Telegram legacy adapter | `grammy 1.45.x`, long polling |
-| Cloudflare candidate | Wrangler/workerd + SQLite Durable Object, local only in CF1 |
+| Cloudflare candidate | Wrangler/workerd + SQLite Durable Object; local in CF1, isolated hosted staging in CF2 |
 | Persistence/schema | параметризованный raw SQL; SQL migrations + typed rows/mappers |
 | SQLite | встроенный `node:sqlite` / `DatabaseSync` |
 | Dates | `date-fns 4.x` и `date-fns-tz 3.x` |
@@ -132,18 +132,22 @@ src/cli/bot.ts
       Telegram users + Showcase channel
 ```
 
-CF1's local Cloudflare topology is an adapter around the same application graph:
+The Cloudflare topology is an adapter around the same application graph:
 
 ```text
 Telegram webhook
   ▼
-local Worker → singleton `CollaborationBotState` Durable Object
+Worker → singleton `CollaborationBotState` Durable Object
                   ├── SQLite storage + storage transactions
                   ├── existing application/domain graph
                   └── one durable alarm for the outbox
 ```
 
-The Worker and Durable Object are local-only under `wrangler dev`. No account login, deploy, remote binding, production webhook, or production database is part of CF1. The existing Node process and SQLite remain the explicit rollback path until a separately authorized hosted/production stage proves a cutover.
+In CF1 the Worker and Durable Object run only under `wrangler dev`. CF2 uses the same graph in one isolated hosted staging Worker: the development webhook, readiness and alarm-driven outbox address only the `collaboration-bot-primary` singleton. The fixed `collaboration-bot-cf2-03-rehearsal` object is staging-gated and operations-token protected; it exposes only one-shot import, export and PITR-bookmark capture, with no webhook/update/readiness/alarm activation path and no arbitrary object selector. Production resources and ingress remain untouched until CF3. The existing Node process and SQLite remain the recoverable rollback source until a separately authorized production cutover is reconciled.
+
+Worker version rollback and storage recovery are distinct operations. A Worker rollback changes active code but does not rewind Durable Object SQLite or Telegram effects; a rollback candidate must be compatible with the current schema, bindings and Durable Object class lifecycle. CF2 captures PITR bookmarks only for the fixed rehearsal object and never restores, restarts or deletes an object. Exact staging operations, Free-only stop conditions and safe Telegram `deleteWebhook(drop_pending_updates=false)` ordering are defined in [`CF2_STAGING_RUNBOOK.md`](./CF2_STAGING_RUNBOOK.md).
+
+For CF3 import, no production `/ops/ready` call is allowed until a read-only query proves zero `prepared`, `dispatching` and `retryable_failed` outbox deliveries. Readiness may schedule the Durable Object alarm; invoking it earlier could deliver imported work before the webhook cutover. After any remote business mutation or Telegram effect, neither Worker code rollback nor restart of stale legacy SQLite is sufficient: remote state must first be exported and reconciled. Cloudflare Free is a fail-closed cost boundary; quota or billing ambiguity stops the cutover instead of enabling a paid resource.
 
 Публикация канала начинается в `collaborations`, сохраняет intent в общем outbox и после commit выполняется delivery runner через grammY transport. В legacy rollback runtime всё работает в одном Node.js process; отдельного HTTP/backend process там нет. CF1's local candidate uses the Worker as a thin HTTP ingress and keeps business execution inside the singleton Durable Object.
 

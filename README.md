@@ -4,7 +4,7 @@
 
 P0 and S0–S4 are complete, including the separately authorized real S4 journey and manual-launch handoff. FUT-01 is implemented locally as a one-time best-effort Telegram audience snapshot; its local/fake evidence does not establish live Telegram count accuracy. The post-launch R1/R2 maintainability work and R3 top-level ownership transition are complete without changing the product boundary.
 
-The project targets a fast manual first launch by one developer. The legacy foreground runtime is not a hosted, scale-ready or always-on service. CF1 additionally prepares a local-only Cloudflare-compatible candidate; that candidate is not a deployment or production-readiness claim.
+The project targets a fast manual first launch by one developer. The legacy foreground runtime is not a hosted, scale-ready or always-on service. CF1 prepares a local Cloudflare-compatible candidate; CF2 proves the same application graph on one isolated hosted staging Worker with a development bot/channel. The staging evidence is not a production deployment, production cutover or SLA claim.
 
 ## Sources of truth
 
@@ -29,7 +29,7 @@ FUT-01 does not verify ownership, reach, authenticity or audience quality. It pe
 
 ## Intended technical shape
 
-The approved local rollback shape is a new independent TypeScript project: one manually managed modular Node.js process with `Telegram Bot API → grammY adapter → application/domain → SQLite`. CF1 adds a second, local-only adapter shape — `Telegram webhook → Worker → singleton SQLite Durable Object → the same application/domain graph` — without changing the PRD journey or creating a hosted resource. D1, Queues, PostgreSQL, Redis, BullMQ, Docker, and Giveaway Bot integration remain outside CF1–CF3 unless a later plan explicitly authorizes them.
+The approved local rollback shape is a new independent TypeScript project: one manually managed modular Node.js process with `Telegram Bot API → grammY adapter → application/domain → SQLite`. CF1 adds a second adapter shape — `Telegram webhook → Worker → singleton SQLite Durable Object → the same application/domain graph` — and CF2 proves that shape on an isolated hosted staging resource without changing the PRD journey or production traffic. D1, Queues, PostgreSQL, Redis, BullMQ, Docker, and Giveaway Bot integration remain outside CF1–CF3 unless a later plan explicitly authorizes them.
 
 The repository contains this foreground runtime, but it contains no real credentials and does not establish a deployed Telegram identity or operational resource by itself.
 
@@ -88,7 +88,7 @@ The executable registry is [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md). A u
 
 No push, remote setup, pull request, merge, deployment, credential use, production mutation, or real Telegram action is implied by a stage command unless separately authorized.
 
-The local Cloudflare Worker and development-bot relay procedure is documented in [the CF1 local runbook](docs/CF1_LOCAL_RUNBOOK.md). It is a local-only rehearsal; the legacy foreground runtime remains the rollback path.
+The local Cloudflare Worker and development-bot relay procedure is documented in [the CF1 local runbook](docs/CF1_LOCAL_RUNBOOK.md). Hosted staging preflight, fixed-object state-transfer/PITR-bookmark rehearsal, Free-tier checks and rollback boundaries are documented in [the CF2 staging runbook](docs/CF2_STAGING_RUNBOOK.md). Production still requires the separately authorized CF3 freeze, import and ingress-cutover units; the legacy foreground runtime remains recoverable until that cutover is reconciled.
 
 ## Foreground operations
 
@@ -134,4 +134,5 @@ Only start the bot again after the copy command finishes. This is a manual stopp
 - Local launch candidate means S1–S4 and `LAC-01`–`LAC-11` pass locally and on fake Telegram.
 - Manual first launch means S4 and separately authorized `LAC-12` pass for one exact bot/channel, after which the author can manually share the link.
 - FUT-01 is optional post-launch enrichment and does not change `LFR-*`, `LAC-*`, launch-candidate or manual-first-launch claims.
+- Hosted staging candidate means CF2 passed on the isolated development bot/channel and Free account; it does not prove production traffic or authorize production mutation.
 - Foreground start does not provide daemon supervision, hosted availability or automatic restart. Production-ready, deployed, scalable, 24/7 and SLA are not claimed by this plan.

@@ -15,6 +15,7 @@ import { constantTimeEqual, handleTelegramWebhook } from "./runtime/cloudflare/w
 import { SystemClock } from "./platform/time/system-clock.js";
 
 const SINGLETON_NAME = "collaboration-bot-primary";
+const REHEARSAL_NAME = "collaboration-bot-cf2-03-rehearsal";
 const PREFLIGHT_TABLE = "cf1_preflight_cache";
 const MAX_TRANSFER_BYTES = 32 * 1024 * 1024;
 const DELIVERY_STALE_AFTER_MS = 60_000;
@@ -132,40 +133,21 @@ export class CollaborationBotState implements DurableObject {
 			}
 		}
 		if (pathname === "/__cf1/state/export" || pathname === "/__cf1/state/import") {
+			return this.handleStateTransfer(request, this.environment.STATE_IMPORT_ENABLED === "true");
+		}
+		if (pathname === "/__cf2/rehearsal/state/export" || pathname === "/__cf2/rehearsal/state/import") {
+			return this.handleStateTransfer(request, true);
+		}
+		if (pathname === "/__cf2/rehearsal/pitr/bookmark") {
+			if (request.method !== "GET") return json({ error: "method_not_allowed" }, 405);
 			await this.ready;
-			if (pathname === "/__cf1/state/export" && request.method === "GET") {
-				try {
-					await this.migrations.verify();
-					const manifest = await exportStateTransferManifest(this.database);
-					return Response.json(manifest, { headers: { "cache-control": "no-store" } });
-				} catch {
-					return json({ error: "state_export_unavailable" }, 500);
-				}
+			try {
+				const bookmark = await this.state.storage.getCurrentBookmark();
+				if (bookmark.trim() === "") throw new Error("empty_bookmark");
+				return json({ bookmark });
+			} catch {
+				return json({ error: "pitr_bookmark_unavailable" }, 501);
 			}
-			if (pathname === "/__cf1/state/import" && request.method === "POST") {
-				if (this.environment.STATE_IMPORT_ENABLED !== "true") return json({ error: "state_import_disabled" }, 403);
-				if (!isJsonContentType(request.headers.get("content-type"))) return json({ error: "unsupported_media_type" }, 415);
-				try {
-					await this.migrations.verify();
-				} catch {
-					return json({ error: "state_import_unavailable" }, 500);
-				}
-				let manifest: unknown;
-				try {
-					manifest = JSON.parse(await readBoundedText(request, MAX_TRANSFER_BYTES));
-				} catch (error) {
-					if (error instanceof TransferTooLargeError) return json({ error: "state_import_too_large" }, 413);
-					return json({ error: "malformed_manifest" }, 400);
-				}
-				try {
-					return json(await importStateTransferManifest(this.database, manifest));
-				} catch (error) {
-					if (error instanceof StateTransferConflictError) return json({ error: "state_import_conflict" }, 409);
-					if (error instanceof StateTransferValidationError) return json({ error: "state_import_invalid" }, 422);
-					return json({ error: "state_import_failed" }, 500);
-				}
-			}
-			return json({ error: "method_not_allowed" }, 405);
 		}
 		if (request.method !== "GET" || !["/__cf1/smoke", "/__cf1/schema"].includes(pathname)) {
 			if (request.method === "POST" && pathname === "/__cf1/update") return this.handleUpdate(request);
@@ -192,6 +174,44 @@ export class CollaborationBotState implements DurableObject {
 			.one();
 
 		return json({ durableObject: "CollaborationBotState", storage: row.value });
+	}
+
+	private async handleStateTransfer(request: Request, importEnabled: boolean): Promise<Response> {
+		await this.ready;
+		const pathname = new URL(request.url).pathname;
+		if (pathname.endsWith("/state/export") && request.method === "GET") {
+			try {
+				await this.migrations.verify();
+				const manifest = await exportStateTransferManifest(this.database);
+				return Response.json(manifest, { headers: { "cache-control": "no-store" } });
+			} catch {
+				return json({ error: "state_export_unavailable" }, 500);
+			}
+		}
+		if (pathname.endsWith("/state/import") && request.method === "POST") {
+			if (!importEnabled) return json({ error: "state_import_disabled" }, 403);
+			if (!isJsonContentType(request.headers.get("content-type"))) return json({ error: "unsupported_media_type" }, 415);
+			try {
+				await this.migrations.verify();
+			} catch {
+				return json({ error: "state_import_unavailable" }, 500);
+			}
+			let manifest: unknown;
+			try {
+				manifest = JSON.parse(await readBoundedText(request, MAX_TRANSFER_BYTES));
+			} catch (error) {
+				if (error instanceof TransferTooLargeError) return json({ error: "state_import_too_large" }, 413);
+				return json({ error: "malformed_manifest" }, 400);
+			}
+			try {
+				return json(await importStateTransferManifest(this.database, manifest));
+			} catch (error) {
+				if (error instanceof StateTransferConflictError) return json({ error: "state_import_conflict" }, 409);
+				if (error instanceof StateTransferValidationError) return json({ error: "state_import_invalid" }, 422);
+				return json({ error: "state_import_failed" }, 500);
+			}
+		}
+		return json({ error: "method_not_allowed" }, 405);
 	}
 
 	private async handleUpdate(request: Request): Promise<Response> {
@@ -392,6 +412,27 @@ export default {
 				);
 				if (!response.ok) throw new Error("durable update failed");
 			});
+		}
+
+		const rehearsalInternalPath = new Map([
+			["/ops/rehearsal/state/export", "/__cf2/rehearsal/state/export"],
+			["/ops/rehearsal/state/import", "/__cf2/rehearsal/state/import"],
+			["/ops/rehearsal/pitr/bookmark", "/__cf2/rehearsal/pitr/bookmark"],
+		]).get(url.pathname);
+		if (rehearsalInternalPath !== undefined) {
+			const runtimeEnvironment = environment as CloudflareEnvironment;
+			if (!isOperationsRequestAuthorized(request, runtimeEnvironment.OPERATIONS_TOKEN)) return json({ error: "unauthorized" }, 401);
+			if (runtimeEnvironment.DEPLOYMENT_ENVIRONMENT !== "staging") return json({ error: "rehearsal_unavailable" }, 403);
+			if (url.pathname === "/ops/rehearsal/state/import" && !isJsonContentType(request.headers.get("content-type"))) return json({ error: "unsupported_media_type" }, 415);
+			const objectId = runtimeEnvironment.COLLABORATION_STATE.idFromName(REHEARSAL_NAME);
+			const response = await runtimeEnvironment.COLLABORATION_STATE.get(objectId).fetch(
+				new Request(new URL(rehearsalInternalPath, request.url), {
+					method: request.method,
+					headers: request.headers,
+					body: request.method === "POST" ? request.body : null,
+				}),
+			);
+			return new Response(response.body, { status: response.status, headers: response.headers });
 		}
 
 		if (url.pathname === "/ops/ready" || url.pathname === "/ops/state/export" || url.pathname === "/ops/state/import") {
