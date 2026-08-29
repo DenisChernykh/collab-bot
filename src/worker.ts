@@ -20,7 +20,16 @@ const MAX_TRANSFER_BYTES = 32 * 1024 * 1024;
 const DELIVERY_STALE_AFTER_MS = 60_000;
 const ALARM_RETRY_DELAY_MS = 1_000;
 
-interface CloudflareEnvironment extends Env {
+type CloudflareEnvironment = Omit<Env,
+	"DEPLOYMENT_ENVIRONMENT"
+	| "STATE_IMPORT_ENABLED"
+	| "EXPECTED_BOT_ID"
+	| "EXPECTED_BOT_USERNAME"
+	| "SHOWCASE_CHANNEL_ID"
+	| "SHOWCASE_CHANNEL_USERNAME"
+	| "HELP_CONTACT"
+> & {
+	readonly DEPLOYMENT_ENVIRONMENT?: string;
 	readonly BOT_TOKEN?: string;
 	readonly EXPECTED_BOT_ID?: string;
 	readonly EXPECTED_BOT_USERNAME?: string;
@@ -31,7 +40,7 @@ interface CloudflareEnvironment extends Env {
 	readonly TELEGRAM_WEBHOOK_SECRET?: string;
 	readonly OPERATIONS_TOKEN?: string;
 	readonly STATE_IMPORT_ENABLED?: string;
-}
+};
 
 interface PreflightCache {
 	readonly botId: string;
@@ -360,7 +369,14 @@ export default {
 	async fetch(request: Request, environment: Env): Promise<Response> {
 		const url = new URL(request.url);
 		if (request.method === "GET" && url.pathname === "/health/live") {
-			return json({ status: "ok", runtime: "cloudflare-local" });
+			const runtimeEnvironment = environment as CloudflareEnvironment;
+			const deploymentEnvironment = runtimeEnvironment.DEPLOYMENT_ENVIRONMENT ?? "local";
+			if (deploymentEnvironment === "local") return json({ status: "ok", runtime: "cloudflare-local" });
+			return json({
+				status: "ok",
+				runtime: "cloudflare",
+				environment: deploymentEnvironment,
+			});
 		}
 
 		if (url.pathname === "/telegram/webhook") {
@@ -381,6 +397,12 @@ export default {
 		if (url.pathname === "/ops/ready" || url.pathname === "/ops/state/export" || url.pathname === "/ops/state/import") {
 			const runtimeEnvironment = environment as CloudflareEnvironment;
 			if (!isOperationsRequestAuthorized(request, runtimeEnvironment.OPERATIONS_TOKEN)) return json({ error: "unauthorized" }, 401);
+			if (url.pathname === "/ops/ready"
+				&& runtimeEnvironment.DEPLOYMENT_ENVIRONMENT !== undefined
+				&& runtimeEnvironment.DEPLOYMENT_ENVIRONMENT !== "local"
+				&& !hasHostedPreflightConfiguration(runtimeEnvironment)) {
+				return json({ status: "not_ready", reason: "preflight_configuration_incomplete" }, 503);
+			}
 			if (url.pathname === "/ops/state/import" && runtimeEnvironment.STATE_IMPORT_ENABLED !== "true") return json({ error: "state_import_disabled" }, 403);
 			if (url.pathname === "/ops/state/import" && !isJsonContentType(request.headers.get("content-type"))) return json({ error: "unsupported_media_type" }, 415);
 			const objectId = runtimeEnvironment.COLLABORATION_STATE.idFromName(SINGLETON_NAME);
@@ -414,6 +436,12 @@ function isOperationsRequestAuthorized(request: Request, expectedToken: string |
 	const authorization = request.headers.get("authorization");
 	const presented = authorization?.startsWith("Bearer ") === true ? authorization.slice("Bearer ".length) : null;
 	return constantTimeEqual(presented, expectedToken);
+}
+
+function hasHostedPreflightConfiguration(environment: CloudflareEnvironment): boolean {
+	return environment.BOT_TOKEN !== undefined && environment.BOT_TOKEN !== "local-development-placeholder"
+		&& environment.EXPECTED_BOT_ID !== undefined && environment.EXPECTED_BOT_USERNAME !== undefined
+		&& environment.SHOWCASE_CHANNEL_ID !== undefined && environment.SHOWCASE_CHANNEL_USERNAME !== undefined;
 }
 
 function parseIds(value: string | undefined): readonly string[] {
