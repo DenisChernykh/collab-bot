@@ -44,8 +44,8 @@
 | R1 — Post-launch maintainability | `completed` | 14 | Те же пользовательские контракты с feature-owned кодом и проверяемыми границами |
 | R2 — Complete feature-first layout | `completed` | 31 | Активные feature implementations принадлежат пяти модулям; shared cross-feature/platform code отделён, legacy paths отсутствуют |
 | R3 — Honest top-level ownership | `completed` | 14 | Корень `src` отражает реальные owners: modules, shared kernel, platform adapters и runtime composition |
-| CF1 — Cloudflare-compatible local runtime | `in_progress` | 15 | Тот же бот проходит workerd/SQLite Durable Object gates локально; production polling остаётся доступным для rollback |
-| CF2 — Free Cloudflare staging | `pending` | 4 | Отдельный staging Worker и dev-бот проходят hosted webhook/alarm smoke без production traffic |
+| CF1 — Cloudflare-compatible local runtime | `completed` | 15 | Тот же бот проходит workerd/SQLite Durable Object gates локально; production polling остаётся доступным для rollback |
+| CF2 — Free Cloudflare staging | `in_progress` | 4 | Отдельный staging Worker и dev-бот проходят hosted webhook/alarm smoke без production traffic |
 | CF3 — Production cutover | `pending` | 4 | Данные перенесены, production webhook включён и hosted journey подтверждён с явным rollback boundary |
 
 ```text
@@ -1620,7 +1620,7 @@ Free-only является stop condition: никакой unit не включа
 
 #### CF2-00 — Preflight the exact free Cloudflare account
 
-- **Status:** `pending`
+- **Status:** `completed`
 - **Objective:** Prove the selected account/project can host the staging topology without payment before creating anything.
 - **Dependencies:** `CF1-09`.
 - **Authorization:** separate remote Cloudflare authorization; browser login remains with the user if required.
@@ -1628,6 +1628,13 @@ Free-only является stop condition: никакой unit не включа
 - **Do not touch:** resource creation, secrets, deploy, Telegram or production.
 - **Stop conditions:** paid Workers plan/overage risk, payment requirement, name collision, unavailable workers.dev, quota too close to safe smoke, wrong account.
 - **Exit criteria:** evidence records exact account, Free plan and resource names; one commit `CF2-00: record free staging preflight`.
+- **Evidence:** Commit SHA: `SELF`. Preflight ran on 2026-08-29 from clean `main` at `b1cfa85ef3e892dfd9719a8f4fcc4643466a9f5a`, with Node `v24.18.0`, pnpm `11.15.1`, Wrangler `4.127.0`, unique Task-ID and no source/config/package change. The user completed Cloudflare OAuth in the browser; a named Wrangler profile `collab-bot` is bound only to this ignored repository directory, while the existing `default` profile remains unchanged. `wrangler whoami` and the Dashboard both resolve account `643464cda99dd9fb036367674d42a62c`.
+- **Free-plan and quota evidence:** Dashboard marks `Free — $0 — Current plan`, with Paid shown only as a `$5` upgrade; no payment action is required. Workers usage is `0 / 100,000` requests today, `0 ms` CPU, zero observability events and zero build minutes. Durable Objects shows no namespaces and zero requests, duration, SQL/KV storage, rows read/written and KV operations. Official [Workers limits](https://developers.cloudflare.com/workers/platform/limits/), [Durable Objects limits](https://developers.cloudflare.com/durable-objects/platform/limits/) and [Durable Objects pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/) confirm that Workers Free supports SQLite-backed Durable Objects with the bounded daily/storage quotas needed for this staging smoke. The API's `default_usage_model=standard` is recorded only as an invocation-model setting; the Dashboard's explicit `Current plan` is the billing-plan evidence.
+- **Resource and collision evidence:** account-wide API inspection reports zero Workers, zero custom domains, zero zones/routes and zero D1 databases; Dashboard independently reports `No projects found` and `No Durable Objects found`. `wrangler deployments list --name collaboration-bot-staging --json` returned Cloudflare code `10007` (`Worker does not exist`), proving the exact Worker name is unoccupied. The account workers.dev subdomain is `castors-suburb-2h.workers.dev`.
+- **Exact staging names:** Worker `collaboration-bot-staging`; public hostname `collaboration-bot-staging.castors-suburb-2h.workers.dev`; binding `COLLABORATION_STATE`; SQLite Durable Object class `CollaborationBotState`; singleton object name `collaboration-bot-primary`. Separate Telegram development identity names remain `collaboration_bot_development` and `collaboration_showcase_development` from `.dev.vars.example`; CF2-00 does not claim that BotFather/channel resources exist or configure them.
+- **Rollback baseline:** the account starts with zero Workers and zero Durable Object namespaces, so CF2-01 must create only the named staging Worker/namespace and preserve that empty-account baseline outside them. Production Telegram, webhook and SQLite are untouched; the legacy local `pnpm start` plus the authoritative local SQLite remain the production rollback target. The existing Wrangler `default` profile remains unchanged and is outside CF2; every future CF2 remote command must first prove active profile `collab-bot` and account `643464cda99dd9fb036367674d42a62c`. No resource, route, namespace, secret, deploy, Telegram setting, production data or billing setting was created or changed.
+- **Verification:** `pnpm check` PASS (architecture 141 modules/476 dependencies; unit 15 files/77 tests; integration 20/90; runtime 7/47; lint 0 errors with two pre-existing generated-file warnings; typecheck/build PASS); `pnpm test:e2e:fake` PASS (8 files/33 tests); host-capable `pnpm test:cloudflare` PASS (6 files/25 tests) after the unchanged sandbox attempt hit only Wrangler-log and `listen EPERM` boundaries; `pnpm db:verify`, `pnpm cloudflare:types:check` on active profile `collab-bot`, `pnpm cloudflare:migrations:check`, `git diff --check`, exact changed-file check and diff credential scan PASS. Only `IMPLEMENTATION_PLAN.md` changed.
+- **Review result:** independent max-effort critical review initially blocked two documentation claims: an unproven inference about the unchanged `default` profile's account and the stale next-unit pointer. One consolidated correction wave removed the inference, added an exact future account/profile preflight, and changed the pointer to separately authorized `CF2-01`; independent re-review returned `PASS` with no remaining blocker.
 
 #### CF2-01 — Provision and deploy isolated staging
 
@@ -1733,4 +1740,4 @@ Push, remote, PR, merge, deploy, credentials и real Telegram не следую�
 - **Hosted production deployment:** `CF3` прошёл import/cutover/real smoke и имеет точную deployment evidence; это не SLA и не обещание бесконечной доступности после исчерпания Free quota.
 - **24/7 / scalable:** Cloudflare снимает зависимость от включённого Mac, но Free limits остаются fail-closed границей; SLA и подготовка к большому масштабу не заявляются.
 
-Следующий executable unit — `CF1-00`, но создание этого плана не запускает CF1. Каждый из `CF1`, `CF2` и `CF3` требует отдельной пользовательской авторизации; CF2/CF3 дополнительно требуют точного разрешения на перечисленные remote, secret, deploy, BotFather/webhook и real Telegram mutations.
+Следующий executable unit — `CF2-01`, но завершение CF2-00 не запускает и не авторизует его. CF2-01 требует отдельного точного разрешения на remote resource creation, secret writes и staging deploy; BotFather/webhook и real Telegram остаются отдельной авторизацией CF2-02, а CF3 требует собственной авторизации.
