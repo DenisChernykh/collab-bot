@@ -61,6 +61,7 @@ describe("CF2-01 staging Wrangler configuration", () => {
 			"BOT_TOKEN",
 			"TELEGRAM_WEBHOOK_SECRET",
 			"OPERATIONS_TOKEN",
+			"ADMIN_TELEGRAM_IDS",
 		]);
 		for (const secretName of staging?.secrets?.required ?? []) {
 			expect(staging?.vars).not.toHaveProperty(secretName);

@@ -12,7 +12,7 @@ import { FakeTelegramApi } from "../support/fake-telegram-api.js";
 import { FakeClock } from "../support/fake-clock.js";
 
 describe("R1-06B bot composition and lifecycle", () => {
-	it("composes the object graph without migration, Telegram, worker, polling, drain, or close effects", () => {
+	it("preserves a positive persisted showcase capability without composition-time effects", () => {
 		const fake = new FakeTelegramApi({
 			token: "fake-token",
 			botInfo: { id: 777, is_bot: true, first_name: "Collab", username: "collab_bot" } as unknown as UserFromGetMe,
@@ -32,10 +32,12 @@ describe("R1-06B bot composition and lifecycle", () => {
 			config: runtimeConfig,
 			clock: new FakeClock(1_700_000_000_000),
 			migrate,
+			showcaseCapability: { canPublish: true, reason: null },
 		});
 
 		expect(application.bot).toBe(bot);
 		expect(application.boundary).toBe(boundary);
+		expect(application.showcaseCapability()).toEqual({ canPublish: true, reason: null });
 		expect(migrate).not.toHaveBeenCalled();
 		expect(fake.calls).toEqual([]);
 		expect(start).not.toHaveBeenCalled();

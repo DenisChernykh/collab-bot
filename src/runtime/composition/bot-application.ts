@@ -72,7 +72,7 @@ export function composeBotApplication(options: BotApplicationCompositionOptions)
 	const transactionRunner = new DatabaseBoundaryTransactionRunner(database);
 	const capability = {
 		canPublish: options.showcaseCapability?.canPublish ?? false,
-		reason: (options.showcaseCapability?.reason ?? "showcase preflight has not run") as string | null,
+		reason: options.showcaseCapability === undefined ? "showcase preflight has not run" : options.showcaseCapability.reason,
 	};
 	const outboxStore = new SqliteOutboxDeliveryRepository(database);
 	const profilesFeature = createProfilesFeature({

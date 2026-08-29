@@ -38,7 +38,8 @@
 				"required": [
 					"BOT_TOKEN",
 					"TELEGRAM_WEBHOOK_SECRET",
-					"OPERATIONS_TOKEN"
+					"OPERATIONS_TOKEN",
+					"ADMIN_TELEGRAM_IDS"
 				]
 			},
 			"exports": {
