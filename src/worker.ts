@@ -149,6 +149,11 @@ export class CollaborationBotState implements DurableObject {
 				return json({ error: "pitr_bookmark_unavailable" }, 501);
 			}
 		}
+		if (pathname === "/__cf1/alarm") {
+			if (request.method !== "GET") return json({ error: "method_not_allowed" }, 405);
+			await this.ready;
+			return json({ scheduledAt: await this.state.storage.getAlarm() });
+		}
 		if (request.method !== "GET" || !["/__cf1/smoke", "/__cf1/schema"].includes(pathname)) {
 			if (request.method === "POST" && pathname === "/__cf1/update") return this.handleUpdate(request);
 			return json({ error: "not_found" }, 404);
@@ -435,10 +440,11 @@ export default {
 			return new Response(response.body, { status: response.status, headers: response.headers });
 		}
 
-		if (url.pathname === "/ops/ready" || url.pathname === "/ops/state/export" || url.pathname === "/ops/state/import" || url.pathname === "/ops/pitr/bookmark") {
+		if (url.pathname === "/ops/ready" || url.pathname === "/ops/state/export" || url.pathname === "/ops/state/import" || url.pathname === "/ops/pitr/bookmark" || url.pathname === "/ops/alarm") {
 			const runtimeEnvironment = environment as CloudflareEnvironment;
 			if (!isOperationsRequestAuthorized(request, runtimeEnvironment.OPERATIONS_TOKEN)) return json({ error: "unauthorized" }, 401);
 			if (url.pathname === "/ops/pitr/bookmark" && runtimeEnvironment.DEPLOYMENT_ENVIRONMENT !== "production") return json({ error: "pitr_unavailable" }, 403);
+			if (url.pathname === "/ops/alarm" && runtimeEnvironment.DEPLOYMENT_ENVIRONMENT !== "production") return json({ error: "alarm_unavailable" }, 403);
 			if (url.pathname === "/ops/ready"
 				&& runtimeEnvironment.DEPLOYMENT_ENVIRONMENT !== undefined
 				&& runtimeEnvironment.DEPLOYMENT_ENVIRONMENT !== "local"
