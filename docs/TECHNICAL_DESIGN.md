@@ -48,9 +48,9 @@ Heartbeat/status storage, scheduled cleanup/retention, exact Unix-socket admissi
 
 Создать новый независимый TypeScript-проект в текущем репозитории.
 
-Приложение является модульным монолитом в одном Node.js-процессе:
+Приложение остаётся модульным монолитом с одним application graph независимо от runtime adapter.
 
-Legacy rollback runtime: `Telegram Bot API → grammY adapter → application/domain → SQLite`. CF1 adds a local candidate and CF2 proves it in isolated hosted staging: `Telegram webhook → Worker → singleton SQLite Durable Object → the same application/domain graph`.
+Active production runtime after CF3: `Telegram webhook → Worker → singleton SQLite Durable Object → the same application/domain graph`. Legacy local/recovery runtime: `Telegram Bot API → grammY adapter → application/domain → SQLite`; после production updates его frozen SQLite является историческим source и не может запускаться как автоматический failover без remote export/reconciliation.
 
 «Бизнес-логика отдельно от Telegram» означает разделение по портам и слоям, а не отдельный сетевой backend-процесс.
 
@@ -62,9 +62,9 @@ Legacy rollback runtime: `Telegram Bot API → grammY adapter → application/do
 | pnpm | `>=11.15.1 <12`; packageManager `pnpm@11.15.1` |
 | TypeScript | ESM, strict; ветка `5.9.x` |
 | Telegram legacy adapter | `grammy 1.45.x`, long polling |
-| Cloudflare candidate | Wrangler/workerd + SQLite Durable Object; local in CF1, isolated hosted staging in CF2 |
+| Cloudflare runtime | Wrangler/workerd + SQLite Durable Object; local in CF1, isolated hosted staging in CF2, production webhook in CF3 |
 | Persistence/schema | параметризованный raw SQL; SQL migrations + typed rows/mappers |
-| SQLite | встроенный `node:sqlite` / `DatabaseSync` |
+| SQLite | local/legacy: `node:sqlite` / `DatabaseSync`; Cloudflare: SQLite Durable Object `storage.sql` |
 | Dates | `date-fns 4.x` и `date-fns-tz 3.x` |
 | Tests | `vitest 4.x` |
 | Lint | ESLint 9 + typescript-eslint 8 |
@@ -143,11 +143,11 @@ Worker → singleton `CollaborationBotState` Durable Object
                   └── one durable alarm for the outbox
 ```
 
-In CF1 the Worker and Durable Object run only under `wrangler dev`. CF2 uses the same graph in one isolated hosted staging Worker: the development webhook, readiness and alarm-driven outbox address only the `collaboration-bot-primary` singleton. The fixed `collaboration-bot-cf2-03-rehearsal` object is staging-gated and operations-token protected; it exposes only one-shot import, export and PITR-bookmark capture, with no webhook/update/readiness/alarm activation path and no arbitrary object selector. Production resources and ingress remain untouched until CF3. The existing Node process and SQLite remain the recoverable rollback source until a separately authorized production cutover is reconciled.
+In CF1 the Worker and Durable Object run under local `wrangler dev`. CF2 keeps an isolated hosted staging Worker/dev bot and the fixed operations-token-protected rehearsal object. CF3 runs the production Telegram webhook on the separate `collaboration-bot-production` Worker; webhook ingress, state export, PITR capture, direct alarm inspection and alarm-driven outbox all address only the fixed `collaboration-bot-primary` singleton in its SQLite-backed `CollaborationBotState` namespace. Production primary import is sealed with `STATE_IMPORT_ENABLED=false`. Exact topology, current version evidence and operating commands are in [`CF3_PRODUCTION_RUNBOOK.md`](./CF3_PRODUCTION_RUNBOOK.md).
 
-Worker version rollback and storage recovery are distinct operations. A Worker rollback changes active code but does not rewind Durable Object SQLite or Telegram effects; a rollback candidate must be compatible with the current schema, bindings and Durable Object class lifecycle. CF2 captures PITR bookmarks only for the fixed rehearsal object and never restores, restarts or deletes an object. Exact staging operations, Free-only stop conditions and safe Telegram `deleteWebhook(drop_pending_updates=false)` ordering are defined in [`CF2_STAGING_RUNBOOK.md`](./CF2_STAGING_RUNBOOK.md).
+Worker version rollback and storage recovery are distinct operations. A Worker rollback changes active code but does not rewind Durable Object SQLite, alarm metadata or Telegram effects; a rollback candidate must be compatible with the current schema, bindings and Durable Object class lifecycle. The project captures nonempty PITR bookmarks but has no restore route/CLI and has not established RPO/RTO. Exact staging boundaries remain in [`CF2_STAGING_RUNBOOK.md`](./CF2_STAGING_RUNBOOK.md); production incident boundaries are in [`CF3_PRODUCTION_RUNBOOK.md`](./CF3_PRODUCTION_RUNBOOK.md).
 
-For CF3 import, no production `/ops/ready` call is allowed until a read-only query proves zero `prepared`, `dispatching` and `retryable_failed` outbox deliveries. Readiness may schedule the Durable Object alarm; invoking it earlier could deliver imported work before the webhook cutover. After any remote business mutation or Telegram effect, neither Worker code rollback nor restart of stale legacy SQLite is sufficient: remote state must first be exported and reconciled. Cloudflare Free is a fail-closed cost boundary; quota or billing ambiguity stops the cutover instead of enabling a paid resource.
+CF3 completed import/readiness/cutover only after proving zero `prepared`, `dispatching`, `retryable_failed`, `ambiguous` and `permanent_failed` deliveries. `/ops/ready` may refresh preflight and call alarm scheduling, so routine production inspection now uses health, state export, PITR and alarm routes without invoking readiness. After any remote business mutation or Telegram effect, neither Worker code rollback nor restart of stale legacy SQLite is sufficient: remote state must first be exported and reconciled. Cloudflare Free remains a fail-closed cost boundary; quota or billing ambiguity stops operator actions instead of enabling a paid resource.
 
 Публикация канала начинается в `collaborations`, сохраняет intent в общем outbox и после commit выполняется delivery runner через grammY transport. В legacy rollback runtime всё работает в одном Node.js process; отдельного HTTP/backend process там нет. CF1's local candidate uses the Worker as a thin HTTP ingress and keeps business execution inside the singleton Durable Object.
 
@@ -878,9 +878,11 @@ Read query формирует один SQL predicate из каноничной p
 - message и обычный callback проходят `DurableCommandExecutor`; opaque `cb_*` направляется в applications `CallbackActionService` с собственной durable one-shot семантикой;
 - feature composers отвечают за свои команды, callbacks, rendering и continuation, а runtime router не принимает product decisions.
 
-### 10.1. Long polling
+### 10.1. Production webhook and legacy long polling
 
-Используется grammY `bot.start()` либо эквивалентный контролируемый runner с одним instance на token.
+Production ingress is the exact workers.dev `POST /telegram/webhook` endpoint with Telegram's secret header, a 1 MiB streaming body cap, JSON/update validation and HTTP 204 only after the fixed primary Durable Object has durably handled the update. Wrong method/content type/secret, oversized or malformed input fails closed. Telegram is configured for only `message` and `callback_query`; a group/channel interaction is still rejected by the adapter. The same production token must never run through `getUpdates` concurrently.
+
+The legacy/local path uses grammY `bot.start()` or an equivalent controlled runner with one instance per token.
 
 Обязательные свойства:
 
@@ -891,7 +893,7 @@ Read query формирует один SQL predicate из каноничной p
 - graceful shutdown вызывает `bot.stop()`, затем самостоятельно ждёт application in-flight tracker до закрытия DB, поскольку `bot.stop()` не ожидает завершения middleware: [grammY Bot API](https://grammy.dev/ref/core/bot);
 - duplicate update безопасен благодаря `processed_updates`.
 
-Long polling не является worker discovery: отдельный process не стартует автоматически. Для CF1 это только legacy rollback ingress; local Worker receives webhook requests and does not start or contact the Node polling process.
+Long polling не является worker discovery: отдельный process не стартует автоматически. After CF3 it is local/recovery tooling only; neither the deployed Worker nor its alarm starts or contacts the Node polling process.
 
 ### 10.2. Handler contract
 
@@ -1158,6 +1160,8 @@ Business entities, operator audit и product events автоматически �
 
 - `BOT_TOKEN` хранится только во внешнем env mode 0600.
 - Token не попадает в plist, SQLite, logs, test fixtures или Git.
+- Hosted `BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `OPERATIONS_TOKEN` и `ADMIN_TELEGRAM_IDS` хранятся только как encrypted Worker secrets; committed config перечисляет только имена.
+- Protected production exports, PITR bookmarks and raw tails are written only to owner-only files outside Git; operations and Telegram tokens never appear in argv, shell history, evidence output or printed/logged Bot API URLs.
 - Пара `EXPECTED_BOT_ID` + `EXPECTED_BOT_USERNAME` предотвращает запуск production process с чужим или giveaway token.
 - Callback raw tokens не хранятся; public collaboration token не даёт mutation authority.
 
@@ -1181,7 +1185,7 @@ Admin hide является единственным enforcement первого 
 
 ### 16.1. Required production variables
 
-S0 реализует pure parser, который принимает явный key/value input и проверяется только синтетическими fixtures: он не читает файл, не требует реальных credentials и не вызывает Telegram. Проверка exact env-file path, current-user ownership, mode 0600, production content и `getMe` identity добавляется в S1 runtime; showcase channel capabilities добавляются вместе с publication flow в S2. Отдельный `APP_ENV` не вводится.
+S0 реализует pure parser, который принимает явный key/value input и проверяется только синтетическими fixtures: он не читает файл, не требует реальных credentials и не вызывает Telegram. Проверка exact env-file path, current-user ownership, mode 0600, production content и `getMe` identity добавляется в S1 runtime; showcase channel capabilities добавляются вместе с publication flow в S2. Отдельный `APP_ENV` не вводится. Следующий env-file contract относится к legacy Node runtime; active Cloudflare production supplies the same application values through Worker bindings/secrets and has no `DATABASE_PATH`.
 
 ```ini
 BOT_TOKEN=<secret>
@@ -1208,10 +1212,12 @@ Pure parser validation в S0:
 
 S1 external preflight до polling и любых Bot API mutations отдельно проверяет exact env-file path, regular-file/no-symlink, current-user ownership и mode 0600; фактический database parent не совпадает с repository root и доступен на запись. Затем `getMe.id`/normalized username сверяются с expected pair. Начиная с S2 отдельно проверяются configured channel ID и права post/edit/delete для exact showcase topology.
 
+The Cloudflare production environment uses the same identity/showcase/help values as plain bindings plus encrypted `BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `OPERATIONS_TOKEN` and `ADMIN_TELEGRAM_IDS`. It additionally fixes `DEPLOYMENT_ENVIRONMENT=production`, `STATE_IMPORT_ENABLED=false` and `COLLABORATION_STATE → CollaborationBotState` with SQLite storage. The public repository contains no secret value.
+
 ### 16.2. Environment boundaries
 
 - Local development запускает Node с явным `--env-file=.env`; `.env` и `.data/` игнорируются Git.
-- Production LaunchAgent передаёт absolute `--env-file=<production.env>` до compiled entrypoint; используется нативный [Node.js `--env-file`](https://nodejs.org/docs/latest-v24.x/api/cli.html#--env-fileconfig), а не `dotenv` dependency.
+- The active production environment is the named Cloudflare Worker/SQLite Durable Object deployment. A LaunchAgent/foreground env file describes only the legacy Node path and is not active production after CF3.
 - Plist содержит путь к env, но не secret values.
 - Приложение читает только allowlisted keys из `process.env`, затем выполняет схемную validation; implicit env-file discovery нет.
 
@@ -1360,6 +1366,8 @@ JSON event содержит:
 
 Запрещены secrets, public/callback tokens, contact и raw user text; incident/log payload использует только внутренние UUID и safe enum/error attributes.
 
+In hosted production, a version-pinned bounded `wrangler tail` is a live stream, not a durable log store. Wrangler 4.127.0 can emit multiline records that interleave when captured asynchronously, so raw output stays private and evidence uses a brace-aware or marker-only sanitizer rather than line-by-line JSON parsing. Persistent Workers Logs are not explicitly enabled in `wrangler.jsonc`; historical retention is not claimed. Durable Objects Data Studio is restricted operationally to aggregate `SELECT` queries against the exact primary object; every statement consumes remote usage and write/DDL/reset/delete operations are prohibited by the runbook.
+
 ### 19.2. Runtime signals
 
 Первый запуск обязан логировать `runtime_ready`, `poll_started`, `poll_failed`, delivery errors и shutdown. Остальные persisted status/heartbeat signals относятся к Later. Возможный расширенный набор:
@@ -1489,6 +1497,8 @@ S3 checkpoint выполняет steps 1–6 и restart-проверку: это
 ### 20.6. Real Telegram smoke
 
 Первый запуск проверяет exact bot/channel identity и основной journey из §20.5 при ручном старте. LaunchAgent restart, backup/restore и log-rotation checks из расширенного списка ниже относятся к Later.
+
+CF2 separately proves the same graph on an isolated hosted development bot/channel. CF3 production evidence proves one exact Worker version and webhook-only named two-account journey through publish, apply, accept, channel edit, admin hide/delete and neutral hidden deep link. It also proves matching completed receipts/updates, terminal one-attempt outbox deliveries and an empty alarm snapshot. This bounded smoke does not establish continuous availability, exactly-once provider delivery, backup restore, RPO/RTO or SLA.
 
 Перед публичным запуском на отдельном test bot/channel:
 

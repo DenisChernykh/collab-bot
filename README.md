@@ -4,7 +4,7 @@
 
 P0 and S0–S4 are complete, including the separately authorized real S4 journey and manual-launch handoff. FUT-01 is implemented locally as a one-time best-effort Telegram audience snapshot; its local/fake evidence does not establish live Telegram count accuracy. The post-launch R1/R2 maintainability work and R3 top-level ownership transition are complete without changing the product boundary.
 
-The project targets a fast manual first launch by one developer. The legacy foreground runtime is not a hosted, scale-ready or always-on service. CF1 prepares a local Cloudflare-compatible candidate; CF2 proves the same application graph on one isolated hosted staging Worker with a development bot/channel. The staging evidence is not a production deployment, production cutover or SLA claim.
+CF1 prepared the Cloudflare-compatible runtime, CF2 proved it on an isolated hosted staging Worker, and CF3 completed the bounded production freeze/import/webhook cutover plus a named two-account hosted journey. Production now runs as one workers.dev Worker and one SQLite-backed Durable Object on the confirmed Cloudflare Free plan. This is deployment evidence, not an SLA, 24/7 guarantee, unlimited-capacity claim or automatic recovery promise.
 
 ## Sources of truth
 
@@ -29,9 +29,9 @@ FUT-01 does not verify ownership, reach, authenticity or audience quality. It pe
 
 ## Intended technical shape
 
-The approved local rollback shape is a new independent TypeScript project: one manually managed modular Node.js process with `Telegram Bot API → grammY adapter → application/domain → SQLite`. CF1 adds a second adapter shape — `Telegram webhook → Worker → singleton SQLite Durable Object → the same application/domain graph` — and CF2 proves that shape on an isolated hosted staging resource without changing the PRD journey or production traffic. D1, Queues, PostgreSQL, Redis, BullMQ, Docker, and Giveaway Bot integration remain outside CF1–CF3 unless a later plan explicitly authorizes them.
+The active production shape is `Telegram webhook → Worker → singleton SQLite Durable Object → the same application/domain graph`. The legacy `Telegram Bot API → grammY adapter → application/domain → SQLite` foreground runtime remains available for local development and as historical recovery code, but its frozen database became stale as soon as CF3 accepted remote updates; it must not be started as an automatic production fallback. D1, Queues, PostgreSQL, Redis, BullMQ, Docker, and Giveaway Bot integration remain outside CF1–CF3 unless a later plan explicitly authorizes them.
 
-The repository contains this foreground runtime, but it contains no real credentials and does not establish a deployed Telegram identity or operational resource by itself.
+The repository contains no real credentials, raw production exports, PITR bookmarks, Telegram updates or deep-link tokens. Exact operational evidence and safe inspection/recovery boundaries are recorded without secret values in the production runbook.
 
 ## Code organization
 
@@ -88,9 +88,11 @@ The executable registry is [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md). A u
 
 No push, remote setup, pull request, merge, deployment, credential use, production mutation, or real Telegram action is implied by a stage command unless separately authorized.
 
-The local Cloudflare Worker and development-bot relay procedure is documented in [the CF1 local runbook](docs/CF1_LOCAL_RUNBOOK.md). Hosted staging preflight, fixed-object state-transfer/PITR-bookmark rehearsal, Free-tier checks and rollback boundaries are documented in [the CF2 staging runbook](docs/CF2_STAGING_RUNBOOK.md). Production still requires the separately authorized CF3 freeze, import and ingress-cutover units; the legacy foreground runtime remains recoverable until that cutover is reconciled.
+The local Cloudflare Worker and development-bot relay procedure is documented in [the CF1 local runbook](docs/CF1_LOCAL_RUNBOOK.md). Hosted staging preflight, fixed-object state-transfer/PITR-bookmark rehearsal, Free-tier checks and rollback boundaries are documented in [the CF2 staging runbook](docs/CF2_STAGING_RUNBOOK.md). The active production topology, read-only checks, quota behavior, deploy/rollback boundaries and retained recovery artifacts are documented in [the CF3 production runbook](docs/CF3_PRODUCTION_RUNBOOK.md).
 
-## Foreground operations
+## Legacy foreground operations
+
+This path is local-development and historical recovery tooling after CF3. Do not run it with the production token or stale `.runtime/app.sqlite` while the production webhook is active. A future ingress rollback requires separate authorization, `deleteWebhook(drop_pending_updates=false)`, a fresh remote export and explicit reconciliation first.
 
 Use Node and pnpm versions allowed by `package.json`, keep the real env file outside Git with restrictive file permissions, and run from the repository root.
 
@@ -135,4 +137,5 @@ Only start the bot again after the copy command finishes. This is a manual stopp
 - Manual first launch means S4 and separately authorized `LAC-12` pass for one exact bot/channel, after which the author can manually share the link.
 - FUT-01 is optional post-launch enrichment and does not change `LFR-*`, `LAC-*`, launch-candidate or manual-first-launch claims.
 - Hosted staging candidate means CF2 passed on the isolated development bot/channel and Free account; it does not prove production traffic or authorize production mutation.
-- Foreground start does not provide daemon supervision, hosted availability or automatic restart. Production-ready, deployed, scalable, 24/7 and SLA are not claimed by this plan.
+- Deployed production candidate means CF3 proved one exact Worker/version, singleton schema-13 state, webhook-only ingress and a bounded named-user journey. It does not prove continuous availability, a tested restore/RPO/RTO, unlimited Free capacity or an SLA.
+- Foreground start does not provide daemon supervision, hosted availability or automatic restart and is not a production failover after remote state diverged.
