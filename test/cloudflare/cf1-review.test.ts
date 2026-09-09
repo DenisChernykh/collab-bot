@@ -63,7 +63,7 @@ describe("CF1 consolidated launch regressions", () => {
 		const stub = env.COLLABORATION_STATE.get(env.COLLABORATION_STATE.idFromName("cf1-review-positive-eviction"));
 		await stub.fetch("https://local/__cf1/schema");
 		await runInDurableObject(stub, async (_instance, state) => {
-			expect(state.storage.sql.exec("SELECT count(*) AS count FROM __app_migrations").toArray()).toEqual([{ count: 14 }]);
+			expect(state.storage.sql.exec("SELECT count(*) AS count FROM __app_migrations").toArray()).toEqual([{ count: 15 }]);
 		});
 		const secondIdentity = vi.fn(async () => undefined);
 		const secondPreflight = vi.fn(async () => undefined);
@@ -109,7 +109,7 @@ describe("CF1 consolidated launch regressions", () => {
 	it("rechecks a degraded showcase cache and schedules a recovered channel intent", async () => {
 		const stub = env.COLLABORATION_STATE.get(env.COLLABORATION_STATE.idFromName("cf1-review-showcase-recovery"));
 		await stub.fetch("https://local/__cf1/schema");
-		await runInDurableObject(stub, async (_instance, state) => expect(state.storage.sql.exec("SELECT count(*) AS count FROM __app_migrations").toArray()).toEqual([{ count: 14 }]));
+		await runInDurableObject(stub, async (_instance, state) => expect(state.storage.sql.exec("SELECT count(*) AS count FROM __app_migrations").toArray()).toEqual([{ count: 15 }]));
 		const createdAt = Date.now() + 10_000;
 		const recoveredCapability = { canPublish: true, reason: null };
 		const recoveredIdentity = vi.fn(async () => undefined);

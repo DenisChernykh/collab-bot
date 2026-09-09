@@ -1893,7 +1893,7 @@ Shared unit contract: read AGENTS.md, PRD §22, TD MFM contract, this complete s
 
 ### MFM-01 — Add preserving MFM schema and transfer coverage
 
-- **Status:** `pending`
+- **Status:** `completed`
 - **Dependencies:** MFM-00 completed.
 - **Read first:** shared MFM unit contract above; predecessor evidence; complete relevant source/test contracts.
 - **Scope:** Migration 15, Cloudflare manifest, transfer tables/version and affected migration assertions.
@@ -1901,6 +1901,8 @@ Shared unit contract: read AGENTS.md, PRD §22, TD MFM contract, this complete s
 - **Tests first:** demonstrate the scope's missing behavior before runtime implementation; documentation units use diff review.
 - **Verification:** focused migration/integration tests; pnpm check; Cloudflare manifest/typecheck/schema tests; git diff --check.
 - **Exit criteria:** acceptance proved; evidence and one local commit; clean tree.
+
+- **Evidence:** Commit SHA: `SELF`. Clean predecessor MFM-00 a164d202b1eab4245d9c64d6233e67c9141a6e43; origin/main unchanged c4c5bfbc5f9696b63e0acf89182990017c2237fb; toolchain unchanged. RED: both populated upgrades failed because migration 15 was absent. GREEN: 3 focused migration tests; pnpm check PASS (82 unit, 95 integration, 47 runtime; build/lint/architecture/typecheck); Cloudflare typecheck/manifest PASS; 9 local workerd schema/recovery tests PASS after required host retry for sandbox 127.0.0.1 EPERM. Aggregate initially identified the expected transfer table-count change (17→22), corrected. Final diff inspected; 12 source/test files plus migration/plan; historical migrations untouched. Changed files: IMPLEMENTATION_PLAN.md, migrations/0015_mfm-onboarding.sql, src/platform/database/cloudflare-migration-manifest.ts, src/platform/database/state-transfer.ts, test/cloudflare/cf1-05-sqlite.test.ts, test/cloudflare/cf1-review.test.ts, test/integration/ap-01-profile-migration.test.ts, test/integration/cf1-08-state-transfer.test.ts, test/integration/mfm-01-migration.test.ts, test/integration/r1-07-test-support.test.ts, test/integration/s2-02-publication.test.ts, test/integration/s3-03-application.test.ts, test/integration/s3-04-application-decision.test.ts, test/integration/s4-01-admin-hide.test.ts. No live database changed.
 
 ### MFM-02 — Add structured MFM model and persistence
 

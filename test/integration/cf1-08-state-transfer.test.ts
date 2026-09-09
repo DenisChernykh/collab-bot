@@ -45,7 +45,7 @@ describe("CF1-08 verified SQLite state transfer", () => {
 				await expect(importStateTransferManifest(target.boundary, manifest, () => 2_000_000)).resolves.toMatchObject({
 					digest: manifest.digest,
 					rowCount: 2,
-					tableCount: 17,
+					tableCount: 22,
 				});
 				expect((await exportStateTransferManifest(target.boundary)).digest).toBe(manifest.digest);
 				expect(await target.boundary.query("SELECT telegram_user_id, display_name FROM telegram_users")).toEqual([{ telegram_user_id: "7001", display_name: "Source User" }]);

@@ -14,13 +14,13 @@ const singleton = () => env.COLLABORATION_STATE.get(
 );
 
 describe("CF1-05 Durable Object SQLite contract", () => {
-	it("boots the canonical 14-migration schema and reopens it after eviction", async () => {
+	it("boots the canonical 15-migration schema and reopens it after eviction", async () => {
 		const stub = singleton();
 		const first = await stub.fetch("https://local/__cf1/schema");
 
 		expect(first.status).toBe(200);
 		expect(await first.json()).toEqual({
-			migrationCount: 14,
+			migrationCount: 15,
 			historyTable: "__app_migrations",
 			integrity: "ok",
 		});
@@ -30,14 +30,14 @@ describe("CF1-05 Durable Object SQLite contract", () => {
 			const rows = state.storage.sql
 				.exec<{ count: number }>("SELECT count(*) AS count FROM __app_migrations")
 				.toArray();
-			expect(rows).toEqual([{ count: 14 }]);
+			expect(rows).toEqual([{ count: 15 }]);
 		});
 
 		await evictDurableObject(stub);
 		const reopened = await stub.fetch("https://local/__cf1/schema");
 		expect(reopened.status).toBe(200);
 		expect(await reopened.json()).toEqual({
-			migrationCount: 14,
+			migrationCount: 15,
 			historyTable: "__app_migrations",
 			integrity: "ok",
 		});
