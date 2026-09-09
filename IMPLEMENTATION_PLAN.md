@@ -1832,7 +1832,7 @@ Product contract: first private /start (including card deep links) atomically cr
 
 ### AP-02 — Create and complete a persistent basic profile
 
-- **Status:** `pending`
+- **Status:** `completed`
 - **Objective:** Add idempotent creation from supplied Telegram name and keep incomplete profiles out of business actions.
 - **Requirements:** AP contract; PRD §7, LFR-01/LFR-02/LFR-04.
 - **Dependencies:** AP-01 completed.
@@ -1845,6 +1845,9 @@ Product contract: first private /start (including card deep links) atomically cr
 - **Verification:** focused integration tests; pnpm check; pnpm test:e2e:fake; git diff --check.
 - **Exit criteria:** checks pass; evidence; one local AP-02 commit and clean tree.
 - **Stop conditions:** identity exposure, broken core journey, toolchain conflict, scope beyond 12 source/test files, real/remote mutations.
+
+- **Completion evidence:** Commit SHA: `SELF`. Preflight clean main at unique AP-01 `3558eeffa0cc1db40ab7071198e769ee201fd26e`, same read-only remote snapshot `c4c5bfbc5f9696b63e0acf89182990017c2237fb`, Node v24.18.0/pnpm 11.15.1. Focused tests first failed for absent ensureFromTelegram, then passed: one persisted row, initial type NULL and no platforms, private/public separation, repeat preserves name/ID, incomplete collaboration denied and applicant context absent, completion reuses ID/createdAt, edited name retained, short-name completion validation. First aggregate run caught a test-only nullable-type mismatch, corrected explicitly. `pnpm check` PASS (unit 82, integration 93, runtime 47); `pnpm test:e2e:fake` PASS (33 tests). Final diff inspected; unchanged active-profile journeys and no /start activation yet. No dependencies, schema, live data or external state changed. Independent stage review remains AP-03.
+- **Changed files:** `IMPLEMENTATION_PLAN.md`, `src/modules/applications/infrastructure/sqlite-applications-repository.ts`, `src/modules/collaborations/infrastructure/sqlite-collaboration-repository.ts`, `src/modules/profiles/application/ports/profile-repository.ts`, `src/modules/profiles/application/profile-service.ts`, `src/modules/profiles/domain/profile.ts`, `src/modules/profiles/infrastructure/sqlite-profile-repository.ts`, `src/modules/profiles/presentation/telegram/profile-composer.ts`, `src/runtime/telegram/telegram-router.ts`, `test/integration/ap-02-automatic-profile.test.ts`.
 
 ### AP-03 — Automatically create profiles on Telegram start
 

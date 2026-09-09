@@ -1,11 +1,13 @@
 import { generateUuid } from "../../../platform/crypto/tokens.js";
 import type { ProfileRepository } from "../application/ports/profile-repository.js";
 import type { ProfileAudienceWriter } from "../application/profile-audience-service.js";
-import type {
-	ProfileInput,
-	ProfilePlatformRecord,
-	ProfileRecord,
-	PublicProfileRecord,
+import {
+	isCompleteProfile,
+	type CompleteProfileRecord,
+	type ProfileInput,
+	type ProfilePlatformRecord,
+	type ProfileRecord,
+	type PublicProfileRecord,
 } from "../domain/profile.js";
 import {
 	parsePlatformType,
@@ -67,7 +69,17 @@ export class SqliteProfileRepository implements ProfileRepository, ProfileAudien
 		const row = rows[0];
 		if (row === undefined) return undefined;
 		const aggregate = await this.readAggregate(row);
-		return toPublicProfile(aggregate);
+		return isCompleteProfile(aggregate) ? toPublicProfile(aggregate) : undefined;
+	}
+
+	async createInitial(telegramUserId: string, displayName: string, now: number): Promise<ProfileRecord> {
+		await this.database.execute(
+			"INSERT INTO profiles (id, telegram_user_id, type, display_name, description, city_code, status, created_at, updated_at) VALUES (?, ?, NULL, ?, NULL, 'ekaterinburg', 'active', ?, ?) ON CONFLICT(telegram_user_id) WHERE status = 'active' DO NOTHING",
+			[generateUuid(), telegramUserId, displayName, now, now],
+		);
+		const created = await this.findActiveByTelegramUserId(telegramUserId);
+		if (created === undefined) throw new Error("initial profile could not be reloaded");
+		return created;
 	}
 
 	async create(telegramUserId: string, input: ProfileInput, now: number): Promise<ProfileRecord> {
@@ -177,14 +189,14 @@ export class SqliteProfileRepository implements ProfileRepository, ProfileAudien
 function readBase(row: ProfileRow): ProfileRecord {
 	if (
 		typeof row.id !== "string" || typeof row.telegram_user_id !== "string" ||
-		typeof row.type !== "string" || typeof row.display_name !== "string" ||
+		(row.type !== null && typeof row.type !== "string") || typeof row.display_name !== "string" ||
 		(row.description !== null && typeof row.description !== "string") || row.city_code !== "ekaterinburg" ||
 		(row.status !== "active" && row.status !== "archived") ||
 		!Number.isSafeInteger(row.created_at) || !Number.isSafeInteger(row.updated_at)
 	) {
 		throw new Error("profile row is corrupt");
 	}
-	const type = parseProfileType(row.type);
+	const type = row.type === null ? null : parseProfileType(row.type);
 	return {
 		id: row.id,
 		telegramUserId: row.telegram_user_id,
@@ -228,7 +240,7 @@ function mapPlatformRow(row: PlatformRow): ProfilePlatformRecord {
 	};
 }
 
-function toPublicProfile(profile: ProfileRecord): PublicProfileRecord {
+function toPublicProfile(profile: CompleteProfileRecord): PublicProfileRecord {
 	return {
 		id: profile.id,
 		type: profile.type,

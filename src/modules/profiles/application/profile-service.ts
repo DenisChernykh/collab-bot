@@ -2,6 +2,8 @@ import type { Clock } from "../../../shared/application/ports/clock.js";
 import type { TransactionRunner } from "../../../shared/application/ports/transaction-runner.js";
 import type { ProfileRepository } from "./ports/profile-repository.js";
 import {
+	isCompleteProfile,
+	validateInitialProfileName,
 	validateProfileInput,
 	type ProfileInput,
 	type ProfileRecord,
@@ -31,12 +33,21 @@ export class ProfileService {
 		private readonly clock: Clock,
 	) {}
 
+	async ensureFromTelegram(telegramUserId: string, displayName: string): Promise<ProfileRecord> {
+		return this.transactionRunner.withTransaction(async () => {
+			const existing = await this.repository.findActiveByTelegramUserId(telegramUserId);
+			if (existing !== undefined) return existing;
+			return this.repository.createInitial(telegramUserId, validateInitialProfileName(displayName), clockMilliseconds(this.clock));
+		});
+	}
+
 	async create(telegramUserId: string, input: ProfileInput): Promise<ProfileRecord> {
 		const normalized = validateProfileInput(input);
 		const now = clockMilliseconds(this.clock);
 		return this.transactionRunner.withTransaction(async () => {
 			const existing = await this.repository.findActiveByTelegramUserId(telegramUserId);
 			if (existing !== undefined) {
+				if (!isCompleteProfile(existing)) return this.repository.update(telegramUserId, normalized, now);
 				throw new ProfileAlreadyExistsError();
 			}
 			try {

@@ -72,7 +72,7 @@ export class SqliteCollaborationRepository implements CollaborationRepository {
 
 	async createDraft(telegramUserId: string, now: number): Promise<CollaborationRecord> {
 		return this.database.withTransaction(async () => {
-			const profileRows = await this.database.query<{ id?: unknown }>("SELECT id FROM profiles WHERE telegram_user_id = ? AND status = 'active'", [telegramUserId]);
+			const profileRows = await this.database.query<{ id?: unknown }>("SELECT id FROM profiles WHERE telegram_user_id = ? AND status = 'active' AND type IS NOT NULL AND EXISTS (SELECT 1 FROM profile_platforms WHERE profile_id = profiles.id)", [telegramUserId]);
 			const profileId = profileRows[0]?.id;
 			if (typeof profileId !== "string") throw new CollaborationRepositoryError("active profile is required");
 			const id = generateUuid();

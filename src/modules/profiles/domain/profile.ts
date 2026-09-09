@@ -34,7 +34,7 @@ export interface ProfilePlatformRecord extends ProfilePlatformInput {
 export interface ProfileRecord {
 	readonly id: string;
 	readonly telegramUserId: string;
-	readonly type: ProfileType;
+	readonly type: ProfileType | null;
 	readonly displayName: string;
 	readonly description: string | null;
 	readonly cityCode: typeof PROFILE_CITY;
@@ -45,7 +45,23 @@ export interface ProfileRecord {
 	readonly platforms: readonly ProfilePlatformRecord[];
 }
 
-export type PublicProfileRecord = Omit<ProfileRecord, "telegramUserId">;
+export type CompleteProfileRecord = ProfileRecord & { readonly type: ProfileType };
+export type PublicProfileRecord = Omit<CompleteProfileRecord, "telegramUserId">;
+
+export function isCompleteProfile(profile: ProfileRecord | undefined): profile is CompleteProfileRecord {
+	if (profile === undefined || profile.type === null) return false;
+	try {
+		validateProfileInput({ ...profile, type: profile.type });
+		return true;
+	} catch (error) {
+		if (error instanceof DomainValidationError) return false;
+		throw error;
+	}
+}
+
+export function validateInitialProfileName(name: string): string {
+	return requiredText(name, 1, Number.MAX_SAFE_INTEGER, "Telegram name");
+}
 
 export function validateProfileInput(input: ProfileInput): ProfileInput {
 	const type = parseProfileType(input.type);

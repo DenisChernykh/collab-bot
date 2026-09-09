@@ -5,6 +5,7 @@ import type {
 } from "../../domain/profile.js";
 
 export interface ProfileRepository {
+	createInitial(telegramUserId: string, displayName: string, now: number): Promise<ProfileRecord>;
 	findActiveByTelegramUserId(telegramUserId: string): Promise<ProfileRecord | undefined>;
 	findPublicById(profileId: string): Promise<PublicProfileRecord | undefined>;
 	create(telegramUserId: string, input: ProfileInput, now: number): Promise<ProfileRecord>;

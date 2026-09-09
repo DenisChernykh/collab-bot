@@ -13,7 +13,7 @@ import {
 } from "../../application/ports/profile-session-repository.js";
 import type { ProfileService } from "../../application/profile-service.js";
 import type { AudienceAutofillIntent } from "../../application/profile-audience-service.js";
-import type { ProfileInput, ProfileRecord } from "../../domain/profile.js";
+import { isCompleteProfile, type ProfileInput, type ProfileRecord } from "../../domain/profile.js";
 import {
 	parsePlatformType,
 	parseProfileType,
@@ -606,7 +606,7 @@ async function showProfile(ctx: Context, options: ProfileTelegramFeatureOptions,
 		"Ваш профиль",
 		"",
 		`Название: ${profile.displayName}`,
-		`Кто вы: ${profileTypeLabel(profile.type)}`,
+		`Кто вы: ${profile.type === null ? "не указано" : profileTypeLabel(profile.type)}`,
 		...(profile.description === null ? [] : [`Описание: ${profile.description}`]),
 		...(profile.topics.length === 0 ? [] : [`Темы: ${profile.topics.map(topicLabel).join(", ")}`]),
 		`Площадка: ${platform?.url ?? "не указана"}`,
@@ -631,14 +631,14 @@ async function startOrResume(
 		await renderStep(ctx, options, userId, current);
 		return;
 	}
-	if (!edit && await options.profileService.getOwn(userId) !== undefined) {
+	if (!edit && isCompleteProfile(await options.profileService.getOwn(userId))) {
 		await ctx.reply("Профиль уже создан. При необходимости обновите его.", { reply_markup: new InlineKeyboard().text("✏️ Изменить профиль", "profile:edit") });
 		return;
 	}
-	const profile = edit ? await options.profileService.getOwn(userId) : undefined;
+	const profile = await options.profileService.getOwn(userId);
 	const firstPlatform = profile?.platforms[0];
 	const draft: ProfileDraft = profile === undefined ? { audienceAutofill: "allow" } : {
-		type: profile.type,
+		...(profile.type === null ? {} : { type: profile.type }),
 		displayName: profile.displayName,
 		description: profile.description,
 		topics: profile.topics,
@@ -673,7 +673,7 @@ async function finishQuickApplicationProfile(ctx: Context, options: ProfileTeleg
 	}
 	let createdProfile: ProfileRecord | undefined;
 	try {
-		if (await options.profileService.getOwn(userId) === undefined) createdProfile = await options.profileService.create(userId, input);
+		if (!isCompleteProfile(await options.profileService.getOwn(userId))) createdProfile = await options.profileService.create(userId, input);
 	} catch (error) {
 		if (error instanceof Error && (error.name === "DomainValidationError" || error.name === "ProfileAlreadyExistsError")) {
 			await ctx.reply("Не удалось сохранить короткий профиль. Проверьте данные и попробуйте ещё раз.");

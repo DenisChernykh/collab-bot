@@ -192,6 +192,8 @@ export class SqliteApplicationsRepository implements ApplicationDecisionStore {
 			FROM telegram_users actor
 			LEFT JOIN profiles applicant
 				ON applicant.telegram_user_id = actor.telegram_user_id AND applicant.status = 'active'
+				AND applicant.type IS NOT NULL
+				AND EXISTS (SELECT 1 FROM profile_platforms WHERE profile_id = applicant.id)
 			LEFT JOIN collaborations c ON c.id = ?
 			LEFT JOIN profiles author ON author.id = c.author_profile_id
 			LEFT JOIN telegram_users author_actor ON author_actor.telegram_user_id = author.telegram_user_id

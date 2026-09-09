@@ -28,6 +28,7 @@ import {
 import {
 	applicationNavigationKeyboard,
 	createProfileTelegramFeature,
+	isCompleteProfile,
 	profileTypeLabel,
 	resumeKeyboard,
 	topicLabel,
@@ -105,7 +106,7 @@ export function registerTelegramRouter(bot: Bot, options: TelegramRouterOptions)
 		menuKeyboard: () => menuKeyboard(options),
 		profileFlow: {
 			findSession: (userId) => profileFeature.findSession(userId),
-			hasOwnProfile: async (userId) => await options.profileService.getOwn(userId) !== undefined,
+			hasOwnProfile: async (userId) => isCompleteProfile(await options.profileService.getOwn(userId)),
 			startForCollaboration: (ctx, userId) => profileFeature.startOrResume(ctx, userId, false, { kind: "create_collaboration" }),
 			resumeKeyboard,
 		},
