@@ -2,7 +2,7 @@ import type { SqlDatabase, SqlValue } from "../../shared/application/ports/sql-d
 import { webCryptoCapabilities } from "../crypto/capabilities.js";
 
 export const STATE_TRANSFER_VERSION = 1 as const;
-export const STATE_TRANSFER_SCHEMA_VERSION = 13 as const;
+export const STATE_TRANSFER_SCHEMA_VERSION = 14 as const;
 export const STATE_TRANSFER_AUDIT_TABLE = "cf1_state_import_audit" as const;
 
 const PRODUCT_TABLES = [

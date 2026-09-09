@@ -6,7 +6,7 @@ import type { DatabaseBoundary } from "../../src/platform/database/database-boun
 import { FakeClock } from "../support/fake-clock.js";
 import { withFreshMigratedDatabase } from "../support/migrated-database.js";
 
-const ALL_MIGRATIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13] as const;
+const ALL_MIGRATIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] as const;
 
 describe("R1-07 production-like test support", () => {
 	it("creates independent migrated databases on repeated runs and cleans each fixture", async () => {

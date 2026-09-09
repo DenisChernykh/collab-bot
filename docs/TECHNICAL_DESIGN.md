@@ -1742,3 +1742,10 @@ First-launch checklist:
 - [ ] Backup учитывает WAL, а restore не оставляет старые WAL/SHM в production path.
 - [ ] Mini App/PostgreSQL/Giveaway остаются Later.
 - [ ] Документация не заявляет hosted, 24/7 или production evidence до реального smoke.
+
+
+## AP — Автоматический профиль при первом /start (2026-09-09)
+
+Уточнение PRD §7.1 заменяет историческое отложенное создание. Private `/start`, включая deep link, внутри текущей durable command transaction сохраняет Telegram snapshot и идемпотентно создаёт реальную запись `profiles` с именем из Telegram. `type` допускает NULL; `description` NULL, topics/platforms пусты до пользовательского ввода. Существующий профиль не перезаписывается. Username хранится в `telegram_users`; публичная площадка по нему требует существующего opt-in.
+
+Полнота профиля определяется типом, корректным названием и публичной площадкой. Незавершённый профиль доступен владельцу, не возвращается public lookup и не проходит collaboration/application admission. Дозаполнение сохраняет `profile_id`, использует исходное имя и возвращает к пользовательскому действию. Повторные /start и replay не меняют профиль/session и не выполняют дополнительные Telegram lookup. Миграция 0014 переносит type без потери данных в nullable column, сохраняет все IDs/ссылки; Cloudflare manifest и state-transfer schema version синхронизируются. Старые transfer manifests требуют совместимой версии, автоматический import/restore в этом stage не выполняется.

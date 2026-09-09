@@ -1,8 +1,8 @@
 # Collaboration Bot — solo-launch and Cloudflare migration implementation plan
 
 - Статус документа: `Approved execution registry`
-- Версия: `1.1`
-- Дата: `2026-08-28`
+- Версия: `1.2`
+- Дата: `2026-09-09`
 - Цель: сохранить работающий Telegram-цикл и перенести его на бесплатный Cloudflare runtime без ослабления durable/transactional гарантий
 - Ограничение: один stage за пользовательскую авторизацию, один локальный commit на unit; push/PR/deploy и внешние mutations только в явно разрешённых cards CF2/CF3
 
@@ -46,6 +46,7 @@
 | R3 — Honest top-level ownership | `completed` | 14 | Корень `src` отражает реальные owners: modules, shared kernel, platform adapters и runtime composition |
 | CF1 — Cloudflare-compatible local runtime | `completed` | 15 | Тот же бот проходит workerd/SQLite Durable Object gates локально; production polling остаётся доступным для rollback |
 | CF2 — Free Cloudflare staging | `completed` | 4 | Отдельный staging Worker и dev-бот проходят hosted webhook/alarm smoke без production traffic |
+| AP — Automatic Telegram profile | `in_progress` | 3 | Профиль создаётся при /start, доступные данные берутся из Telegram, участие требует дозаполнения |
 | CF3 — Production cutover | `completed` | 4 | Данные перенесены, production webhook включён, hosted journey подтверждён и operations handoff закрыт с явным recovery boundary |
 
 ```text
@@ -1801,4 +1802,62 @@ Push, remote, PR, merge, deploy, credentials и real Telegram не следую�
 - **Hosted production deployment:** `CF3` прошёл import/cutover/real smoke и имеет точную deployment evidence; это не SLA и не обещание бесконечной доступности после исчерпания Free quota.
 - **24/7 / scalable:** Cloudflare снимает зависимость от включённого Mac, но Free limits остаются fail-closed границей; SLA и подготовка к большому масштабу не заявляются.
 
-Все executable units через CF3-03 завершены. В плане нет следующей authorized/pending card: будущую capability или новый stage нельзя выбирать автоматически. Push/PR/merge, paid resources, distribution, retention/deletion и действия вне завершённого CF3 требуют отдельного точного решения и авторизации.
+Исторические executable units через CF3-03 завершены. AP ниже отдельно авторизован 2026-09-09; за его пределами будущую capability или новый stage нельзя выбирать автоматически. Push/PR/merge, paid resources, distribution, retention/deletion и действия вне завершённого CF3 требуют отдельного точного решения и авторизации.
+
+
+## 9. AP — Automatic Telegram profile
+
+User authorization (2026-09-09): «Я хочу, чтобы создавался профиль. Данные, которые можно брать из ТГ берутся из ТГ». This supersedes deferred profile creation in PRD §7.1. Scope is local implementation; deployment, real Telegram and remote writes are not authorized.
+
+Product contract: first private /start (including card deep links) atomically creates one real profiles row from Telegram name and identity, without starting an obligatory questionnaire. Type is unknown (NULL); no invented platform. Username remains in the existing private Telegram snapshot and is offered for explicit public-platform selection. Existing profile names/edits are not overwritten by subsequent starts. An incomplete profile is visible to its owner, excluded from public projections and cannot create a collaboration or submit an application until required fields are complete. The existing profile_id survives completion. Available names are prefilled; optional enrichment stays optional. Deep links still open their target and abandoned completion does not submit an application.
+
+### AP-01 — Preserve profiles while allowing an unknown type
+
+- **Status:** `completed`
+- **Objective:** Prepare a data-preserving schema for automatic profiles on Node SQLite and local workerd.
+- **Requirements:** PRD §7, LFR-01/LAC-01 and AP contract above.
+- **Dependencies:** CF3-03 completed.
+- **Read first:** AGENTS.md; PRD §7, §19.1, §20.1; TD profiles schema and Cloudflare migration/state-transfer contracts; migrations 0003/0008/0013; migration manifest and state-transfer code.
+- **Preconditions:** clean main at unique CF3-03; Node >=24.18.0 <25 and pnpm >=11.15.1 <12; inspect remote read-only. Existing runtime remains compatible while auto creation is not yet enabled.
+- **Scope:** migration 0014 nullable profile type using copy-preserving column replacement; regenerated Cloudflare manifest; state-transfer schema version; migration count expectations; focused populated-upgrade test; PRD/TD/plan.
+- **Do not touch:** dependencies, historic migrations, production data, credentials, remote writes, hosted runtime.
+- **Invariants:** preserve profile IDs and all values/children/references; unique active profile/user; no invented type; migration checksums remain authoritative; incompatible old state exports fail closed.
+- **Tests first:** populated 13→14 migration preserves profile/platform/collaboration records, permits NULL type and rejects invalid types; repeat migration is a no-op.
+- **Verification:** focused integration test; pnpm check; pnpm cloudflare:migrations:check; pnpm cloudflare:typecheck; local workerd schema tests; git diff --check.
+- **Exit criteria:** checks pass; evidence recorded; one local AP-01 commit and clean tree.
+- **Stop conditions:** data loss, incompatible toolchain, ambiguous policy, scope beyond 12 source/test files, real/remote mutations.
+
+- **Completion evidence:** Commit SHA: `SELF`. Preflight main at unique CF3-03 `c5aee491b55eca1c188d9bdae803387239fefcd7`; clean initial tree; Node v24.18.0/pnpm 11.15.1. Read-only origin/main verified at `c4c5bfbc5f9696b63e0acf89182990017c2237fb` (sandbox DNS failed, host read succeeded); no remote writes. Focused migration test first failed because migration 14 was absent, then passed with populated profile/platform/topic/collaboration preservation, FK/integrity checks, nullable/invalid type checks, uniqueness and replay. An initial test-harness failure used the Cloudflare runner against Node single-statement execute; corrected to the native MigrationRunner before the meaningful failing test. `pnpm check` PASS (unit 82, integration 91, runtime 47); `pnpm cloudflare:typecheck` PASS; `pnpm cloudflare:migrations:check` PASS; local `WRANGLER_WRITE_LOGS=false pnpm test:cloudflare test/cloudflare/cf1-05-sqlite.test.ts test/cloudflare/cf1-review.test.ts` PASS (9 tests); focused populated-reference test rerun PASS; diff check PASS. Local diff reviewed: no historic migration edits or data loss; independent stage review deferred to AP-03 as specified. No live DB or production was touched.
+- **Changed files:** `IMPLEMENTATION_PLAN.md`, `docs/PRD.md`, `docs/TECHNICAL_DESIGN.md`, `migrations/0014_ap-01-automatic-profiles.sql`, `src/platform/database/cloudflare-migration-manifest.ts`, `src/platform/database/state-transfer.ts`, `test/cloudflare/cf1-05-sqlite.test.ts`, `test/cloudflare/cf1-review.test.ts`, `test/integration/ap-01-profile-migration.test.ts`, `test/integration/r1-07-test-support.test.ts`, `test/integration/s2-02-publication.test.ts`, `test/integration/s3-03-application.test.ts`, `test/integration/s3-04-application-decision.test.ts`, `test/integration/s4-01-admin-hide.test.ts`.
+
+### AP-02 — Create and complete a persistent basic profile
+
+- **Status:** `pending`
+- **Objective:** Add idempotent creation from supplied Telegram name and keep incomplete profiles out of business actions.
+- **Requirements:** AP contract; PRD §7, LFR-01/LFR-02/LFR-04.
+- **Dependencies:** AP-01 completed.
+- **Read first:** AP-01 evidence; complete AP contract; profile domain/service/repository; collaboration admission; application submission context; profile composer; nearest toolchain contracts.
+- **Preconditions:** unique AP-01 commit and clean tree; verify branch/HEAD/remote/Node/pnpm.
+- **Scope:** nullable type/domain completeness; profile service/repository bootstrap; complete existing profile in place; public projection and application/collaboration guards; profile rendering/completion compatibility; focused integration tests.
+- **Do not touch:** Telegram /start activation until AP-03, dependencies, production, schema beyond AP-01.
+- **Invariants:** one active row/user; unchanged profile_id on completion; no overwrite of user edits; no business action/public view from incomplete profile; no platform from private username without opt-in.
+- **Tests first:** bootstrap twice preserves ID/name; incomplete public lookup absent; incomplete collaboration/application denied; completion reuses ID; optional data stays optional.
+- **Verification:** focused integration tests; pnpm check; pnpm test:e2e:fake; git diff --check.
+- **Exit criteria:** checks pass; evidence; one local AP-02 commit and clean tree.
+- **Stop conditions:** identity exposure, broken core journey, toolchain conflict, scope beyond 12 source/test files, real/remote mutations.
+
+### AP-03 — Automatically create profiles on Telegram start
+
+- **Status:** `pending`
+- **Objective:** First /start creates the profile and shows the usual menu/card; owner can complete it using prefilled Telegram data.
+- **Requirements:** AP contract; PRD §7, LFR-01/LAC-01 and existing deep-link/application acceptance.
+- **Dependencies:** AP-02 completed.
+- **Read first:** AP-02 evidence; complete AP contract; Telegram router/composer, fake and workerd harnesses, migration/transfer gates.
+- **Preconditions:** unique AP-02 commit and clean tree; verify branch/HEAD/remote/Node/pnpm.
+- **Scope:** bootstrap before /start target routing; owner display and prefilled completion; focused fake Telegram/workerd tests and affected journey expectations; README/TD/PRD/plan final reconciliation.
+- **Do not touch:** dependencies, real Telegram, credentials, remote writes, deployment.
+- **Invariants:** idempotent update replay; name is populated once; private identity remains private; no username works; deep links retain target; unfinished sessions/old profiles survive; completed profiles keep current journeys.
+- **Tests first:** ordinary/deep-link first start; repeated/replayed start; username absent; profile view; completion and application/creation continuation; edited name preserved.
+- **Verification:** pnpm check; pnpm test:e2e:fake; pnpm cloudflare:typecheck; pnpm cloudflare:migrations:check; local pnpm test:cloudflare; git diff --check; one independent blocker-limited critical review and at most one consolidated fix wave.
+- **Exit criteria:** full local/fake/workerd checks and independent review pass; evidence; one local AP-03 commit and clean tree; AP stage completed.
+- **Stop conditions:** broken core journey, identity exposure, toolchain conflict, scope beyond 12 source/test files, real/remote mutations.
