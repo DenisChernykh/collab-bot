@@ -51,6 +51,7 @@ describe("CF2-01 staging Wrangler configuration", () => {
 		expect(staging?.vars).toEqual({
 			DEPLOYMENT_ENVIRONMENT: "staging",
 			STATE_IMPORT_ENABLED: "false",
+			MFM_FEATURE_ENABLED: "false",
 			EXPECTED_BOT_ID: "8777929575",
 			EXPECTED_BOT_USERNAME: "collaboration_development_bot",
 			SHOWCASE_CHANNEL_ID: "-1004314534828",

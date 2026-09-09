@@ -48,6 +48,7 @@ describe("CF3-01 production Wrangler configuration", () => {
 		expect(production?.vars).toEqual({
 			DEPLOYMENT_ENVIRONMENT: "production",
 			STATE_IMPORT_ENABLED: "false",
+			MFM_FEATURE_ENABLED: "false",
 			EXPECTED_BOT_ID: "8951630763",
 			EXPECTED_BOT_USERNAME: "davay_vmeste_bot",
 			SHOWCASE_CHANNEL_ID: "-1003941660389",

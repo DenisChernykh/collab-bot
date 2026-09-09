@@ -16,6 +16,7 @@ type RequiredKey = (typeof REQUIRED_KEYS)[number];
 export type ConfigInput = Record<string, string | undefined>;
 
 export interface AppConfig {
+	readonly mfmFeatureEnabled?: boolean;
 	readonly botToken: string;
 	readonly expectedBotId: string;
 	readonly expectedBotUsername: string;
@@ -157,7 +158,7 @@ function absoluteNonRootPath(
 
 export function parseConfig(input: ConfigInput): ParseConfigResult {
 	const issues: ConfigIssue[] = [];
-	const knownKeys = new Set<string>(REQUIRED_KEYS);
+	const knownKeys = new Set<string>([...REQUIRED_KEYS, "MFM_FEATURE_ENABLED"]);
 	const warnings = Object.keys(input)
 		.filter((key) => !knownKeys.has(key))
 		.sort()
@@ -222,6 +223,7 @@ export function parseConfig(input: ConfigInput): ParseConfigResult {
 
 	return {
 		config: {
+			mfmFeatureEnabled: parseMfmFeatureEnabled(input.MFM_FEATURE_ENABLED),
 			botToken,
 			expectedBotId,
 			expectedBotUsername,
@@ -235,4 +237,10 @@ export function parseConfig(input: ConfigInput): ParseConfigResult {
 		},
 		warnings,
 	};
+}
+
+export function parseMfmFeatureEnabled(value: string | undefined): boolean {
+	if (value === undefined || value === "false") return false;
+	if (value === "true") return true;
+	throw new ConfigValidationError([{ code: "invalid", key: "MFM_FEATURE_ENABLED", message: "must be true or false" }]);
 }

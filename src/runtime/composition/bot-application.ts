@@ -76,6 +76,8 @@ export function composeBotApplication(options: BotApplicationCompositionOptions)
 	};
 	const outboxStore = new SqliteOutboxDeliveryRepository(database);
 	const profilesFeature = createProfilesFeature({
+		mfmFeatureEnabled: options.config.mfmFeatureEnabled ?? false,
+		crypto,
 		database,
 		transactions: transactionRunner,
 		clock,
@@ -141,6 +143,7 @@ export function composeBotApplication(options: BotApplicationCompositionOptions)
 	});
 	registerTelegramRouter(bot, {
 		profileService: profilesFeature.api,
+		onboardingService: profilesFeature.onboarding,
 		profileAudienceService: profilesFeature.audience,
 		sessionRepository: profilesFeature.sessions,
 		telegramUserRepository: userRepository,

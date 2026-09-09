@@ -6,6 +6,6 @@ export async function loadConfigFromEnvFile(envFilePath: string): Promise<AppCon
 	if (typeof process.loadEnvFile !== "function") throw new Error("Node runtime lacks process.loadEnvFile");
 	process.loadEnvFile(envFilePath);
 	const values: Record<string, string | undefined> = {};
-	for (const key of ["BOT_TOKEN", "EXPECTED_BOT_ID", "EXPECTED_BOT_USERNAME", "ADMIN_TELEGRAM_IDS", "SHOWCASE_CHANNEL_ID", "SHOWCASE_CHANNEL_USERNAME", "DATABASE_PATH", "LOG_LEVEL", "TIME_ZONE", "HELP_CONTACT"]) values[key] = process.env[key];
+	for (const key of ["BOT_TOKEN", "EXPECTED_BOT_ID", "EXPECTED_BOT_USERNAME", "ADMIN_TELEGRAM_IDS", "SHOWCASE_CHANNEL_ID", "SHOWCASE_CHANNEL_USERNAME", "DATABASE_PATH", "LOG_LEVEL", "TIME_ZONE", "HELP_CONTACT", "MFM_FEATURE_ENABLED"]) values[key] = process.env[key];
 	return parseConfig(values).config;
 }

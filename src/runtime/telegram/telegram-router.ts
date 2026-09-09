@@ -36,6 +36,7 @@ import {
 	type ProfileAudienceService,
 	type ProfileDraft,
 	type ProfileRecord,
+	type OnboardingService,
 	type ProfileService,
 	type ProfileSessionRepository,
 	type ProfileTelegramFeature,
@@ -47,6 +48,7 @@ import { webCryptoCapabilities } from "../../platform/crypto/capabilities.js";
 const AUDIENCE_SNAPSHOT_UNAVAILABLE = "Аудиторию Telegram определить не удалось; профиль сохранён, число можно указать позже в «Мой профиль».";
 
 export interface TelegramRouterOptions {
+	readonly onboardingService?: OnboardingService;
 	readonly profileService: ProfileService;
 	readonly profileAudienceService?: ProfileAudienceService;
 	readonly sessionRepository: ProfileSessionRepository;

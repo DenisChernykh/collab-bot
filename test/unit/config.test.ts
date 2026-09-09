@@ -128,3 +128,12 @@ describe("parseConfig", () => {
 		}
 	});
 });
+
+
+it("defaults MFM off and accepts only explicit booleans", () => {
+	expect(parseConfig(validInput()).config.mfmFeatureEnabled).toBe(false);
+	expect(parseConfig({ ...validInput(), MFM_FEATURE_ENABLED: "true" }).config.mfmFeatureEnabled).toBe(true);
+	expect(parseConfig({ ...validInput(), MFM_FEATURE_ENABLED: "false" }).config.mfmFeatureEnabled).toBe(false);
+	expect(parseConfig({ ...validInput(), MFM_FEATURE_ENABLED: "true" }).warnings).toEqual([]);
+	for (const value of ["yes", "1", "", "TRUE"]) expect(() => parseConfig({ ...validInput(), MFM_FEATURE_ENABLED: value })).toThrow(ConfigValidationError);
+});

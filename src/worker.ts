@@ -9,7 +9,7 @@ import {
 } from "./platform/database/state-transfer.js";
 import { Bot } from "grammy";
 
-import type { AppConfig } from "./config/parse-config.js";
+import { parseMfmFeatureEnabled, type AppConfig } from "./config/parse-config.js";
 import { composeBotApplication } from "./runtime/composition/bot-application.js";
 import { constantTimeEqual, handleTelegramWebhook } from "./runtime/cloudflare/webhook.js";
 import { SystemClock } from "./platform/time/system-clock.js";
@@ -29,7 +29,9 @@ type CloudflareEnvironment = Omit<Env,
 	| "SHOWCASE_CHANNEL_ID"
 	| "SHOWCASE_CHANNEL_USERNAME"
 	| "HELP_CONTACT"
+	| "MFM_FEATURE_ENABLED"
 > & {
+	readonly MFM_FEATURE_ENABLED?: string;
 	readonly DEPLOYMENT_ENVIRONMENT?: string;
 	readonly BOT_TOKEN?: string;
 	readonly EXPECTED_BOT_ID?: string;
@@ -466,6 +468,7 @@ export default {
 
 function createWorkerConfig(environment: CloudflareEnvironment): AppConfig {
 	return {
+		mfmFeatureEnabled: parseMfmFeatureEnabled(environment.MFM_FEATURE_ENABLED),
 		botToken: environment.BOT_TOKEN ?? "local-development-placeholder",
 		expectedBotId: environment.EXPECTED_BOT_ID ?? "0",
 		expectedBotUsername: environment.EXPECTED_BOT_USERNAME ?? "local_bot",

@@ -1,3 +1,7 @@
+import { OnboardingService } from "../application/onboarding-service.js";
+import { SqliteOnboardingRepository } from "../infrastructure/sqlite-onboarding-repository.js";
+import { webCryptoCapabilities } from "../../../platform/crypto/capabilities.js";
+import type { CryptoCapabilities } from "../../../shared/application/ports/crypto.js";
 import type { Bot } from "grammy";
 
 import type { Clock } from "../../../shared/application/ports/clock.js";
@@ -13,12 +17,15 @@ import { SqliteProfileRepository } from "../infrastructure/sqlite-profile-reposi
 import { SqliteProfileSessionRepository } from "../infrastructure/sqlite-profile-session-repository.js";
 
 export interface ProfilesFeature {
+	readonly onboarding: OnboardingService;
 	readonly api: ProfileService;
 	readonly audience: ProfileAudienceService;
 	readonly sessions: ProfileSessionRepository;
 }
 
 export interface CreateProfilesFeatureOptions {
+	readonly mfmFeatureEnabled?: boolean;
+	readonly crypto?: CryptoCapabilities;
 	readonly boundary?: SqlDatabaseInput;
 	readonly database?: SqlDatabase;
 	readonly transactions: TransactionRunner;
@@ -31,8 +38,10 @@ export function createProfilesFeature(options: CreateProfilesFeatureOptions): Pr
 	const database = options.database ?? (options.boundary === undefined ? undefined : resolveSqlDatabase(options.boundary));
 	if (database === undefined) throw new Error("profiles feature requires a SQL database");
 	const repository = new SqliteProfileRepository(database);
+	const api = new ProfileService(repository, options.transactions, options.clock);
 	return {
-		api: new ProfileService(repository, options.transactions, options.clock),
+		api,
+		onboarding: new OnboardingService(new SqliteOnboardingRepository(database), api, options.transactions, options.clock, options.crypto ?? webCryptoCapabilities, options.mfmFeatureEnabled ?? false),
 		audience: new ProfileAudienceService(
 			new GrammyTelegramAudienceReader(options.telegramBot),
 			repository,

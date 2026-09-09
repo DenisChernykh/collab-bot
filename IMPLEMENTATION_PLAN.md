@@ -1947,7 +1947,7 @@ Shared unit contract: read AGENTS.md, PRD §22, TD MFM contract, this complete s
 
 ### MFM-05 — Compose the feature and parse runtime configuration
 
-- **Status:** `pending`
+- **Status:** `completed`
 - **Dependencies:** MFM-04 completed.
 - **Read first:** shared MFM unit contract above; predecessor evidence; complete relevant source/test contracts.
 - **Scope:** Compose profiles-owned onboarding service, public exports and optional router capability; parse flag consistently in Node/Worker and document default-off config.
@@ -1955,6 +1955,8 @@ Shared unit contract: read AGENTS.md, PRD §22, TD MFM contract, this complete s
 - **Tests first:** demonstrate the scope's missing behavior before runtime implementation; documentation units use diff review.
 - **Verification:** focused config/composition tests; pnpm check; Cloudflare typecheck/types; git diff --check.
 - **Exit criteria:** acceptance proved; evidence and one local commit; clean tree.
+
+- **Evidence:** Commit SHA: `SELF`. Clean preflight MFM-04 1b7839a7948cf07a11e50475b62afabdb234ac86; remote unchanged c4c5bfbc5f9696b63e0acf89182990017c2237fb; toolchain unchanged. RED: default flag was undefined. GREEN: seven config tests including malformed/default/true/false values; full pnpm check PASS (98 unit, 99 integration, 47 runtime, lint/architecture/typecheck/build). Cloudflare typecheck and generated types check PASS. Wrangler generation succeeded with a sandbox log-write warning; clean types check used logs disabled. Updated the two exact hosted-vars assertions to include the new nonsecret default-off flag. Final diff reviewed: 12 source/test files plus Wrangler config/plan. Existing Telegram route activation is explicitly deferred to MFM-05B; no hosted configuration changed. Changed files: IMPLEMENTATION_PLAN.md, src/config/parse-config.ts, src/modules/profiles/application/index.ts, src/modules/profiles/composition/create-profiles-feature.ts, src/modules/profiles/index.ts, src/runtime/bootstrap/env-file-config.ts, src/runtime/composition/bot-application.ts, src/runtime/telegram/telegram-router.ts, src/worker.ts, test/unit/cf2-01-staging-config.test.ts, test/unit/cf3-01-production-config.test.ts, test/unit/config.test.ts, worker-configuration.d.ts, wrangler.jsonc.
 
 ### MFM-05B — Gate real Telegram routes by experience
 

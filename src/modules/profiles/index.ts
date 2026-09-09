@@ -10,3 +10,5 @@ export {
 	type ProfileTelegramFeatureOptions,
 } from "./presentation/telegram/profile-composer.js";
 export * from "./presentation/telegram/profile-presentation.js";
+
+export { createMfmTelegramFeature, type MfmTelegramFeature } from "./presentation/telegram/mfm-composer.js";
