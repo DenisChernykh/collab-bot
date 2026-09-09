@@ -17,7 +17,7 @@ export type OnboardingView = ViewContext & (
 export interface OnboardingToken { readonly generation: string; readonly revision: number; }
 export type OnboardingAction =
 	| { readonly kind: "language" | "affiliation" | "choice" | "text" | "page"; readonly value: string }
-	| { readonly kind: "next" | "back" | "keep" };
+	| { readonly kind: "next" | "back" | "keep" | "city" | "cancel" };
 const FLOW: readonly OnboardingStep[] = ["affiliation", "event_status", "intro", "display_name", "profile_type", "location", "spheres", "specializations", "open_to"];
 
 export class OnboardingService {
@@ -69,6 +69,7 @@ export class OnboardingService {
 		return this.transactions.withTransaction(async () => {
 			const user = await this.repository.getUser(userId);
 			if (user?.status !== "active") return this.view(userId);
+			if (user.experience === "undecided" && await this.profiles.getOwn(userId) === undefined) return { kind: "needs_start", language: user.language ?? "ru", festivalEnabled: this.enabled };
 			const current = await this.repository.getSession(userId);
 			if (current?.state.step === "language") return this.view(userId);
 			await this.save(userId, current === undefined
@@ -113,6 +114,7 @@ export class OnboardingService {
 				if (user.experience === "undecided") return this.finishClassic(userId, user, current.state.pendingStart);
 				if (user.experience === "mfm" && await this.repository.getProfile(userId) === undefined) return this.view(userId);
 			}
+			if (action.kind === "cancel") return this.cancel(userId);
 			try { return await this.advance(userId, user, current.state, action); }
 			catch (error) {
 				if (error instanceof DomainValidationError) return this.view(userId, "invalid");
@@ -165,6 +167,7 @@ export class OnboardingService {
 			}
 			return this.view(userId, "invalid");
 		}
+		if (action.kind === "city" && state.step === "location") return this.move(userId, state, "spheres", { ...state.draft, locationText: user.language === "en" ? "Yekaterinburg, Russia" : "Екатеринбург, Россия" });
 		if (action.kind === "text" || action.kind === "keep") {
 			if (state.step === "display_name") return this.move(userId, state, "profile_type", { ...state.draft, displayName: mfmText(action.kind === "text" ? action.value : state.draft.displayName, 100) });
 			if (state.step === "location") return this.move(userId, state, "spheres", { ...state.draft, locationText: mfmText(action.kind === "text" ? action.value : state.draft.locationText, 200) });

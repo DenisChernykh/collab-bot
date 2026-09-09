@@ -46,7 +46,7 @@
 | R3 — Honest top-level ownership | `completed` | 14 | Корень `src` отражает реальные owners: modules, shared kernel, platform adapters и runtime composition |
 | CF1 — Cloudflare-compatible local runtime | `completed` | 15 | Тот же бот проходит workerd/SQLite Durable Object gates локально; production polling остаётся доступным для rollback |
 | CF2 — Free Cloudflare staging | `completed` | 4 | Отдельный staging Worker и dev-бот проходят hosted webhook/alarm smoke без production traffic |
-| MFM — Bilingual event profiles | `in_progress` | 10 | One bot with classic and MFM profiles; authorized project DB reset |
+| MFM — Bilingual event profiles | `in_progress` | 11 | One bot with classic and MFM profiles; authorized project DB reset |
 | AP — Automatic Telegram profile | `completed` | 3 | Профиль создаётся при /start, доступные данные берутся из Telegram, участие требует дозаполнения |
 | CF3 — Production cutover | `completed` | 4 | Данные перенесены, production webhook включён, hosted journey подтверждён и operations handoff закрыт с явным recovery boundary |
 
@@ -1932,7 +1932,7 @@ Shared unit contract: read AGENTS.md, PRD §22, TD MFM contract, this complete s
 
 ### MFM-04 — Render the bilingual MFM journey
 
-- **Status:** `pending`
+- **Status:** `completed`
 - **Dependencies:** MFM-03 completed.
 - **Read first:** shared MFM unit contract above; predecessor evidence; complete relevant source/test contracts.
 - **Scope:** RU/EN dictionaries, keyboards, compact callback codec and profiles-owned Telegram feature.
@@ -1941,21 +1941,36 @@ Shared unit contract: read AGENTS.md, PRD §22, TD MFM contract, this complete s
 - **Verification:** focused presentation/callback tests; typecheck; architecture; git diff --check.
 - **Exit criteria:** acceptance proved; evidence and one local commit; clean tree.
 
-### MFM-05 — Connect experience routing and configuration
+- **Evidence:** Commit SHA: `SELF`. Clean preflight at MFM-03 610de6ebc31394c98d38ba8626fbd124efb5513c; remote c4c5bfbc5f9696b63e0acf89182990017c2237fb unchanged. RED: missing renderer/codec. GREEN: three RU/EN presentation tests covering all 42 specialization labels, selected buttons, 64-byte bound and paused screen; all three FSM regressions PASS. Typecheck/architecture/lint/diff-check PASS. Added guarded quick-city/cancel actions consumed by the keyboard, and prevented /language before initial /start from creating an uncompletable profile. Test assertion normalizes grammY empty keyboard rows. Final diff reviewed. MFM-05 split before execution into configuration/composition and MFM-05B routing to respect the 12-source/test-file limit. Changed files: IMPLEMENTATION_PLAN.md, src/modules/profiles/application/onboarding-service.ts, src/modules/profiles/presentation/telegram/mfm-callback-codec.ts, src/modules/profiles/presentation/telegram/mfm-composer.ts, src/modules/profiles/presentation/telegram/mfm-copy.ts, src/modules/profiles/presentation/telegram/mfm-presentation.ts, test/unit/mfm-04-presentation.test.ts.
+
+- **Evidence correction before next unit:** The first background typecheck result was mistakenly read in the same orchestration call as commit. It had failed union narrowing in the renderer, so the initial completion claim was premature. Restored this unit in_progress, fixed explicit step narrowing, reran typecheck/architecture/lint, three FSM and three presentation tests, and inspected their exit code 0 before amending the same unit commit. No next unit or external operation began during the failed state.
+
+### MFM-05 — Compose the feature and parse runtime configuration
 
 - **Status:** `pending`
 - **Dependencies:** MFM-04 completed.
 - **Read first:** shared MFM unit contract above; predecessor evidence; complete relevant source/test contracts.
-- **Scope:** Real composition, Node/Worker flag, entry/opaque/replay gates, postcommit keyboard edits and focused fake journeys.
+- **Scope:** Compose profiles-owned onboarding service, public exports and optional router capability; parse flag consistently in Node/Worker and document default-off config.
 - **Do not touch / Invariants / Stop conditions:** shared unit contract above; external reset mutations only in MFM-08 within explicit user authorization.
 - **Tests first:** demonstrate the scope's missing behavior before runtime implementation; documentation units use diff review.
-- **Verification:** focused fake/routing/config tests; pnpm check; Cloudflare typecheck; git diff --check.
+- **Verification:** focused config/composition tests; pnpm check; Cloudflare typecheck/types; git diff --check.
 - **Exit criteria:** acceptance proved; evidence and one local commit; clean tree.
+
+### MFM-05B — Gate real Telegram routes by experience
+
+- **Status:** `pending`
+- **Dependencies:** MFM-05 completed.
+- **Read first:** shared MFM unit contract; MFM-05 evidence; full router, durable ingress, MFM presenter and real-composition fake harness.
+- **Scope:** Entry/text/plain/opaque/replay gates; collect keyboard edits until commit; focused real-composition RU/EN fake journeys.
+- **Do not touch / Invariants / Stop conditions:** shared unit contract; preserve classic module behavior and receipt/delivery atomicity; <=12 source/test files.
+- **Tests first:** missing language/affiliation entry and MFM route bypass.
+- **Verification:** focused fake/routing tests; pnpm check; Cloudflare typecheck; git diff --check.
+- **Exit criteria:** evidence and exactly one local commit, clean tree.
 
 ### MFM-06 — Verify restart and cross-runtime compatibility
 
 - **Status:** `pending`
-- **Dependencies:** MFM-05 completed.
+- **Dependencies:** MFM-05B completed.
 - **Read first:** shared MFM unit contract above; predecessor evidence; complete relevant source/test contracts.
 - **Scope:** Full RU/EN/classic journeys, recovery/toggle/replay, migration/transfer workerd evidence and minimal fixes.
 - **Do not touch / Invariants / Stop conditions:** shared unit contract above; external reset mutations only in MFM-08 within explicit user authorization.
