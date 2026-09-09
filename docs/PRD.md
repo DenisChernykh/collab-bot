@@ -735,3 +735,17 @@ Restore, block/unblock, каскадная обработка связанных
 Исторические `FR-*`/`AC-*`, которые не представлены в `LFR-*`/`LAC-*`, являются Later backlog и не блокируют первый запуск.
 
 Новая возможность сначала классифицируется как MVP, Later или Out of scope. Формулировки `может`, `по возможности` и `обсуждалось` не создают обязательства реализации.
+
+
+## 22. MFM-2026 — approved extension (2026-09-09)
+
+This user-authorized contract scopes §7/§15/LAC-01 to classic and adds a second experience inside the same bot, user system, active profile and SQLite. Classic collaboration policy remains unchanged.
+
+- MFM-F01: first private start still ensures the Telegram-derived base profile once. New users choose RU/EN then (when enabled) MFM affiliation. No chooses classic, Yes chooses participant/citizen_program/volunteer and the profile invitation. Existing rows migrate to classic; no automatic switching or second profile. New users cannot bypass entry via commands, callbacks or deep links. Classic deep-link destinations survive entry.
+- MFM-F02: MFM name, profile_type (specialist/media/project/business), free-text city/country, 1–3 professional spheres, 1–3 specializations belonging to those spheres and 1–3 open_to choices are mandatory. All eight spheres and 42 specializations from the user specification are fixed structured values. open_to is joint_projects/professional_communication/city_and_events and never an implicit matching exclusion. No public-platform/contact requirement is added to MFM.
+- MFM-F03: every choice is durable; draft has no expiry; back preserves data except specializations invalidated by a removed sphere. Repeat start resumes rather than resets. Callback actor/generation/revision validation and receipts prevent duplicate mutations. /cancel pauses initial onboarding; cancelling editing discards only the edit draft. Completion replaces the MFM record and shared display name atomically. Editing retains the completed record until commit.
+- MFM-F04: complete RU/EN prompts, keyboards, validation, own-profile rendering and /language without resetting draft. Classic remains Russian. MFM offers own profile/edit only; people search and experience switching after selection are outside this stage. Before completion there is no feature menu. All classic commands, deep links, plain/opaque callbacks and replay fallbacks honor the experience boundary.
+- MFM-F05: MFM_FEATURE_ENABLED defaults false in both runtimes. Disabled: new users choose language then classic; completed MFM profiles remain editable without festival labels/status; incomplete MFM sessions pause without data loss and resume when enabled again. Feature shutdown never deletes data.
+- MFM-F06: explicit user authorization includes one-time clearing of all databases belonging to this project (production, staging primary/rehearsal, local SQLite including the old local SQLite copy). This is an isolated operator action, never an automatic schema migration. No other project or Telegram message history is part of that reset. MFM production feature release is separate from reset execution.
+
+MFM acceptance: full RU/EN journeys; classic regression; resume/replay/back/language; cardinalities and parent specialization constraints; no classic route bypass; atomic rollback; feature toggle retention; populated schema 13/14 upgrades; transfer of MFM records; reset rehearsal and exact-target verification. New product data must not enter command receipts, logs or Git fixtures with real identities.

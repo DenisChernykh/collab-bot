@@ -46,6 +46,7 @@
 | R3 — Honest top-level ownership | `completed` | 14 | Корень `src` отражает реальные owners: modules, shared kernel, platform adapters и runtime composition |
 | CF1 — Cloudflare-compatible local runtime | `completed` | 15 | Тот же бот проходит workerd/SQLite Durable Object gates локально; production polling остаётся доступным для rollback |
 | CF2 — Free Cloudflare staging | `completed` | 4 | Отдельный staging Worker и dev-бот проходят hosted webhook/alarm smoke без production traffic |
+| MFM — Bilingual event profiles | `in_progress` | 10 | One bot with classic and MFM profiles; authorized project DB reset |
 | AP — Automatic Telegram profile | `completed` | 3 | Профиль создаётся при /start, доступные данные берутся из Telegram, участие требует дозаполнения |
 | CF3 — Production cutover | `completed` | 4 | Данные перенесены, production webhook включён, hosted journey подтверждён и operations handoff закрыт с явным recovery boundary |
 
@@ -1869,3 +1870,122 @@ Product contract: first private /start (including card deep links) atomically cr
 
 - **Completion evidence:** Commit SHA: `SELF`. Independent read-only critical review by `ap_final_review` returned PASS: no credential/private-contact exposure, data corruption, duplicate effect, broken core journey or unrunnable-stage blocker. It confirmed the known nonblocking back→type name reset; one consolidated fix preserves draft.displayName while clearing type/platform. A focused failing assertion reproduced that name reset before the fix, then the complete fake suite passed again (35), and final `pnpm check` passed again (82 unit/93 integration/47 runtime). Earlier full local workerd (35), Cloudflare typecheck/manifest checks remain valid; the final change only preserves an existing draft field in the shared profile flow. No second independent review cycle was started. Final diff and diff-check passed. Stage AP is complete locally; real Telegram, live database migrations, deployment and push were not performed.
 - **Changed files:** `IMPLEMENTATION_PLAN.md`, `README.md`, `docs/PRD.md`, `docs/TECHNICAL_DESIGN.md`, `src/modules/collaborations/presentation/telegram/collaboration-composer.ts`, `src/modules/profiles/presentation/telegram/profile-composer.ts`, `src/modules/profiles/presentation/telegram/profile-presentation.ts`, `src/runtime/telegram/telegram-router.ts`, `test/cloudflare/ap-03-automatic-profile.test.ts`, `test/e2e-fake/ap-03-automatic-profile-bot.test.ts`, `test/e2e-fake/s1-02-profile-bot.test.ts`, `test/e2e-fake/s3-02-browse-bot.test.ts`.
+
+
+## 10. MFM — bilingual event profiles and authorized reset
+
+User approved the conversational plan and launched implementation on 2026-09-09. PRD §22 supersedes classic-only entry restrictions for the new experience. RU/EN, mandatory 1–3 values in all three groups, own profile/edit without people search, neutral complete profiles and paused incomplete onboarding after shutdown, /language, and all project DB reset are explicitly authorized. No general feature release, push or unrelated infrastructure work is authorized.
+
+Shared unit contract: read AGENTS.md, PRD §22, TD MFM contract, this complete stage/card and predecessor evidence; inspect closest source, tests, migration/toolchain contracts. Before every unit verify branch/HEAD/status/remote/predecessor Task-ID; Node 24.18.x and pnpm 11.15.x. One current unit; <=12 source/test files per unit; runtime tests first. Invariants: one user/profile; classic semantics preserved; no private identity exposure; durable state and receipt atomicity; outbound Telegram after commit. Do not touch historic migrations, dependencies, collaboration business policy or unrelated resources. Stop for policy conflict, failed required acceptance, incompatible toolchain, or unauthorized external mutation. Every unit ends with focused checks, diff inspection, exact file/command evidence and exactly one Task-ID commit (SHA SELF). Independent critical review runs once on the final code candidate; at most one consolidated correction wave.
+
+### MFM-00 — Define the approved product and execution contract
+
+- **Status:** `completed`
+- **Dependencies:** AP-03 completed.
+- **Read first:** shared MFM unit contract above; predecessor evidence; complete relevant source/test contracts.
+- **Scope:** Documentation only: PRD/TD and stage cards.
+- **Do not touch / Invariants / Stop conditions:** shared unit contract above; external reset mutations only in MFM-08 within explicit user authorization.
+- **Tests first:** demonstrate the scope's missing behavior before runtime implementation; documentation units use diff review.
+- **Verification:** git diff --check; git diff --check.
+- **Exit criteria:** acceptance proved; evidence and one local commit; clean tree.
+
+- **Evidence:** Commit SHA: `SELF`. Clean main at AP-03 `6571b61c798cb82748c84494a4bdab50cbd25fdc`; read-only origin/main `c4c5bfbc5f9696b63e0acf89182990017c2237fb` (host retry after sandbox DNS failure); Node v24.18.0, pnpm 11.15.1. Changed exactly docs/PRD.md, docs/TECHNICAL_DESIGN.md, IMPLEMENTATION_PLAN.md. User-approved decisions reconciled explicitly; no unresolved source conflict. `git diff --check` PASS; final three-file diff reviewed. Documentation-only unit; no runtime tests needed.
+
+### MFM-01 — Add preserving MFM schema and transfer coverage
+
+- **Status:** `pending`
+- **Dependencies:** MFM-00 completed.
+- **Read first:** shared MFM unit contract above; predecessor evidence; complete relevant source/test contracts.
+- **Scope:** Migration 15, Cloudflare manifest, transfer tables/version and affected migration assertions.
+- **Do not touch / Invariants / Stop conditions:** shared unit contract above; external reset mutations only in MFM-08 within explicit user authorization.
+- **Tests first:** demonstrate the scope's missing behavior before runtime implementation; documentation units use diff review.
+- **Verification:** focused migration/integration tests; pnpm check; Cloudflare manifest/typecheck/schema tests; git diff --check.
+- **Exit criteria:** acceptance proved; evidence and one local commit; clean tree.
+
+### MFM-02 — Add structured MFM model and persistence
+
+- **Status:** `pending`
+- **Dependencies:** MFM-01 completed.
+- **Read first:** shared MFM unit contract above; predecessor evidence; complete relevant source/test contracts.
+- **Scope:** Domain catalog/model, onboarding and MFM repository ports/adapters; focused validation/persistence tests.
+- **Do not touch / Invariants / Stop conditions:** shared unit contract above; external reset mutations only in MFM-08 within explicit user authorization.
+- **Tests first:** demonstrate the scope's missing behavior before runtime implementation; documentation units use diff review.
+- **Verification:** focused unit/integration; architecture; typecheck; git diff --check.
+- **Exit criteria:** acceptance proved; evidence and one local commit; clean tree.
+
+### MFM-03 — Implement durable onboarding decisions
+
+- **Status:** `pending`
+- **Dependencies:** MFM-02 completed.
+- **Read first:** shared MFM unit contract above; predecessor evidence; complete relevant source/test contracts.
+- **Scope:** Application FSM with entry/language, draft/back/multiselect/completion/edit/flag-off and integration tests.
+- **Do not touch / Invariants / Stop conditions:** shared unit contract above; external reset mutations only in MFM-08 within explicit user authorization.
+- **Tests first:** demonstrate the scope's missing behavior before runtime implementation; documentation units use diff review.
+- **Verification:** focused FSM integration and unit tests; architecture; typecheck; git diff --check.
+- **Exit criteria:** acceptance proved; evidence and one local commit; clean tree.
+
+### MFM-04 — Render the bilingual MFM journey
+
+- **Status:** `pending`
+- **Dependencies:** MFM-03 completed.
+- **Read first:** shared MFM unit contract above; predecessor evidence; complete relevant source/test contracts.
+- **Scope:** RU/EN dictionaries, keyboards, compact callback codec and profiles-owned Telegram feature.
+- **Do not touch / Invariants / Stop conditions:** shared unit contract above; external reset mutations only in MFM-08 within explicit user authorization.
+- **Tests first:** demonstrate the scope's missing behavior before runtime implementation; documentation units use diff review.
+- **Verification:** focused presentation/callback tests; typecheck; architecture; git diff --check.
+- **Exit criteria:** acceptance proved; evidence and one local commit; clean tree.
+
+### MFM-05 — Connect experience routing and configuration
+
+- **Status:** `pending`
+- **Dependencies:** MFM-04 completed.
+- **Read first:** shared MFM unit contract above; predecessor evidence; complete relevant source/test contracts.
+- **Scope:** Real composition, Node/Worker flag, entry/opaque/replay gates, postcommit keyboard edits and focused fake journeys.
+- **Do not touch / Invariants / Stop conditions:** shared unit contract above; external reset mutations only in MFM-08 within explicit user authorization.
+- **Tests first:** demonstrate the scope's missing behavior before runtime implementation; documentation units use diff review.
+- **Verification:** focused fake/routing/config tests; pnpm check; Cloudflare typecheck; git diff --check.
+- **Exit criteria:** acceptance proved; evidence and one local commit; clean tree.
+
+### MFM-06 — Verify restart and cross-runtime compatibility
+
+- **Status:** `pending`
+- **Dependencies:** MFM-05 completed.
+- **Read first:** shared MFM unit contract above; predecessor evidence; complete relevant source/test contracts.
+- **Scope:** Full RU/EN/classic journeys, recovery/toggle/replay, migration/transfer workerd evidence and minimal fixes.
+- **Do not touch / Invariants / Stop conditions:** shared unit contract above; external reset mutations only in MFM-08 within explicit user authorization.
+- **Tests first:** demonstrate the scope's missing behavior before runtime implementation; documentation units use diff review.
+- **Verification:** pnpm check; pnpm test:e2e:fake; pnpm test:cloudflare; Cloudflare types/typecheck/manifest; db:verify; git diff --check.
+- **Exit criteria:** acceptance proved; evidence and one local commit; clean tree.
+
+### MFM-07 — Prepare an isolated one-time database reset
+
+- **Status:** `pending`
+- **Dependencies:** MFM-06 completed.
+- **Read first:** shared MFM unit contract above; predecessor evidence; complete relevant source/test contracts.
+- **Scope:** Exact-target operator reset under maintenance; idempotency and local/workerd rehearsal; operation documentation.
+- **Do not touch / Invariants / Stop conditions:** shared unit contract above; external reset mutations only in MFM-08 within explicit user authorization.
+- **Tests first:** demonstrate the scope's missing behavior before runtime implementation; documentation units use diff review.
+- **Verification:** focused reset tests; pnpm check; Cloudflare checks; final independent critical review; git diff --check.
+- **Exit criteria:** acceptance proved; evidence and one local commit; clean tree.
+
+### MFM-08 — Clear authorized project databases
+
+- **Status:** `pending`
+- **Dependencies:** MFM-07 completed.
+- **Read first:** shared MFM unit contract above; predecessor evidence; complete relevant source/test contracts.
+- **Scope:** Execute reviewed reset on verified project production/staging/rehearsal/local databases; record counts/digests without private rows.
+- **Do not touch / Invariants / Stop conditions:** shared unit contract above; external reset mutations only in MFM-08 within explicit user authorization.
+- **Tests first:** demonstrate the scope's missing behavior before runtime implementation; documentation units use diff review.
+- **Verification:** preflight exact targets; post-reset empty business tables/integrity; reset surface disabled; git diff --check.
+- **Exit criteria:** acceptance proved; evidence and one local commit; clean tree.
+
+### MFM-09 — Close MFM evidence and handoff
+
+- **Status:** `pending`
+- **Dependencies:** MFM-08 completed.
+- **Read first:** shared MFM unit contract above; predecessor evidence; complete relevant source/test contracts.
+- **Scope:** Final documentation, clean tree and unit ledger; distinguish local implementation/reset from MFM live activation.
+- **Do not touch / Invariants / Stop conditions:** shared unit contract above; external reset mutations only in MFM-08 within explicit user authorization.
+- **Tests first:** demonstrate the scope's missing behavior before runtime implementation; documentation units use diff review.
+- **Verification:** git diff --check; verify all Task-IDs and completed checks; git diff --check.
+- **Exit criteria:** acceptance proved; evidence and one local commit; clean tree.
