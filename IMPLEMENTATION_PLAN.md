@@ -46,7 +46,7 @@
 | R3 — Honest top-level ownership | `completed` | 14 | Корень `src` отражает реальные owners: modules, shared kernel, platform adapters и runtime composition |
 | CF1 — Cloudflare-compatible local runtime | `completed` | 15 | Тот же бот проходит workerd/SQLite Durable Object gates локально; production polling остаётся доступным для rollback |
 | CF2 — Free Cloudflare staging | `completed` | 4 | Отдельный staging Worker и dev-бот проходят hosted webhook/alarm smoke без production traffic |
-| AP — Automatic Telegram profile | `in_progress` | 3 | Профиль создаётся при /start, доступные данные берутся из Telegram, участие требует дозаполнения |
+| AP — Automatic Telegram profile | `completed` | 3 | Профиль создаётся при /start, доступные данные берутся из Telegram, участие требует дозаполнения |
 | CF3 — Production cutover | `completed` | 4 | Данные перенесены, production webhook включён, hosted journey подтверждён и operations handoff закрыт с явным recovery boundary |
 
 ```text
@@ -1851,7 +1851,7 @@ Product contract: first private /start (including card deep links) atomically cr
 
 ### AP-03 — Automatically create profiles on Telegram start
 
-- **Status:** `pending`
+- **Status:** `completed`
 - **Objective:** First /start creates the profile and shows the usual menu/card; owner can complete it using prefilled Telegram data.
 - **Requirements:** AP contract; PRD §7, LFR-01/LAC-01 and existing deep-link/application acceptance.
 - **Dependencies:** AP-02 completed.
@@ -1864,3 +1864,8 @@ Product contract: first private /start (including card deep links) atomically cr
 - **Verification:** pnpm check; pnpm test:e2e:fake; pnpm cloudflare:typecheck; pnpm cloudflare:migrations:check; local pnpm test:cloudflare; git diff --check; one independent blocker-limited critical review and at most one consolidated fix wave.
 - **Exit criteria:** full local/fake/workerd checks and independent review pass; evidence; one local AP-03 commit and clean tree; AP stage completed.
 - **Stop conditions:** broken core journey, identity exposure, toolchain conflict, scope beyond 12 source/test files, real/remote mutations.
+
+- **AP-03 verification before independent review:** Preflight clean main at unique AP-02 `5ceedc3456b2232abd4b23d952dd43d1d55b97aa`, Node v24.18.0/pnpm 11.15.1; host read-only origin/main rechecked unchanged at `c4c5bfbc5f9696b63e0acf89182990017c2237fb`. The new fake journey initially failed because /start had not created a profile; a test-harness reference to an unexposed runtime service was corrected before that meaningful failure. Focused real-composition fake tests then passed for first/last name, username absent, one row, replay/restart, session preservation, owner view, name reuse/edit preservation, completion/creation with original ID. Existing fake assertions expecting no row on /start were replaced with assertions for an unchanged incomplete row. Deep-link quick completion now proves original ID/name preservation and exactly one submitted application under replay. Workerd test proves profile/receipt rollback after an injected SQLite failure and successful same-update retry. `pnpm check` PASS (82 unit, 93 integration, 47 runtime; lint zero errors and two pre-existing generated-file warnings); `pnpm test:e2e:fake` PASS (35); `WRANGLER_WRITE_LOGS=false pnpm test:cloudflare` PASS (35); `pnpm cloudflare:typecheck` PASS; `pnpm cloudflare:migrations:check` PASS; `git diff --check` PASS. Secret-pattern scan over all 30 changed/new stage files found no Telegram token or private-key patterns. These are local/fake/workerd results, not production verification. Independent review pending; no commit or stage-complete claim yet.
+
+- **Completion evidence:** Commit SHA: `SELF`. Independent read-only critical review by `ap_final_review` returned PASS: no credential/private-contact exposure, data corruption, duplicate effect, broken core journey or unrunnable-stage blocker. It confirmed the known nonblocking back→type name reset; one consolidated fix preserves draft.displayName while clearing type/platform. A focused failing assertion reproduced that name reset before the fix, then the complete fake suite passed again (35), and final `pnpm check` passed again (82 unit/93 integration/47 runtime). Earlier full local workerd (35), Cloudflare typecheck/manifest checks remain valid; the final change only preserves an existing draft field in the shared profile flow. No second independent review cycle was started. Final diff and diff-check passed. Stage AP is complete locally; real Telegram, live database migrations, deployment and push were not performed.
+- **Changed files:** `IMPLEMENTATION_PLAN.md`, `README.md`, `docs/PRD.md`, `docs/TECHNICAL_DESIGN.md`, `src/modules/collaborations/presentation/telegram/collaboration-composer.ts`, `src/modules/profiles/presentation/telegram/profile-composer.ts`, `src/modules/profiles/presentation/telegram/profile-presentation.ts`, `src/runtime/telegram/telegram-router.ts`, `test/cloudflare/ap-03-automatic-profile.test.ts`, `test/e2e-fake/ap-03-automatic-profile-bot.test.ts`, `test/e2e-fake/s1-02-profile-bot.test.ts`, `test/e2e-fake/s3-02-browse-bot.test.ts`.

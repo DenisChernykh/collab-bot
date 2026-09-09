@@ -6,6 +6,8 @@ P0 and S0–S4 are complete, including the separately authorized real S4 journey
 
 CF1 prepared the Cloudflare-compatible runtime, CF2 proved it on an isolated hosted staging Worker, and CF3 completed the bounded production freeze/import/webhook cutover plus a named two-account hosted journey. Production now runs as one workers.dev Worker and one SQLite-backed Durable Object on the confirmed Cloudflare Free plan. This is deployment evidence, not an SLA, 24/7 guarantee, unlimited-capacity claim or automatic recovery promise.
 
+AP adds automatic profiles locally: the first private `/start` creates a persistent profile with the Telegram name, including card deep links. The user can browse immediately and complete the missing type/platform before participating. Repeated starts preserve the profile and user edits; the username stays private unless explicitly selected as a public platform. Migration 0014 preserves existing records and uses state-transfer schema version 14. This change has not been deployed; schema-13 exports remain historical artifacts and cannot be imported directly into schema 14.
+
 ## Sources of truth
 
 Read the documents in this order:

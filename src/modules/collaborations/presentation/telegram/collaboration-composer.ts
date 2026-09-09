@@ -149,7 +149,7 @@ async function startOrResumeCollaboration(ctx: Context, options: CollaborationTe
 		return;
 	}
 	if (!(await options.profileFlow.hasOwnProfile(userId))) {
-		await ctx.reply("Чтобы создать коллаборацию, сначала заполним короткий профиль.");
+		await ctx.reply("Чтобы создать коллаборацию, сначала дополним профиль.");
 		await options.profileFlow.startForCollaboration(ctx, userId);
 		return;
 	}

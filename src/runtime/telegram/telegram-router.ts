@@ -144,6 +144,9 @@ export function registerTelegramRouter(bot: Bot, options: TelegramRouterOptions)
 		const handled = await routeTelegramText(workCtx, userId, text, {
 			routeModeration: (ctx, actorId, command, commandText) => moderationFeature.routeCommand(ctx, actorId, command, commandText),
 			routeStart: async (ctx, actorId, startParameter) => {
+				if (ctx.from !== undefined) {
+					await options.profileService.ensureFromTelegram(actorId, [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(" ").trim());
+				}
 				if (await applicationsFeature.routeStart(ctx, actorId, startParameter)) return true;
 				return marketplaceFeature.routeStart(ctx, actorId, startParameter);
 			},

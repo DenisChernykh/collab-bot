@@ -70,9 +70,9 @@ describe("S1-02 fake Telegram profile journey", () => {
 			await bot.handleUpdate({ update_id: 1, message: privateMessage(1, "/start") });
 			const profileCallback = callbackData(fake, "profile:view");
 			await bot.handleUpdate({ update_id: 2, callback_query: callback(2, profileCallback) });
-			const createCallback = fake.lastMessage()?.reply_markup?.inline_keyboard?.flat().find((button) => (button as { callback_data?: string }).callback_data === "profile:create");
+			const createCallback = fake.lastMessage()?.reply_markup?.inline_keyboard?.flat().find((button) => (button as { callback_data?: string }).callback_data === "profile:edit");
 			expect(createCallback).toBeDefined();
-			await bot.handleUpdate({ update_id: 3, callback_query: callback(3, "profile:create") });
+			await bot.handleUpdate({ update_id: 3, callback_query: callback(3, "profile:edit") });
 			const initialTypeCallback = callbackData(fake, "profile:type:blogger");
 			await bot.handleUpdate({ update_id: 4, message: privateMessage(4, "Блогер") });
 			const currentCancelCallback = callbackData(fake, "profile:cancel");

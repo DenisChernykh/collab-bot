@@ -472,14 +472,14 @@ Block является identity policy. Внутренняя причина хр
 |---|---|
 | `id TEXT PK` | UUID |
 | `telegram_user_id TEXT FK` | владелец |
-| `type TEXT` | `ProfileType` CHECK |
+| `type TEXT NULL` | `NULL` для базового профиля; затем `ProfileType` CHECK |
 | `display_name TEXT` | 2–100 |
 | `description TEXT NULL` | NULL либо 10–500 |
 | `city_code TEXT` | CHECK = `ekaterinburg` |
 | `status TEXT` | `active` или `archived` |
 | `created_at / updated_at INTEGER` | UTC ms |
 
-Обычного UNIQUE на `telegram_user_id` нет: связь 1:N и история archived-профилей разрешены. MVP-инвариант «один active profile» защищают и use case, и частичный SQL-индекс:
+Обычного UNIQUE на `telegram_user_id` нет: связь 1:N и история archived-профилей разрешены. MVP-инвариант «один active profile, включая незаполненный» защищают и use case, и частичный SQL-индекс:
 
 ```sql
 CREATE UNIQUE INDEX profiles_one_active_per_user
@@ -753,7 +753,7 @@ Raw user content, contacts and tokens are forbidden.
 
 ### 9.2. `SubmitApplication`
 
-Telegram adapter разрешает открыть карточку и нажать `Откликнуться` без профиля. Если active profile отсутствует, mutation ещё не начинается: durable profile session сохраняет typed continuation на collaboration и source, запускает quick mode с обязательными `type → display_name → platform`, сохраняет минимально завершённый profile и затем повторно открывает ввод application message. Description, topics и audience в quick mode не запрашиваются. После restart flow продолжается с сохранённого шага; после завершения target повторно проходит текущие guards.
+Telegram adapter разрешает открыть карточку и нажать `Откликнуться` без профиля. Если заполненный active profile отсутствует, mutation ещё не начинается: durable profile session сохраняет typed continuation на collaboration и source, запускает quick mode с обязательными `type → display_name → platform`, сохраняет минимально завершённый profile и затем повторно открывает ввод application message. Description, topics и audience в quick mode не запрашиваются. Начальное название из существующего профиля подставляется; кнопка «Оставить название» с generation/revision позволяет продолжить без повторного ввода, а новое текстовое значение заменяет его в draft. После restart flow продолжается с сохранённого шага; после завершения target повторно проходит текущие guards.
 
 В одной transaction:
 

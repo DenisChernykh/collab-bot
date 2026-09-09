@@ -69,6 +69,12 @@ export function cancelKeyboard(identity: ProfileSessionIdentity): InlineKeyboard
 		: new InlineKeyboard().text("Отменить заполнение", revisionCallback("profile:cancel", identity));
 }
 
+export function displayNameKeyboard(identity: ProfileSessionIdentity): InlineKeyboard {
+	const keyboard = new InlineKeyboard().text("Оставить название", revisionCallback("profile:keep_name", identity)).row();
+	if ("state" in identity && isApplicationState(identity.state)) keyboard.text("← Назад", revisionCallback("profile:back", identity)).row();
+	return keyboard.text("Отменить заполнение", revisionCallback("profile:cancel", identity));
+}
+
 export function optionalKeyboard(identity: ProfileSessionIdentity, populated: boolean): InlineKeyboard {
 	return new InlineKeyboard()
 		.text(populated ? "Очистить" : "Пропустить", revisionCallback("profile:omit", identity)).row()

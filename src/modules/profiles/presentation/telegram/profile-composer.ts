@@ -26,7 +26,7 @@ import {
 	PROFILE_LINK_CHOICE_HINT,
 	PROFILE_LINK_PROMPT,
 	applicationNavigationKeyboard,
-	cancelKeyboard,
+	cancelKeyboard,	displayNameKeyboard,
 	isApplicationSession,
 	isApplicationState,
 	normalizeTelegramUsername,
@@ -160,6 +160,16 @@ export function createProfileTelegramFeature(options: ProfileTelegramFeatureOpti
 				case "platform":
 					await choosePlatform(ctx, options, userId, mutation.value ?? "", requestIdFactory(options), mutation);
 					return;
+				case "keep_name": {
+					const session = await sessionAtRevision(ctx, options, userId, mutation);
+					if (session === undefined) return;
+					if (session.state.step !== "display_name" || !hasValidDraftName(session.state.draft)) {
+						await renderStep(ctx, options, userId, session);
+						return;
+					}
+					await advanceText(ctx, options, userId, session, session.state.draft.displayName);
+					return;
+				}
 				case "omit":
 					await omitOptional(ctx, options, userId, mutation);
 					return;
@@ -198,20 +208,21 @@ export function createProfileTelegramFeature(options: ProfileTelegramFeatureOpti
 			await renderStep(ctx, options, userId, saved);
 		},
 		startQuickApplicationProfile: async (ctx, userId, continuation) => {
+			const profile = await options.profileService.getOwn(userId);
 			const saved = await saveState(options, userId, {
 				version: PROFILE_SESSION_VERSION,
 				generation: options.crypto.randomHex(8),
 				step: "type",
-				draft: { description: null, topics: [], audienceAutofill: "allow" },
+				draft: { description: null, topics: [], audienceAutofill: "allow", ...(profile === undefined ? {} : { displayName: profile.displayName }) },
 				continuation,
 			});
-			await ctx.reply("Чтобы откликнуться, создадим короткий профиль — это займёт около минуты.");
+			await ctx.reply(profile === undefined ? "Чтобы откликнуться, создадим короткий профиль — это займёт около минуты." : "Чтобы откликнуться, дополните профиль: выберите тип и публичную площадку. Название уже заполнено.");
 			await renderStep(ctx, options, userId, saved);
 		},
 	};
 }
 
-type ProfileMutationKind = "back" | "cancel" | "apply" | "type" | "platform" | "omit";
+type ProfileMutationKind = "back" | "cancel" | "apply" | "type" | "platform" | "omit" | "keep_name";
 interface ProfileMutationCallback extends ProfileSessionToken {
 	readonly kind: ProfileMutationKind;
 	readonly value?: string;
@@ -433,7 +444,7 @@ async function backSession(ctx: Context, options: ProfileTelegramFeatureOptions,
 			const saved = await saveState(options, userId, withoutRequestId({
 				...state,
 				step: "type",
-				draft: { description: null, topics: [], audienceAutofill: "allow" },
+				draft: { description: null, topics: [], audienceAutofill: "allow", ...(state.draft.displayName === undefined ? {} : { displayName: state.draft.displayName }) },
 			}));
 			await renderStep(ctx, options, userId, saved);
 			return;
@@ -612,7 +623,9 @@ async function showProfile(ctx: Context, options: ProfileTelegramFeatureOptions,
 		`Площадка: ${platform?.url ?? "не указана"}`,
 		...(platform?.audienceSize === undefined ? [] : [`Аудитория: ${platform.audienceSize}`]),
 	];
-	await ctx.reply(lines.join("\n"), { reply_markup: new InlineKeyboard().text("✏️ Изменить профиль", "profile:edit").row().text("← В главное меню", "menu:home") });
+	const complete = isCompleteProfile(profile);
+	if (!complete) lines.push("", "Дополните профиль перед созданием коллаборации или откликом: укажите тип и публичную площадку.");
+	await ctx.reply(lines.join("\n"), { reply_markup: new InlineKeyboard().text(complete ? "✏️ Изменить профиль" : "✏️ Дополнить профиль", "profile:edit").row().text("← В главное меню", "menu:home") });
 }
 
 async function startOrResume(
@@ -736,7 +749,13 @@ async function renderStep(ctx: Context, options: ProfileTelegramFeatureOptions, 
 	const state = session.state;
 	switch (state.step) {
 		case "type": await ctx.reply("Выберите, кто вы:", { reply_markup: typeKeyboard(session) }); return;
-		case "display_name": await ctx.reply("Как назвать ваш профиль? Это может быть ваше имя, название канала, заведения или бренда (2–100 символов).", { reply_markup: cancelKeyboard(session) }); return;
+		case "display_name":
+			if (hasValidDraftName(state.draft)) {
+				await ctx.reply(`Название профиля: ${state.draft.displayName}\n\nОставьте его или отправьте другое название (2–100 символов).`, { reply_markup: displayNameKeyboard(session) });
+			} else {
+				await ctx.reply("Как назвать ваш профиль? Это может быть ваше имя, название канала, заведения или бренда (2–100 символов).", { reply_markup: cancelKeyboard(session) });
+			}
+			return;
 		case "topics": await ctx.reply("Укажите до 3 тем через запятую: Lifestyle, Еда и рестораны, Красота, Путешествия, Город, События, Семья, Спорт, Бизнес, Другое. Поле можно пропустить.", { reply_markup: optionalKeyboard(session, hasTopics(state.draft)) }); return;
 		case "description": await ctx.reply("Опишите профиль (10–500 символов) или пропустите поле.", { reply_markup: optionalKeyboard(session, state.draft.description !== undefined && state.draft.description !== null) }); return;
 		case "platform": await ctx.reply(PROFILE_LINK_PROMPT, { reply_markup: platformKeyboard(session, ctx.from?.username) }); return;
@@ -812,7 +831,7 @@ function parseTopics(value: string): Topic[] | undefined {
 }
 
 function parseProfileMutationCallback(data: string): ProfileMutationCallback | undefined {
-	const match = /^(profile:(?:back|cancel|apply|omit)|profile:(?:type|platform):([a-z_]+)):g([a-f0-9]{16}):r(\d+)$/.exec(data);
+	const match = /^(profile:(?:back|cancel|apply|omit|keep_name)|profile:(?:type|platform):([a-z_]+)):g([a-f0-9]{16}):r(\d+)$/.exec(data);
 	if (match === null) return undefined;
 	const [, action, value, generation, revisionRaw] = match;
 	if (action === undefined || generation === undefined || revisionRaw === undefined) return undefined;
@@ -821,6 +840,7 @@ function parseProfileMutationCallback(data: string): ProfileMutationCallback | u
 	if (action === "profile:back") return { kind: "back", generation, revision };
 	if (action === "profile:cancel") return { kind: "cancel", generation, revision };
 	if (action === "profile:apply") return { kind: "apply", generation, revision };
+	if (action === "profile:keep_name") return { kind: "keep_name", generation, revision };
 	if (action === "profile:omit") return { kind: "omit", generation, revision };
 	if (action.startsWith("profile:type:")) return { kind: "type", value: value ?? action.slice("profile:type:".length), generation, revision };
 	if (action.startsWith("profile:platform:")) return { kind: "platform", value: value ?? action.slice("profile:platform:".length), generation, revision };
@@ -855,6 +875,11 @@ function withoutAudience(platform: ProfileInput["platforms"][number]): ProfileIn
 	const without = { ...platform };
 	delete without.audienceSize;
 	return without;
+}
+
+function hasValidDraftName(draft: ProfileDraft): draft is ProfileDraft & { readonly displayName: string } {
+	const name = draft.displayName?.trim();
+	return name !== undefined && name.length >= 2 && name.length <= 100 && !name.includes("\u0000");
 }
 
 function hasTopics(draft: ProfileDraft): boolean {

@@ -82,7 +82,7 @@ describe("S3-02 fake Telegram browse journey", () => {
 			await runtime.bot.handleUpdate({ update_id: 11, message: privateMessageForUser(11, 300, `/start c_${FIRST_TOKEN}`) });
 			expect(String(fake.lastMessage()?.text)).toContain("First browse card");
 			expect(callbackValues(fake)).toContain(`application:start:d:${FIRST_TOKEN}`);
-			expect(await runtime.boundary.query("SELECT id FROM profiles WHERE telegram_user_id = '300'")).toEqual([]);
+			expect(await runtime.boundary.query("SELECT type, display_name FROM profiles WHERE telegram_user_id = '300'")).toEqual([{ type: null, display_name: "User 300" }]);
 
 			await runtime.bot.handleUpdate({ update_id: 13, message: privateMessageForUser(13, 300, "/start c_short") });
 			const neutral = String(fake.lastMessage()?.text);
@@ -140,7 +140,7 @@ describe("S3-02 fake Telegram browse journey", () => {
 		}
 	});
 
-	it("keeps the quick profile resumable and supports Back plus Cancel before profile persistence", async () => {
+	it("keeps the quick profile resumable and supports Back plus Cancel without changing the initial profile", async () => {
 		const fixture = await createSeededFixture("collaboration-s3-03-quick-resume-");
 		const { databasePath, directory, fake, clock } = fixture;
 		let { runtime } = fixture;
@@ -155,7 +155,7 @@ describe("S3-02 fake Telegram browse journey", () => {
 			await runtime.bot.handleUpdate({ update_id: 3, callback_query: callbackForUser(3, 410, callbackData(fake, "profile:type:blogger")) });
 			expect(await profileSessionState(runtime.boundary, "410")).toMatchObject({ step: "display_name" });
 			await runtime.bot.handleUpdate({ update_id: 4, callback_query: callbackForUser(4, 410, callbackData(fake, "profile:back:")) });
-			expect(await profileSessionState(runtime.boundary, "410")).toMatchObject({ step: "type", draft: { description: null, topics: [] } });
+			expect(await profileSessionState(runtime.boundary, "410")).toMatchObject({ step: "type", draft: { description: null, topics: [], displayName: "User 410" } });
 
 			await runtime.bot.handleUpdate({ update_id: 5, callback_query: callbackForUser(5, 410, callbackData(fake, "profile:type:blogger")) });
 			await runtime.bot.handleUpdate({ update_id: 6, message: privateMessageForUser(6, 410, "Restarted Applicant") });
@@ -172,7 +172,7 @@ describe("S3-02 fake Telegram browse journey", () => {
 
 			await runtime.bot.handleUpdate({ update_id: 9, message: privateMessageForUser(9, 410, "/cancel") });
 			expect(await profileSessionState(runtime.boundary, "410")).toBeUndefined();
-			expect(await runtime.boundary.query("SELECT id FROM profiles WHERE telegram_user_id = '410'")).toEqual([]);
+			expect(await runtime.boundary.query("SELECT type, display_name FROM profiles WHERE telegram_user_id = '410'")).toEqual([{ type: null, display_name: "User 410" }]);
 			expect(await runtime.boundary.query("SELECT id FROM applications")).toEqual([]);
 		} finally {
 			await runtime.shutdown();
@@ -199,7 +199,7 @@ describe("S3-02 fake Telegram browse journey", () => {
 
 			expect(String(fake.lastMessage()?.text)).toContain("публичного @username");
 			expect(await profileSessionState(runtime.boundary, "415")).toMatchObject({ step: "platform" });
-			expect(await runtime.boundary.query("SELECT id FROM profiles WHERE telegram_user_id = '415'")).toEqual([]);
+			expect(await runtime.boundary.query("SELECT type, display_name FROM profiles WHERE telegram_user_id = '415'")).toEqual([{ type: null, display_name: "User 415" }]);
 		} finally {
 			await runtime.shutdown();
 			await rm(directory, { recursive: true, force: true });
@@ -211,9 +211,10 @@ describe("S3-02 fake Telegram browse journey", () => {
 		const { directory, fake, runtime } = fixture;
 		try {
 			await runtime.bot.handleUpdate({ update_id: 1, message: privateMessageForUser(1, 416, `/start c_${FIRST_TOKEN}`, "quick_creator") });
+			const [initialProfile] = await runtime.boundary.query<{ id: string }>("SELECT id FROM profiles WHERE telegram_user_id = '416'");
 			await runtime.bot.handleUpdate({ update_id: 2, callback_query: callbackForUser(2, 416, callbackData(fake, `application:start:d:${FIRST_TOKEN}`), "quick_creator") });
 			await runtime.bot.handleUpdate({ update_id: 3, callback_query: callbackForUser(3, 416, callbackData(fake, "profile:type:blogger"), "quick_creator") });
-			await runtime.bot.handleUpdate({ update_id: 4, message: privateMessageForUser(4, 416, "Quick Telegram Applicant", "quick_creator") });
+			await runtime.bot.handleUpdate({ update_id: 4, callback_query: callbackForUser(4, 416, callbackData(fake, "profile:keep_name"), "quick_creator") });
 			expect(fake.lastMessage()?.reply_markup?.inline_keyboard?.flat()).toContainEqual(expect.objectContaining({ text: "Использовать @quick_creator" }));
 			await runtime.bot.handleUpdate({ update_id: 5, callback_query: callbackForUser(5, 416, callbackData(fake, "profile:platform:self"), "quick_creator") });
 
@@ -221,6 +222,11 @@ describe("S3-02 fake Telegram browse journey", () => {
 			expect(await runtime.boundary.query("SELECT pp.url, pp.username FROM profile_platforms pp JOIN profiles p ON p.id = pp.profile_id WHERE p.telegram_user_id = '416' AND p.status = 'active'")).toEqual([{
 				url: "https://t.me/quick_creator", username: "quick_creator",
 			}]);
+			expect(await runtime.boundary.query("SELECT id, display_name FROM profiles WHERE telegram_user_id = '416'")).toEqual([{ id: initialProfile?.id, display_name: "User 416" }]);
+			const submit = { update_id: 6, message: privateMessageForUser(6, 416, "Хочу сделать совместный городской проект.", "quick_creator") };
+			await runtime.bot.handleUpdate(submit);
+			await runtime.bot.handleUpdate(submit);
+			expect(await runtime.boundary.query("SELECT applicant_profile_id FROM applications WHERE collaboration_id = ?", [FIRST_ID])).toEqual([{ applicant_profile_id: initialProfile?.id }]);
 		} finally {
 			await runtime.shutdown();
 			await rm(directory, { recursive: true, force: true });
