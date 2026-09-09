@@ -1919,7 +1919,7 @@ Shared unit contract: read AGENTS.md, PRD §22, TD MFM contract, this complete s
 
 ### MFM-03 — Implement durable onboarding decisions
 
-- **Status:** `pending`
+- **Status:** `completed`
 - **Dependencies:** MFM-02 completed.
 - **Read first:** shared MFM unit contract above; predecessor evidence; complete relevant source/test contracts.
 - **Scope:** Application FSM with entry/language, draft/back/multiselect/completion/edit/flag-off and integration tests.
@@ -1927,6 +1927,8 @@ Shared unit contract: read AGENTS.md, PRD §22, TD MFM contract, this complete s
 - **Tests first:** demonstrate the scope's missing behavior before runtime implementation; documentation units use diff review.
 - **Verification:** focused FSM integration and unit tests; architecture; typecheck; git diff --check.
 - **Exit criteria:** acceptance proved; evidence and one local commit; clean tree.
+
+- **Evidence:** Commit SHA: `SELF`. Preflight clean main at MFM-02 d8fbde0cd0ea1aeb1da66460c136513147388fe3; origin/main unchanged c4c5fb snapshot (full SHA in earlier units); toolchain unchanged. RED: missing onboarding service. GREEN: 3 real-SQL FSM journeys PASS (RU/EN completion, edited-draft isolation, disabled-feature behavior, restart, language restoration, sphere pruning, stale callback and classic deep-link continuation). Typecheck, architecture (145 modules), lint and diff-check PASS; corrected TypeScript narrowing before completion. Final two-file source/test diff reviewed: state transitions are application-owned and all mutations are transactional; independent stage review remains MFM-07. Changed files: IMPLEMENTATION_PLAN.md, src/modules/profiles/application/onboarding-service.ts, test/integration/mfm-03-onboarding.test.ts.
 
 ### MFM-04 — Render the bilingual MFM journey
 

@@ -1,0 +1,87 @@
+import { expect, it } from "vitest";
+import { OnboardingService, type OnboardingAction, type OnboardingView } from "../../src/modules/profiles/application/onboarding-service.js";
+import { SqliteOnboardingRepository } from "../../src/modules/profiles/infrastructure/sqlite-onboarding-repository.js";
+import { ProfileService } from "../../src/modules/profiles/application/profile-service.js";
+import { SqliteProfileRepository } from "../../src/modules/profiles/infrastructure/sqlite-profile-repository.js";
+import { DatabaseBoundaryTransactionRunner } from "../../src/platform/database/transaction-runner.js";
+import { webCryptoCapabilities } from "../../src/platform/crypto/capabilities.js";
+import { withFreshMigratedDatabase } from "../support/migrated-database.js";
+import { FakeClock } from "../support/fake-clock.js";
+
+it.each(["ru", "en"] as const)("finishes and edits one durable MFM profile in %s", async (language) => {
+	const clock = new FakeClock(100);
+	await withFreshMigratedDatabase({ prefix: "mfm-fsm-", clock }, async ({ boundary }) => {
+		await boundary.execute("INSERT INTO telegram_users (telegram_user_id, display_name, status, created_at, updated_at) VALUES ('1', 'Lucas', 'active', 1, 1)");
+		const repository = new SqliteOnboardingRepository(boundary);
+		const transactions = new DatabaseBoundaryTransactionRunner(boundary);
+		const profiles = new ProfileService(new SqliteProfileRepository(boundary), transactions, clock);
+		const create = (enabled = true) => new OnboardingService(repository, profiles, transactions, clock, webCryptoCapabilities, enabled);
+		let service = create();
+		let view: OnboardingView = await service.start("1", "Lucas");
+		const act = async (action: OnboardingAction) => {
+			if (view.kind !== "step") throw new Error("expected a step");
+			view = await service.act("1", action, { generation: view.session.state.generation, revision: view.session.revision });
+			return view;
+		};
+		expect(view.kind).toBe("step");
+		await act({ kind: "language", value: language });
+		await act({ kind: "affiliation", value: "yes" });
+		await act({ kind: "choice", value: "volunteer" });
+		await act({ kind: "next" });
+		await act({ kind: "keep" });
+		await act({ kind: "choice", value: "specialist" });
+		await act({ kind: "text", value: "São Paulo, Brazil" });
+		await act({ kind: "choice", value: "media" });
+		await act({ kind: "choice", value: "digital_it" });
+		await act({ kind: "next" });
+		await act({ kind: "choice", value: "blogger" });
+		await act({ kind: "choice", value: "ai" });
+		await act({ kind: "back" });
+		await act({ kind: "choice", value: "media" });
+		expect(view).toMatchObject({ session: { state: { draft: { specializations: ["ai"] } } } });
+		service = create();
+		view = await service.start("1", "Changed Telegram Name");
+		expect(view).toMatchObject({ language, session: { state: { step: "spheres", draft: { displayName: "Lucas" } } } });
+		expect(await create(false).view("1")).toMatchObject({ kind: "paused", language });
+		view = await service.language("1");
+		await act({ kind: "language", value: language === "ru" ? "en" : "ru" });
+		expect(view).toMatchObject({ session: { state: { step: "spheres" } } });
+		await act({ kind: "next" });
+		await act({ kind: "next" });
+		await act({ kind: "choice", value: "joint_projects" });
+		const before = view;
+		await act({ kind: "next" });
+		expect(view).toMatchObject({ kind: "home", profile: { displayName: "Lucas", spheres: ["digital_it"], specializations: ["ai"] } });
+		if (before.kind !== "step") throw new Error("expected step");
+		expect(await service.act("1", { kind: "next" }, { generation: before.session.state.generation, revision: before.session.revision })).toMatchObject({ kind: "home" });
+		expect(await boundary.query("SELECT * FROM mfm_profiles")).toHaveLength(1);
+		expect(await repository.getSession("1")).toBeUndefined();
+		service = create(false);
+		expect(await service.start("1", "Changed")).toMatchObject({ kind: "home", festivalEnabled: false });
+		view = await service.edit("1");
+		await act({ kind: "text", value: "Edited Name" });
+		expect(await repository.getProfile("1")).toMatchObject({ displayName: "Lucas" });
+		view = await service.cancel("1");
+		expect(view).toMatchObject({ kind: "home", profile: { displayName: "Lucas" } });
+		expect(await boundary.query("SELECT id FROM profiles")).toHaveLength(1);
+	});
+});
+
+it("keeps classic entry destinations and rejects stale cross-step choices", async () => {
+	const clock = new FakeClock(100);
+	await withFreshMigratedDatabase({ prefix: "mfm-entry-", clock }, async ({ boundary }) => {
+		await boundary.execute("INSERT INTO telegram_users (telegram_user_id, display_name, status, created_at, updated_at) VALUES ('1', 'User', 'active', 1, 1)");
+		const repository = new SqliteOnboardingRepository(boundary);
+		const tx = new DatabaseBoundaryTransactionRunner(boundary);
+		const service = new OnboardingService(repository, new ProfileService(new SqliteProfileRepository(boundary), tx, clock), tx, clock, webCryptoCapabilities, true);
+		const initial = await service.start("1", "User", "c_test");
+		if (initial.kind !== "step") throw new Error("expected step");
+		const token = { generation: initial.session.state.generation, revision: initial.session.revision };
+		const affiliation = await service.act("1", { kind: "language", value: "en" }, token);
+		expect(await service.act("1", { kind: "language", value: "ru" }, token)).toMatchObject({ language: "en", notice: "stale" });
+		if (affiliation.kind !== "step") throw new Error("expected step");
+		expect(await service.act("1", { kind: "affiliation", value: "no" }, { generation: affiliation.session.state.generation, revision: affiliation.session.revision })).toMatchObject({ kind: "classic", pendingStart: "c_test" });
+		expect(await repository.getProfile("1")).toBeUndefined();
+		expect(await repository.getSession("1")).toBeUndefined();
+	});
+});
