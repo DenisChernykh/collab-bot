@@ -1960,7 +1960,7 @@ Shared unit contract: read AGENTS.md, PRD §22, TD MFM contract, this complete s
 
 ### MFM-05B — Gate real Telegram routes by experience
 
-- **Status:** `pending`
+- **Status:** `completed`
 - **Dependencies:** MFM-05 completed.
 - **Read first:** shared MFM unit contract; MFM-05 evidence; full router, durable ingress, MFM presenter and real-composition fake harness.
 - **Scope:** Entry/text/plain/opaque/replay gates; collect keyboard edits until commit; focused real-composition RU/EN fake journeys.
@@ -1968,6 +1968,8 @@ Shared unit contract: read AGENTS.md, PRD §22, TD MFM contract, this complete s
 - **Tests first:** missing language/affiliation entry and MFM route bypass.
 - **Verification:** focused fake/routing tests; pnpm check; Cloudflare typecheck; git diff --check.
 - **Exit criteria:** evidence and exactly one local commit, clean tree.
+
+- **Evidence:** Commit SHA: `SELF`. Clean preflight at MFM-05 00f061186771a19600688651df3ffe12f578e90f; remote unchanged c4c5bfbc5f9696b63e0acf89182990017c2237fb. RED: first start still showed classic menu. GREEN: two real-composition RU/EN fake journeys finish a profile, edit selected keyboards after commit and deny text/deep-link/plain/opaque/replayed classic access without collaboration/application rows. Full pnpm check PASS (98 unit, 99 integration, 47 runtime); Cloudflare typecheck, focused route contract and durable-ingress test PASS. Final diff reviewed: optional capability preserves isolated classic router contracts, moderation retains its original priority, reply collector defers edits and handles unavailable messages after commit. No real Telegram or hosted configuration mutation. Changed files: IMPLEMENTATION_PLAN.md, src/runtime/telegram/telegram-router.ts, test/e2e-fake/mfm-05b-bot.test.ts, test/support/fake-bot-runtime.ts.
 
 ### MFM-06 — Verify restart and cross-runtime compatibility
 

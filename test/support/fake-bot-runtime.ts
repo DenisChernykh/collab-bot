@@ -17,6 +17,7 @@ import {
 const migrationsDirectory = fileURLToPath(new URL("../../migrations/", import.meta.url));
 
 export interface FakeBotRuntimeOptions {
+	readonly mfmFeatureEnabled?: boolean;
 	readonly databasePath: string;
 	readonly clock?: Clock;
 	readonly fake?: FakeTelegramApi;
@@ -40,6 +41,7 @@ export async function createFakeBotRuntime(options: FakeBotRuntimeOptions): Prom
 		bot.stop = async () => {};
 	}
 	const config: AppConfig = {
+		mfmFeatureEnabled: options.mfmFeatureEnabled ?? false,
 		botToken: FAKE_BOT_TOKEN,
 		expectedBotId: "777",
 		expectedBotUsername: "collab_bot",

@@ -28,6 +28,8 @@ import {
 import {
 	applicationNavigationKeyboard,
 	createProfileTelegramFeature,
+	createMfmTelegramFeature,
+	type MfmTelegramFeature,
 	isCompleteProfile,
 	profileTypeLabel,
 	resumeKeyboard,
@@ -134,18 +136,37 @@ export function registerTelegramRouter(bot: Bot, options: TelegramRouterOptions)
 		replyUnknownCommand: (ctx) => replyUnknownCommand(ctx, options),
 	});
 
+	const mfmFeature = options.onboardingService === undefined ? undefined : createMfmTelegramFeature({
+		service: options.onboardingService,
+		helpContact: options.helpContact,
+		renderClassic: async (ctx, pendingStart) => {
+			const userId = String(ctx.from!.id);
+			if (pendingStart !== undefined && await applicationsFeature.routeStart(ctx, userId, pendingStart)) return;
+			if (pendingStart !== undefined && await marketplaceFeature.routeStart(ctx, userId, pendingStart)) return;
+			await renderMenu(ctx, options, profileFeature, collaborationFeature, userId);
+		},
+	});
+
 	const messageRoute = new Composer<Context>();
 	messageRoute.on("message", async (workCtx, next) => {
 		if (workCtx.chat?.type !== "private" || workCtx.from === undefined) return;
 		if (!(await ensureActor(workCtx, options))) return;
+		if (workCtx.message.text === undefined && options.onboardingService !== undefined && mfmFeature !== undefined) {
+			const view = await options.onboardingService.view(String(workCtx.from.id));
+			if (view.kind !== "classic") { await mfmFeature.show(workCtx, view); return; }
+		}
 		await next();
 	});
 	messageRoute.on("message:text", async (workCtx, next) => {
 		const userId = String(workCtx.from.id);
 		const text = workCtx.message.text;
+		const command = text.trim().split(/\s+/, 1)[0]?.toLowerCase();
+		if (await moderationFeature.routeCommand(workCtx, userId, command, text)) return;
+		if (mfmFeature !== undefined && await mfmFeature.routeText(workCtx, userId, text)) return;
 		const handled = await routeTelegramText(workCtx, userId, text, {
-			routeModeration: (ctx, actorId, command, commandText) => moderationFeature.routeCommand(ctx, actorId, command, commandText),
+			routeModeration: async () => false,
 			routeStart: async (ctx, actorId, startParameter) => {
+				if (mfmFeature !== undefined) { await mfmFeature.start(ctx, actorId, startParameter); return true; }
 				if (ctx.from !== undefined) {
 					await options.profileService.ensureFromTelegram(actorId, [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(" ").trim());
 				}
@@ -181,6 +202,7 @@ export function registerTelegramRouter(bot: Bot, options: TelegramRouterOptions)
 			return;
 		}
 		await workCtx.answerCallbackQuery();
+		if (mfmFeature !== undefined && await mfmFeature.routeCallback(workCtx, String(workCtx.from.id), callbackQuery.data)) return;
 		await next();
 	});
 	callbackRoute.use(profileFeature.composer);
@@ -200,11 +222,16 @@ export function registerTelegramRouter(bot: Bot, options: TelegramRouterOptions)
 	});
 
 	registerDurableTelegramIngress(bot, {
-		executeDurably: (ctx, input, route) => runDurable(ctx, options, profileFeature, moderationFeature, input, route),
+		executeDurably: (ctx, input, route) => runDurable(ctx, options, profileFeature, moderationFeature, input, route, mfmFeature),
 		messageRoute: messageRoute.middleware(),
 		callbackRoute: callbackRoute.middleware(),
 		opaqueCallbackRoute: async (ctx) => {
 			const data = ctx.callbackQuery?.data;
+			if (options.onboardingService !== undefined && mfmFeature !== undefined && ctx.from !== undefined) {
+				if (ctx.callbackQuery?.message?.chat.type !== "private") { await ctx.answerCallbackQuery(); return; }
+				const view = await options.onboardingService.view(String(ctx.from.id));
+				if (view.kind !== "classic") { await ctx.answerCallbackQuery(); await mfmFeature.show(ctx, view); return; }
+			}
 			if (data !== undefined) await applicationsFeature.handleOpaqueCallback(ctx, data);
 		},
 	});
@@ -216,6 +243,7 @@ function replyUnknownCommand(ctx: Context, options: TelegramRouterOptions): Prom
 }
 
 type ReplyOptions = Parameters<Context["reply"]>[1];
+type EditOptions = Parameters<Context["editMessageText"]>[1];
 type AnswerOptions = Parameters<Context["answerCallbackQuery"]>[0];
 interface ReplyAction { readonly text: string; readonly options?: ReplyOptions; }
 interface ProfileAudienceAction { readonly plan: ProfileAudiencePlan; readonly replyIndex: number; }
@@ -225,6 +253,7 @@ type CollectedContext = Context & { readonly [REPLY_COLLECTOR]?: ReplyCollector 
 
 class ReplyCollector {
 	readonly replies: ReplyAction[] = [];
+	readonly edits: { readonly text: string; readonly options?: EditOptions }[] = [];
 	readonly answers: AnswerOptions[] = [];
 	private audienceAction: ProfileAudienceAction | undefined;
 
@@ -234,6 +263,10 @@ class ReplyCollector {
 		proxy.reply = async (text: string, options?: ReplyOptions) => {
 			if (options === undefined) this.replies.push({ text });
 			else this.replies.push({ text, options });
+			return undefined as never;
+		};
+		proxy.editMessageText = async (text: string, options?: EditOptions) => {
+			this.edits.push({ text, ...(options === undefined ? {} : { options }) });
 			return undefined as never;
 		};
 		proxy.answerCallbackQuery = async (options?: AnswerOptions) => {
@@ -274,6 +307,7 @@ async function runDurable(
 	moderationFeature: ModerationTelegramFeature,
 	input: CanonicalInput,
 	effect: (workContext: Context) => Promise<void>,
+	mfmFeature?: MfmTelegramFeature,
 ): Promise<void> {
 	const updateId = getUpdateId(ctx.update);
 	const from = ctx.from;
@@ -295,8 +329,12 @@ async function runDurable(
 		},
 	});
 	const inputRecord = input !== null && typeof input === "object" && !Array.isArray(input) ? input as { readonly kind?: unknown } : undefined;
-	if (collector.replies.length === 0 && collector.answers.length === 0 && inputRecord?.kind === "callback_query") {
+	if (collector.replies.length === 0 && collector.answers.length === 0 && collector.edits.length === 0 && inputRecord?.kind === "callback_query") {
 		await ctx.answerCallbackQuery();
+		if (options.onboardingService !== undefined && mfmFeature !== undefined) {
+			const view = await options.onboardingService.view(telegramUserId);
+			if (view.kind !== "classic") { await mfmFeature.show(ctx, view); return; }
+		}
 		const session = await profileFeature.findSession(telegramUserId);
 		if (session !== undefined) await ctx.reply("Запрос уже обработан. Текущий шаг сохранён.", { reply_markup: resumeKeyboard(session) });
 		else if (await options.profileService.getOwn(telegramUserId) !== undefined) await ctx.reply("Запрос уже обработан. Профиль уже сохранён.", { reply_markup: menuKeyboard(options) });
@@ -306,6 +344,13 @@ async function runDurable(
 	for (const answer of collector.answers) {
 		if (answer === undefined) await ctx.answerCallbackQuery();
 		else await ctx.answerCallbackQuery(answer);
+	}
+	for (const edit of collector.edits) {
+		try { await ctx.editMessageText(edit.text, edit.options); }
+		catch (error) {
+			if (error instanceof Error && /message is not modified/i.test(error.message)) continue;
+			await ctx.reply(edit.text, edit.options?.reply_markup === undefined ? undefined : { reply_markup: edit.options.reply_markup });
+		}
 	}
 	let postCommitError: unknown;
 	const audienceAction = collector.takeAudienceAction();
