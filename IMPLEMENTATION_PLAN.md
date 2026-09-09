@@ -1906,7 +1906,7 @@ Shared unit contract: read AGENTS.md, PRD §22, TD MFM contract, this complete s
 
 ### MFM-02 — Add structured MFM model and persistence
 
-- **Status:** `pending`
+- **Status:** `completed`
 - **Dependencies:** MFM-01 completed.
 - **Read first:** shared MFM unit contract above; predecessor evidence; complete relevant source/test contracts.
 - **Scope:** Domain catalog/model, onboarding and MFM repository ports/adapters; focused validation/persistence tests.
@@ -1914,6 +1914,8 @@ Shared unit contract: read AGENTS.md, PRD §22, TD MFM contract, this complete s
 - **Tests first:** demonstrate the scope's missing behavior before runtime implementation; documentation units use diff review.
 - **Verification:** focused unit/integration; architecture; typecheck; git diff --check.
 - **Exit criteria:** acceptance proved; evidence and one local commit; clean tree.
+
+- **Evidence:** Commit SHA: `SELF`. Preflight clean main at MFM-01 ed6410df6f47bbb09aa5132eb25430ccf3f1d73b; read-only origin/main remains c4c5bfbc5f9696b63e0acf89182990017c2237fb; compatible toolchain. RED: missing domain/repository modules. GREEN: 12 domain cases and persistence/rollback test PASS; typecheck, architecture (144 modules), lint and diff-check PASS (only two prior generated warnings). Explicit SQL mapping preserves profile ID, classic NULL type/platforms and completedAt; forced child failure rolls back shared name and all MFM relations. State/choices validated at persistence boundary. Final five-file source/test diff reviewed; independent stage review remains MFM-07. Changed files: IMPLEMENTATION_PLAN.md, src/modules/profiles/application/ports/onboarding-repository.ts, src/modules/profiles/domain/mfm-profile.ts, src/modules/profiles/infrastructure/sqlite-onboarding-repository.ts, test/integration/mfm-02-repository.test.ts, test/unit/mfm-02-domain.test.ts.
 
 ### MFM-03 — Implement durable onboarding decisions
 
