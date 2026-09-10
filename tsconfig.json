@@ -22,5 +22,5 @@
 		"types": ["node"]
 	},
 	"include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.ts", "eslint.config.js"],
-	"exclude": ["src/worker.ts", "test/cloudflare/**/*.ts", "worker-configuration.d.ts"]
+	"exclude": ["src/worker.ts", "src/reset-worker.ts", "test/cloudflare/**/*.ts", "worker-configuration.d.ts"]
 }

@@ -132,3 +132,18 @@ it("keeps the completed profile visible until an edited draft is saved once with
 	expect(await j.session()).toBeUndefined();
 	expect(String(j.fake().lastMessage()?.text)).not.toContain("MFM");
 }));
+
+it("never renders a private MFM draft into a group on initial or replayed callback delivery", () => withJourney(async (j) => {
+	await j.fields();
+	await j.act({ kind: "back" }); // location prompt contains previously entered private draft text
+	const event = await j.event({ kind: "keep" });
+	const callback = event.callback_query;
+	if (!callback.message) throw new Error("missing synthetic callback message");
+	const groupUpdate = { ...event, callback_query: { ...callback, message: { ...callback.message, chat: { id: -100999, type: "supergroup" as const, title: "Synthetic group" } } } };
+	const before = await j.session();
+	const calls = j.fake().calls.length;
+	await j.runtime().bot.handleUpdate(groupUpdate);
+	await j.runtime().bot.handleUpdate(groupUpdate);
+	expect(j.fake().calls.slice(calls).filter((call) => call.method === "sendMessage" || call.method === "editMessageText")).toEqual([]);
+	expect(await j.session()).toEqual(before);
+}));

@@ -1986,7 +1986,7 @@ Shared unit contract: read AGENTS.md, PRD §22, TD MFM contract, this complete s
 
 ### MFM-07 — Prepare an isolated one-time database reset
 
-- **Status:** `pending`
+- **Status:** `completed`
 - **Dependencies:** MFM-06 completed.
 - **Read first:** shared MFM unit contract above; predecessor evidence; complete relevant source/test contracts.
 - **Scope:** Exact-target operator reset under maintenance; idempotency and local/workerd rehearsal; operation documentation.
@@ -1994,6 +1994,8 @@ Shared unit contract: read AGENTS.md, PRD §22, TD MFM contract, this complete s
 - **Tests first:** demonstrate the scope's missing behavior before runtime implementation; documentation units use diff review.
 - **Verification:** focused reset tests; pnpm check; Cloudflare checks; final independent critical review; git diff --check.
 - **Exit criteria:** acceptance proved; evidence and one local commit; clean tree.
+
+- **Evidence:** Commit SHA: `SELF`. Preflight clean main at MFM-06 ad3825c1036cb618b306641e61e043caaf61d184; origin/main unchanged c4c5bfbc5f9696b63e0acf89182990017c2237fb; toolchain unchanged. RED: reset module absent. GREEN: five local reset tests cover schemas 11/13/15, exact target/digest, transaction rollback/guard restoration, quiescence/unknown tables and durable retry; two real workerd reset tests PASS. Compiled CLI inspect/apply/retry/empty verification PASS. Temporary maintenance Worker dry-run PASS; it is separate from the normal entrypoint and does not migrate, run Telegram ingress or deliver effects. Cloudflare types/typecheck/manifest PASS. Workerd rejected unsupported PRAGMA integrity_check during rehearsal; local CLI retains it and shared/DO reset verifies FK/schema/migration integrity. One independent critical review by mfm_final_review identified replay rendering of private drafts into group chats; one consolidated correction added a private-chat guard and a failing then passing real-router regression. No other critical blockers found. Final pnpm check PASS (98 unit, 104 integration, 47 runtime); all fake journeys PASS (43); full local workerd PASS (38); final typecheck and diff-check PASS. Final diff inspected. Read-only inventory confirms three local project SQLite files (including retained CF3 snapshot) have only terminal deliveries/completed receipts; production and staging remain at their prior versions. An initial unfiltered Wrangler metadata response included the account email; no credential or private user data entered files/Git, and subsequent provider metadata is captured privately with only version IDs emitted. No hosted/local project database mutation yet. Operator runbook covers exact targets, idle ingress window, temporary secret handling and restoration of prior code version. MFM-08 remains the separately sequenced execution. Changed files: IMPLEMENTATION_PLAN.md, docs/MFM_RESET_RUNBOOK.md, src/cli/project-reset.ts, src/platform/database/project-reset.ts, src/reset-worker.ts, src/runtime/telegram/telegram-router.ts, test/cloudflare/mfm-07-reset.test.ts, test/e2e-fake/mfm-06-recovery.test.ts, test/integration/mfm-07-reset.test.ts, tsconfig.build.json, tsconfig.cloudflare.json, tsconfig.json.
 
 ### MFM-08 — Clear authorized project databases
 

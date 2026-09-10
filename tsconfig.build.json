@@ -8,5 +8,5 @@
 		"sourceMap": true
 	},
 	"include": ["src/**/*.ts"],
-	"exclude": ["src/worker.ts"]
+	"exclude": ["src/worker.ts", "src/reset-worker.ts"]
 }

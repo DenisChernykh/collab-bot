@@ -331,6 +331,7 @@ async function runDurable(
 	const inputRecord = input !== null && typeof input === "object" && !Array.isArray(input) ? input as { readonly kind?: unknown } : undefined;
 	if (collector.replies.length === 0 && collector.answers.length === 0 && collector.edits.length === 0 && inputRecord?.kind === "callback_query") {
 		await ctx.answerCallbackQuery();
+		if (ctx.chat?.type !== "private") return;
 		if (options.onboardingService !== undefined && mfmFeature !== undefined) {
 			const view = await options.onboardingService.view(telegramUserId);
 			if (view.kind !== "classic") { await mfmFeature.show(ctx, view); return; }
