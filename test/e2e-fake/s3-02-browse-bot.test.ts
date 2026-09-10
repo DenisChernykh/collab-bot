@@ -8,7 +8,7 @@ import type { BotRuntime } from "../../src/runtime/bot-runtime.js";
 import type { DatabaseBoundary } from "../../src/platform/database/database-boundary.js";
 import type { FakeTelegramApi } from "../support/fake-telegram-api.js";
 import { FakeClock } from "../support/fake-clock.js";
-import { createFakeBotRuntime } from "../support/fake-bot-runtime.js";
+import { createClassicFakeBotRuntime } from "../support/classic-fake-bot-runtime.js";
 import {
 	callbackData,
 	callbackForUser,
@@ -779,7 +779,7 @@ async function createRuntime(
 	clock: FakeClock,
 	options: { readonly adminTelegramIds?: readonly string[] } = {},
 ): Promise<BotRuntime> {
-	const { runtime } = await createFakeBotRuntime({
+	const { runtime } = await createClassicFakeBotRuntime({
 		databasePath,
 		fake,
 		clock,

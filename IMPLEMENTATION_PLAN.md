@@ -1973,7 +1973,7 @@ Shared unit contract: read AGENTS.md, PRD §22, TD MFM contract, this complete s
 
 ### MFM-06 — Verify restart and cross-runtime compatibility
 
-- **Status:** `pending`
+- **Status:** `completed`
 - **Dependencies:** MFM-05B completed.
 - **Read first:** shared MFM unit contract above; predecessor evidence; complete relevant source/test contracts.
 - **Scope:** Full RU/EN/classic journeys, recovery/toggle/replay, migration/transfer workerd evidence and minimal fixes.
@@ -1981,6 +1981,8 @@ Shared unit contract: read AGENTS.md, PRD §22, TD MFM contract, this complete s
 - **Tests first:** demonstrate the scope's missing behavior before runtime implementation; documentation units use diff review.
 - **Verification:** pnpm check; pnpm test:e2e:fake; pnpm test:cloudflare; Cloudflare types/typecheck/manifest; db:verify; git diff --check.
 - **Exit criteria:** acceptance proved; evidence and one local commit; clean tree.
+
+- **Evidence:** Commit SHA: `SELF`. Preflight clean main at MFM-05B 92db071a7f260245e9124d7fba34d9e91607a923; origin/main unchanged c4c5bfbc5f9696b63e0acf89182990017c2237fb; Node v24.18.0 and pnpm 11.15.1 confirmed. Initial full regressions identified 14 classic fixture enrollment failures and 4 obsolete transfer counts (17 versus 22). Explicit classic-enrolled fixture preserves the original assertions; a separate real language/No flow verifies unchanged completion and collaboration creation. GREEN: pnpm check PASS (98 unit, 99 integration, 47 runtime, lint/architecture/typecheck/build); pnpm test:e2e:fake PASS (42); full local pnpm test:cloudflare PASS (36, host loopback permission); Cloudflare generated types/typecheck/manifest and pnpm db:verify PASS; git diff --check PASS. New journeys verify restart, text rejection, cardinalities, feature shutdown/re-enable, language recovery, final save rollback with no Telegram reply or receipt, retry exactly once, disabled-feature edit commit preserving original ID/time, and workerd export/import of complete profiles plus a draft after eviction. Structured SQL lookup returns both different open_to intentions without an implicit filter. Test helper annotation corrected before final gates. Final seven-file source/test diff inspected; runtime behavior needed no correction. Independent critical review remains MFM-07. Changed files: IMPLEMENTATION_PLAN.md, test/cloudflare/cf1-08-transfer.test.ts, test/cloudflare/cf2-03-operations.test.ts, test/cloudflare/mfm-06-onboarding.test.ts, test/e2e-fake/ap-03-automatic-profile-bot.test.ts, test/e2e-fake/mfm-06-recovery.test.ts, test/e2e-fake/s3-02-browse-bot.test.ts, test/support/classic-fake-bot-runtime.ts.
 
 ### MFM-07 — Prepare an isolated one-time database reset
 

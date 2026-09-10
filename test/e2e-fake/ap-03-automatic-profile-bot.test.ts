@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { expect, it } from "vitest";
 
-import { createFakeBotRuntime } from "../support/fake-bot-runtime.js";
+import { createClassicFakeBotRuntime } from "../support/classic-fake-bot-runtime.js";
 import { callbackData, callbackForUser, callbackValues, privateMessageForUser } from "../support/fake-telegram.js";
 import { SqliteProfileRepository } from "../../src/modules/profiles/infrastructure/sqlite-profile-repository.js";
 import { FakeClock } from "../support/fake-clock.js";
@@ -13,7 +13,7 @@ it("creates a real profile from first and last name on start, preserves it acros
 	const directory = await mkdtemp(join(tmpdir(), "collaboration-ap-03-"));
 	const databasePath = join(directory, "app.sqlite");
 	const clock = new FakeClock(1_700_000_000_000);
-	let { runtime, fake } = await createFakeBotRuntime({ databasePath, clock });
+	let { runtime, fake } = await createClassicFakeBotRuntime({ databasePath, clock });
 	try {
 		const firstMessage = privateMessageForUser(1, 100, "/start", "private_person", "First");
 		const first = { update_id: 1, message: { ...firstMessage, from: { ...firstMessage.from!, last_name: "Last" } } };
@@ -34,7 +34,7 @@ it("creates a real profile from first and last name on start, preserves it acros
 		const keepName = callbackData(fake, "profile:keep_name");
 		const savedSession = await runtime.boundary.query("SELECT * FROM profile_sessions");
 		await runtime.shutdown();
-		({ runtime, fake } = await createFakeBotRuntime({ databasePath, clock, fake }));
+		({ runtime, fake } = await createClassicFakeBotRuntime({ databasePath, clock, fake }));
 		await runtime.bot.handleUpdate({ update_id: 6, message: privateMessageForUser(6, 100, "/start", "new_private_person", "Another name") });
 		expect(await runtime.boundary.query("SELECT * FROM profile_sessions")).toEqual(savedSession);
 		expect(await new SqliteProfileRepository(runtime.boundary).findActiveByTelegramUserId("100")).toEqual(initial);
@@ -58,7 +58,7 @@ it("creates a real profile from first and last name on start, preserves it acros
 
 it("creates a profile without a username and completes it before starting a collaboration", async () => {
 	const directory = await mkdtemp(join(tmpdir(), "collaboration-ap-03-no-username-"));
-	const { runtime, fake } = await createFakeBotRuntime({ databasePath: join(directory, "app.sqlite"), clock: new FakeClock(1_700_000_000_000) });
+	const { runtime, fake } = await createClassicFakeBotRuntime({ databasePath: join(directory, "app.sqlite"), clock: new FakeClock(1_700_000_000_000) });
 	try {
 		await runtime.bot.handleUpdate({ update_id: 1, message: privateMessageForUser(1, 200, "/start", undefined, "No Username") });
 		const initial = await new SqliteProfileRepository(runtime.boundary).findActiveByTelegramUserId("200");
