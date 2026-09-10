@@ -42,17 +42,15 @@ it("runs the composed MFM journey atomically in workerd and transfers profiles, 
 			await act(id, { kind: "language", value: id === 41 ? "ru" : "en" });
 			await act(id, { kind: "affiliation", value: "yes" });
 			await act(id, { kind: "choice", value: "participant" });
-			await act(id, { kind: "next" }); await act(id, { kind: "keep" });
+			await act(id, { kind: "keep" });
 			await act(id, { kind: "choice", value: "specialist" }); await act(id, { kind: "city" });
 			if (id === 43) continue; // The transfer must retain an unfinished draft too.
 			await act(id, { kind: "choice", value: "digital_it" }); await act(id, { kind: "next" });
-			await act(id, { kind: "choice", value: "ai" }); await act(id, { kind: "next" });
-			await act(id, { kind: "choice", value: id === 41 ? "joint_projects" : "professional_communication" });
 			const update = await event(id, { kind: "next" });
 			if (id === 41) {
 				const before = await repository.getSession(String(id));
 				const calls = fake.calls.length;
-				await database.execute("CREATE TRIGGER mfm_failure BEFORE INSERT ON mfm_profile_open_to BEGIN SELECT RAISE(ABORT, 'injected MFM failure'); END");
+				await database.execute("CREATE TRIGGER mfm_failure BEFORE INSERT ON mfm_profile_spheres BEGIN SELECT RAISE(ABORT, 'injected MFM failure'); END");
 				await expect(bot.handleUpdate(update)).rejects.toThrow("injected MFM failure");
 				expect(await repository.getSession(String(id))).toEqual(before);
 				expect(await repository.getProfile(String(id))).toBeUndefined();
@@ -61,10 +59,10 @@ it("runs the composed MFM journey atomically in workerd and transfers profiles, 
 				await database.execute("DROP TRIGGER mfm_failure");
 			}
 			await bot.handleUpdate(update); await bot.handleUpdate(update);
-			expect(await repository.getProfile(String(id))).toMatchObject({ revision: 1, spheres: ["digital_it"], specializations: ["ai"] });
+			expect(await repository.getProfile(String(id))).toMatchObject({ revision: 1, spheres: ["digital_it"], specializations: [], openTo: [] });
 		}
-		// The structured lookup includes both intentions when no optional open_to filter is supplied.
-		expect(await database.query("SELECT m.profile_id FROM mfm_profiles m JOIN mfm_profile_spheres s ON s.profile_id = m.profile_id JOIN mfm_profile_specializations p ON p.profile_id = m.profile_id WHERE m.event_status = ? AND s.sphere = ? AND p.specialization = ?", ["participant", "digital_it", "ai"])).toHaveLength(2);
+		// The shortened flow keeps both profiles discoverable without optional detail rows.
+		expect(await database.query("SELECT m.profile_id FROM mfm_profiles m JOIN mfm_profile_spheres s ON s.profile_id = m.profile_id WHERE m.event_status = ? AND s.sphere = ?", ["participant", "digital_it"])).toHaveLength(2);
 	});
 	await evictDurableObject(stub);
 	const manifest = await runInDurableObject(stub, (_instance, state) => exportStateTransferManifest(new CloudflareSqlDatabase(state.storage)));
@@ -75,7 +73,7 @@ it("runs the composed MFM journey atomically in workerd and transfers profiles, 
 		await importStateTransferManifest(database, manifest);
 		const repository = new SqliteOnboardingRepository(database);
 		expect(await repository.getUser("41")).toMatchObject({ language: "ru", experience: "mfm" });
-		expect(await repository.getProfile("42")).toMatchObject({ specializations: ["ai"], openTo: ["professional_communication"] });
+		expect(await repository.getProfile("42")).toMatchObject({ specializations: [], openTo: [] });
 		expect(await repository.getSession("43")).toMatchObject({ state: { step: "spheres", draft: { eventStatus: "participant", displayName: "Example Person" } } });
 		expect((await exportStateTransferManifest(database)).digest).toBe(manifest.digest);
 		expect(await database.query("PRAGMA foreign_key_check")).toEqual([]);
