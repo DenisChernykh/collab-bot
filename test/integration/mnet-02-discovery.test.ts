@@ -5,6 +5,25 @@ import type { ConnectionView, ConnectionAction } from "../../src/modules/connect
 
 function proof(view: ConnectionView) { if (view.kind === "unavailable") throw new Error("unavailable fixture"); return { generation: view.session.state.generation, revision: view.session.revision }; }
 
+it.each([
+	["joint_projects", 2],
+	["professional_communication", 3],
+	["city_and_events", 4],
+	[null, 2],
+] as const)("applies search purpose %s without changing the profile", async (purpose, expectedId) => {
+	await withFreshMigratedDatabase({ prefix: "mfp-purpose-", clock: connectionClock }, async ({ boundary }) => {
+		await seedConnectionPerson(boundary, 1, { openTo: ["joint_projects"] });
+		await seedConnectionPerson(boundary, 2, { openTo: ["joint_projects"] });
+		await seedConnectionPerson(boundary, 3, { openTo: ["professional_communication"] });
+		await seedConnectionPerson(boundary, 4, { openTo: ["city_and_events"] });
+		const { api } = connectionsFor(boundary);
+		const initial = await api.view("1");
+		const result = await api.act("1", { kind: "set_filter", field: "openTo", value: purpose }, proof(initial));
+		expect(result).toMatchObject({ kind: "search", person: { profileId: connectionProfileId(expectedId) } });
+		expect((await api.view("1"))).toMatchObject({ profile: { openTo: ["joint_projects"] } });
+	});
+});
+
 it("discovers completed MFM people by default with optional filters, never implicit intent matching", async () => {
 	await withFreshMigratedDatabase({ prefix: "mnet-search-", clock: connectionClock }, async ({ boundary }) => {
 		for (const id of [1, 2, 3]) await seedConnectionPerson(boundary, id, { eventStatus: id === 2 ? "volunteer" : "participant", openTo: [id === 3 ? "professional_communication" : "joint_projects"] });

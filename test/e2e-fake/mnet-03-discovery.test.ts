@@ -35,11 +35,13 @@ it.each(["ru", "en"] as const)("offers default and persistent discovery in the a
 		expect(String(fixture.fake.lastMessage()?.text)).toContain("Synthetic 2");
 		expect(String(fixture.fake.lastMessage()?.text)).not.toContain("private_person");
 		await choose(1, t("Сфера", "Field")); await choose(1, t("💻 IT и технологии", "💻 IT and technology"));
-		await choose(1, t("Специализация", "Specialization")); await choose(1, t("AI / нейросети", "AI / neural networks"));
 		await fixture.runtime.shutdown(); fixture = await createFakeBotRuntime({ databasePath, mfmFeatureEnabled: true, clock: connectionClock, fake: fixture.fake });
 		await message(1, "/start");
 		expect(String(fixture.fake.lastMessage()?.text)).toContain("Synthetic 2");
-		await choose(1, t("К чему открыт", "Open to")); await choose(1, t("🤝 Для совместного проекта", "🤝 For a joint project"));
+		await choose(1, t("← Назад", "← Back"));
+		await choose(1, t("🔎 Найти людей", "🔎 Find people"));
+		expect(String(fixture.fake.lastMessage()?.text)).toContain(t("Для чего хотите познакомиться?", "Why would you like to connect?"));
+		await choose(1, t("🤝 Для совместного проекта", "🤝 For a joint project"));
 		expect(String(fixture.fake.lastMessage()?.text)).toContain(t("Пока никого", "No people"));
 		await choose(1, t("Сбросить фильтры", "Reset filters"));
 		expect(String(fixture.fake.lastMessage()?.text)).toContain("Synthetic 2");
