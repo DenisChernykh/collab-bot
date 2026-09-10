@@ -50,6 +50,7 @@
 | AP — Automatic Telegram profile | `completed` | 3 | Профиль создаётся при /start, доступные данные берутся из Telegram, участие требует дозаполнения |
 | CF3 — Production cutover | `completed` | 4 | Данные перенесены, production webhook включён, hosted journey подтверждён и operations handoff закрыт с явным recovery boundary |
 | MFMR — MFM hosted release | `completed` | 1 | Authorized staging-first MFM release on the existing production bot |
+| MNET — MFM discovery and introductions | `in_progress` | 10 | Private profile discovery, introduction requests and authorized reset |
 
 ```text
 P0-01 → P0-02
@@ -2047,3 +2048,84 @@ User instruction «Задеплой» separately authorizes deployment of the co
 - **Deployment refinement:** staging's first normal-code deployment revealed that Cloudflare retained `RESET_AUTH_TOKEN` and `RESET_OPERATION_ID` from the historical maintenance upload even though the prior active rollback version had neither binding. Normal code exposes no reset route. Use `--keep-vars=false` with the complete inspected environment vars and explicit MFMtrue, then remove only the residual `RESET_AUTH_TOKEN` from the verified schema15 normal-code version; verify script identity unchanged and exact final bindings. Telegram secrets remain intact. This corrects deployment metadata only, with no runtime/source change, data reset or extra review cycle.
 
 - **Completion evidence:** Commit SHA: `SELF`. Released the unchanged MFM-09 application candidate to staging then production. Final staging version b4d79bda-d848-4dcd-935b-34fc2d5a82f0/deployment efb70d02-1b5d-40b8-abcb-1a80191dbaf5; production version c4a99757-2f2a-468e-be76-b42ad5999a86/deployment68a85c0f-a391-479a-b716-e3e0c757653b; both100%. Both hosted primaries migrated13→15, export22tables/0rows with independently recomputed per-table and overall digest760b36d30518cf718134d2ae3ab8ae0ea46b2b2723c5edb1653d4a3b7b92314d. Production shared-column row preservation checked against its immediately preceding13/17tables/0rows export. Protected export verifies migration history/FKs; health/ready/identity/showcase pass, all outbox/receipts empty, no reset bindings/routes, exact four secrets, MFMtrue/importfalse. Production alarmnull, PITR present, exact unchanged webhook/max_connections1/allowed_updates, pending0/no last error. Original webhook secret verified by a rejected invalid payload (400 vs unauthenticated401), before DO dispatch, without a Telegram message. All330 automated checks and independent review above apply to the unchanged source. Private operator phases: preflight, dry-run, deploy, staging normalize-staging, remove-reset-secret, verify, usage and archive; Wrangler deploy uses --strict --keep-vars=false --var MFM_FEATURE_ENABLED:true, staging-only additive operations secret file. Cleanup removes only RESET_AUTH_TOKEN through the exact Worker secrets API; metadata proves script unchanged. The first staging metadata check failed on inherited reset bindings and passed after this single metadata correction. No code fix, extra review cycle, reset/import/restore/webhook mutation, billing/resource expansion or push. Billing subscriptions inspection denied by existing OAuth(code10000); Workers settings standard and bounded last24h usage available (before production32/staging23; afterward production45/staging29 requests, errors0), so no newly verified invoice/Free-plan claim. Staging protected preflight/getWebhookInfo limited by intentionally removed CF2 local credentials; replaced only staging OPERATIONS_TOKEN in an owner0700/0600 handoff and verified protected post-deploy identity/state. Production credentials unchanged. Final six-file documentation diff inspected; git diff --check and exact-secret scan PASS. Changed files: IMPLEMENTATION_PLAN.md, README.md, docs/CF2_STAGING_RUNBOOK.md, docs/CF3_PRODUCTION_RUNBOOK.md, docs/TECHNICAL_DESIGN.md, docs/MFM_RELEASE_RUNBOOK.md. Full release/rollback boundaries and immutable version evidence are in docs/MFM_RELEASE_RUNBOOK.md.
+
+## 12. MNET — MFM discovery and introductions (2026-09-10)
+
+User approved the proposed private-bot journey and then requested database clearing. This stage implements that journey within the existing bot and runs the explicitly confirmed all-project reset, matching the six MFM-08 targets. New feature deployment, Git push, webhook changes and Telegram test messages are not authorized by this stage. Reset maintenance deployment is confined to the reset unit's explicitly authorized targets and restores the previously active feature runtime afterward.
+
+Shared unit contract: read AGENTS.md, PRD §23/§22, TD MFM discovery contract, this entire stage/card, predecessor evidence and nearest source/test/toolchain contracts. Before each unit verify branch/HEAD/status, origin/main and unique predecessor Task-ID; Node>=24.18.0<25, pnpm>=11.15.1<12. Exactly one unit in_progress, <=12 source/test files per unit, focused failing runtime tests before implementation. Preserve classic business meanings, private identity, transaction/receipt/outbox guarantees, same bot/DB and RU/EN. Do not change dependencies, historical migrations, unrelated files, billing, Git remotes or production outside the exact reset unit. Stop for unresolved product conflict, unsafe/unproven acceptance, incompatible toolchain or unauthorized mutation. Each unit records exact files/commands/results/review/deviations, Commit SHA SELF, one Task-ID commit and a clean tree.
+
+| Unit | Status | Dependencies | Scope and observable result |
+|---|---|---|---|
+| MNET-00 | completed | MFMR-01 | Approved product/technical contract and executable cards |
+| MNET-01A | pending | MNET-00 | Adapt integration fixture head checks for additive migrations |
+| MNET-01B | pending | MNET-01A | Preserving schema16, transfer25 and Cloudflare coverage |
+| MNET-02 | pending | MNET-01B | Discovery consent/filter/session application and repository |
+| MNET-03 | pending | MNET-02 | Usable RU/EN discovery in the actual bot |
+| MNET-04 | pending | MNET-03 | Atomic introduction requests, decisions and private contacts |
+| MNET-05 | pending | MNET-04 | Full RU/EN introduction journey, notifications and deep links |
+| MNET-06 | pending | MNET-05 | Recovery/workerd gates, independent critical review and docs |
+| MNET-07 | pending | MNET-06 | Rehearse a separately authorized second reset without losing prior audit |
+| MNET-08 | pending | MNET-07 | Execute clarified exact reset, restore runtime, close evidence |
+
+All cards include the shared contract's Read first, Do not touch, Invariants and Stop conditions above.
+
+### MNET-00 — Define the approved networking contract
+- **Scope:** docs/PRD.md, docs/TECHNICAL_DESIGN.md, IMPLEMENTATION_PLAN.md only.
+- **Verification:** policy/source reconciliation, git diff --check and final diff review. No runtime test needed.
+- **Exit:** approved proposal represented explicitly; one local commit, clean tree.
+
+### MNET-01A — Preserve fixture expectations across additive schema upgrades
+- **Scope:** one test-support canonical migration-ID list and existing integration head-count expectations (<=12 files); no runtime changes or changed business assertions.
+- **Verification:** focused affected integration suites, typecheck, git diff --check.
+- **Exit:** existing schema15 tests pass and later additive migrations need no unrelated expectation edits.
+
+### MNET-01B — Add preserving connection schema
+- **Scope:** migration16, manifest, transfer allowlist/version, focused populated-upgrade/constraints/transfer test and affected Cloudflare/table-count expectations.
+- **Tests first:** populated schema15 preserves MFM and classic IDs/data, consent absent/hidden, unordered-pair/status/FK constraints and transfer roundtrip.
+- **Verification:** focused upgrade/transfer/Cloudflare schema tests, pnpm check, Cloudflare typecheck/manifest, git diff --check.
+- **Exit:** schema16/25tables works in Node/workerd, no live migration.
+
+### MNET-02 — Implement discovery decisions and persistence
+- **Scope:** connections public boundaries, domain/contracts/repository/application/composition and focused integration tests; register architecture boundary.
+- **Tests first:** hidden by default/explicit consent, no self/classic/incomplete/blocked results, optional filters/open_to behavior, stable pages and durable actor/version-checked sessions.
+- **Verification:** focused tests, typecheck, architecture, lint, git diff --check.
+- **Exit:** service returns only authorized published profile views with persistent search state.
+
+### MNET-03 — Mount usable discovery in the bot
+- **Scope:** RU/EN discovery presentation, shared profile rendering exports, MFM/runtime integration and fake journey tests.
+- **Tests first:** two completed users opt in and discover each other; filter/back/reset/restart; classic/incomplete/private-chat guards.
+- **Verification:** focused fake tests, pnpm check, all fake journeys, Cloudflare typecheck, git diff --check.
+- **Exit:** real runtime composition offers working Find people/My profile before request implementation.
+
+### MNET-04 — Implement atomic introductions and contact rules
+- **Scope:** application/repository request operations, localized durable notifications, exact n_ delivery URL allowlist and focused tests.
+- **Tests first:** draft/confirm, unordered-pair duplication/replay, recipient decisions/sender withdrawal, accepted-only contact, hidden/blocked checks and forced transactional rollback with outbox.
+- **Verification:** focused integration/unit suites, typecheck, architecture, lint, git diff --check.
+- **Exit:** complete business journey with durable private delivery intents and no classic model changes.
+
+### MNET-05 — Mount the introduction journey
+- **Scope:** RU/EN request/card/list/compose/decision/contact UI, n_ start routing, actual runtime tests.
+- **Tests first:** complete RU/EN request/accept/decline/withdraw, incoming/sent/accepted lists, direct-link authorization, old callback/replay, no channel sends.
+- **Verification:** focused fake tests, pnpm check, all fake journeys, Cloudflare typecheck, git diff --check.
+- **Exit:** completed profile leads all the way to consensual Telegram contact in the existing bot.
+
+### MNET-06 — Verify recovery and close the code candidate
+- **Scope:** focused workerd/restart/privacy/feature-off regressions, one independent blocker-limited review, at most one consolidated correction wave; README/TD/plan reconciliation.
+- **Verification:** pnpm check; all fake/workerd suites; db:verify; Cloudflare types/typecheck/manifest; final diff and secret-pattern checks.
+- **Exit:** full local/fake/workerd evidence, independent review complete; no live feature-release claim.
+
+### MNET-07 — Rehearse the separately requested reset
+- **Scope:** confirmed scope is all six MFM-08 project databases after fresh inventory; preserve prior reset audit while allowing a distinct authorized operation, plus focused Node/workerd operator tests and reset runbook. No deletion through bot startup or migration.
+- **Tests first:** distinct second operation after new rows, exact retry, prior audit preservation, wrong target/digest/quiescence, rollback and schema16 handling.
+- **Verification:** focused reset Node/workerd, applicable aggregate gates, diff review and concrete exact-target operator preflight plan.
+- **Exit:** reset safe and reviewable for confirmed scope; no live deletion yet.
+- **Stop:** unexpected project target or ownership ambiguity; never delete another project.
+
+### MNET-08 — Execute the exact authorized reset and finish
+- **Scope:** only confirmed reset targets; preflight versions/counts/digests/quiescence, bounded maintenance, one deletion per target, exact retry verification, same-runtime restoration and final handoff.
+- **Verification:** before/after authorized tables, retained schema/audit, zero effects/active maintenance endpoints after restoration, final diff and exact-secret scan.
+- **Exit:** requested reset verified, code-stage evidence complete, one local commit and clean tree.
+- **Stop:** missing exact scope, live identity/schema drift, delivery ambiguity or any operation beyond reset authorization. Feature release is separate.
+
+- **MNET-00 evidence:** Commit SHA: `SELF`. Clean main at MFMR-01 eef7c1bb43169d2fcc9f1ed6f057d9a7d9f8087f, unique predecessor; read-only origin/main c4c5bfbc5f9696b63e0acf89182990017c2237fb; Node24.18.0/pnpm11.15.1. Existing profile/FSM/router, application decisions, outbox payload constraints, migration/transfer/reset ownership inspected. User-approved proposal now explicitly extends MFM-F04; no automatic channel publication or existing-profile opt-in. User clarified reset scope: all project databases as in the prior operation, covering the six MFM-08 targets after fresh inventory. Changed exactly docs/PRD.md, docs/TECHNICAL_DESIGN.md, IMPLEMENTATION_PLAN.md. Documentation-only: final diff reviewed, git diff --check PASS; no runtime or live changes.
