@@ -29,7 +29,7 @@ export class ConnectionService {
 					}
 					case "reset_filters": next.filters = {}; next.offset = 0; next.screen = "search"; break;
 					case "set_filter": {
-						if (action.value !== null && !filterChoices(action.field, next.filters).includes(action.value)) return this.render(actor, session, "invalid");
+						if (action.value !== null && !filterChoices(action.field).includes(action.value)) return this.render(actor, session, "invalid");
 						const raw = { ...next.filters, [action.field]: action.value ?? undefined };
 						next.filters = parseConnectionState({ ...next, filters: raw }).filters; next.offset = 0; next.screen = "search"; break;
 					}

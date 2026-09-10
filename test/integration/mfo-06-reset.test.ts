@@ -3,7 +3,7 @@ import { inspectProjectReset, resetProjectDatabase } from "../../src/platform/da
 import { connectionClock, connectionProfileId, seedConnectionPerson } from "../support/connections-fixture.js";
 import { withFreshMigratedDatabase } from "../support/migrated-database.js";
 
-it("performs the authorized third schema17 reset once after both prior audits", async () => {
+it("performs the authorized third reset once after both prior audits", async () => {
 	await withFreshMigratedDatabase({ prefix: "mfo-reset-", clock: connectionClock }, async ({ boundary }) => {
 		const target = "local:synthetic-mfo";
 		const request = async (operationId: string) => ({ operationId, target, expectedDigest: (await inspectProjectReset(boundary, target)).digest });
@@ -16,7 +16,7 @@ it("performs the authorized third schema17 reset once after both prior audits", 
 		const before = await inspectProjectReset(boundary, target);
 		const third = { operationId: "mfo-2026-reset", target, expectedDigest: before.digest };
 		const result = await resetProjectDatabase(boundary, target, third);
-		expect(result).toMatchObject({ operationId: "mfo-2026-reset", target, removedRows: before.rowCount, schemaVersion: 17 });
+		expect(result).toMatchObject({ operationId: "mfo-2026-reset", target, removedRows: before.rowCount, schemaVersion: 18 });
 		expect(await inspectProjectReset(boundary, target)).toMatchObject({ rowCount: 0, schemaDigest: before.schemaDigest, completedOperations: expect.arrayContaining([expect.objectContaining({ operationId: "mfm-2026-reset" }), expect.objectContaining({ operationId: "mnet-2026-reset" }), result]) });
 		expect(await boundary.query("SELECT * FROM mfm_profile_contacts")).toEqual([]);
 		await seedConnectionPerson(boundary, 2);

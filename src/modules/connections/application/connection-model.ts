@@ -47,7 +47,7 @@ export type ConnectionAction =
 	| { kind: "set_filter"; field: FilterField; value: string | null }
 	| { kind: "reset_filters" };
 
-export function filterChoices(field: FilterField, filters: SearchFilters): readonly string[] {
+export function filterChoices(field: FilterField): readonly string[] {
 	switch (field) {
 		case "eventStatus": return MFM_EVENT_STATUSES;
 		case "sphere": return MFM_SPHERES;

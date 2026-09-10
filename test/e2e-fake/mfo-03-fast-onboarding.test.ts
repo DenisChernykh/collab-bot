@@ -39,6 +39,8 @@ it("runs RU/EN fast onboarding through both native pickers, external link and sk
 			await reachSpheres();
 			await choose({ kind: "choice", value: sphere });
 			await choose({ kind: "next" });
+			await choose({ kind: "choice", value: "joint_projects" });
+			await choose({ kind: "next" });
 		};
 		const shared = (requestId: number, chatId: number, title?: string, sharedUsername?: string, privateChat = true): Update => {
 			const message = privateMessageForUser(++sequence, userId, undefined, username, firstName);
@@ -61,8 +63,10 @@ it("runs RU/EN fast onboarding through both native pickers, external link and sk
 		expect(String(latestCall()?.payload.text)).toContain("Выбрано: 3 из 3");
 		expect((latestCall()?.payload.reply_markup as { inline_keyboard: { text: string }[][] }).inline_keyboard.flat()).toContainEqual(expect.objectContaining({ text: "Продолжить →" }));
 		await ru.choose({ kind: "choice", value: "entrepreneurship" });
-		expect(String(latestCall()?.payload.text)).toContain("максимум 3");
+		expect(String(latestCall()?.payload.text)).toContain("Можно выбрать до 3");
 		await ru.choose({ kind: "choice", value: "creative_industries" });
+		await ru.choose({ kind: "next" });
+		for (const goal of ["joint_projects", "professional_communication", "city_and_events"]) await ru.choose({ kind: "choice", value: goal });
 		await ru.choose({ kind: "next" });
 		const ruPicker = picker();
 		expect(ruPicker.channel.request_id).not.toBe(ruPicker.group.request_id);
@@ -72,9 +76,11 @@ it("runs RU/EN fast onboarding through both native pickers, external link and sk
 		expect(await ruRepository.getSession("101")).toEqual(beforeWrong);
 		const selected = ru.shared(ruPicker.channel.request_id, -100101, "Alice media", "alice_media");
 		await runtime.bot.handleUpdate(selected);
-		expect(fake.calls.slice(-2).map((call) => String(call.payload.text))).toEqual([expect.stringContaining("Alice media"), expect.stringContaining("Профиль готов 🎉")]);
+		expect(fake.calls.slice(-2).map((call) => String(call.payload.text))).toEqual([expect.stringContaining("Alice media"), expect.stringContaining("Расскажите о себе")]);
+		await ru.text("Создаю полезные проекты и медиа.");
+		expect(String(fake.lastMessage()?.text)).toContain("Профиль готов 🎉");
 		expect(fake.lastMessage()?.reply_markup?.inline_keyboard?.flat()).toContainEqual(expect.objectContaining({ text: "Найти людей →" }));
-		expect(fake.lastMessage()?.reply_markup?.inline_keyboard?.flat()).toContainEqual(expect.objectContaining({ text: "✨ Дополнить профиль" }));
+		expect(fake.lastMessage()?.reply_markup?.inline_keyboard?.flat().some((button) => button.text.includes("Дополнить"))).toBe(false);
 		const afterSelectionCalls = fake.calls.length;
 		await runtime.bot.handleUpdate(selected);
 		expect(fake.calls).toHaveLength(afterSelectionCalls);
@@ -96,6 +102,7 @@ it("runs RU/EN fast onboarding through both native pickers, external link and sk
 		expect(await new SqliteOnboardingRepository(runtime.boundary).getSession("102")).toEqual(beforeGroup);
 		const groupDelivery = en.shared(enPicker.group.request_id, -100102, "Public group", "public_group");
 		await runtime.bot.handleUpdate(groupDelivery);
+		await en.choose({ kind: "next" });
 		expect(String(fake.lastMessage()?.text)).toContain("Profile ready 🎉");
 		expect(await runtime.boundary.query("SELECT kind FROM mfm_profile_contacts WHERE profile_id = (SELECT id FROM profiles WHERE telegram_user_id = '102')")).toEqual([{ kind: "telegram_group" }]);
 
@@ -108,17 +115,20 @@ it("runs RU/EN fast onboarding through both native pickers, external link and sk
 		expect(String(fake.lastMessage()?.text)).toContain("public link");
 		expect((fake.lastMessage()?.reply_markup as { remove_keyboard?: boolean } | undefined)?.remove_keyboard).toBe(true);
 		await external.text("https://example.com/contact");
+		await external.text("Available for useful business projects.");
 		expect(await runtime.boundary.query("SELECT kind, url FROM mfm_profile_contacts WHERE profile_id = (SELECT id FROM profiles WHERE telegram_user_id = '103')")).toEqual([{ kind: "external", url: "https://example.com/contact" }]);
 
 		const skip = actor(104, "ru", "Пропуск");
 		await skip.reachContact("sports_health");
 		await skip.text("Пропустить");
+		await skip.choose({ kind: "next" });
 		expect(String(fake.lastMessage()?.text)).toContain("Профиль готов 🎉");
 		expect(await runtime.boundary.query("SELECT * FROM mfm_profile_contacts WHERE profile_id = (SELECT id FROM profiles WHERE telegram_user_id = '104')")).toEqual([]);
 
 		const personal = actor(105, "en", "Personal Telegram");
 		await personal.reachContact("civic_engagement");
 		await personal.text("✈️ Use my Telegram");
+		await personal.choose({ kind: "next" });
 		expect(await runtime.boundary.query("SELECT kind FROM mfm_profile_contacts WHERE profile_id = (SELECT id FROM profiles WHERE telegram_user_id = '105')")).toEqual([{ kind: "telegram_user" }]);
 	} finally {
 		await runtime.shutdown();

@@ -33,7 +33,7 @@ export function renderConnection(view: ConnectionView, introductions = false): {
 	} else if (view.kind === "filter") {
 		const field = view.session.state.filterField ?? "eventStatus";
 		text = t(field === "openTo" ? PURPOSE : FIELDS[field]);
-		for (const value of filterChoices(field, filters)) {
+		for (const value of filterChoices(field)) {
 			const label = (field === "openTo" ? PURPOSE_LABELS : LABELS[field])[value]!;
 			button(`${filters[field] === value ? "✅ " : ""}${t(label)}`, { kind: "set_filter", field, value });
 		}

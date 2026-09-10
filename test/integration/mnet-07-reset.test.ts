@@ -28,11 +28,11 @@ it("rehearses a distinct second reset, keeps both audits and protects new data f
 		expect(await boundary.query("SELECT name FROM sqlite_master WHERE name = 'mnet_reset_audit'")).toEqual([]);
 		await boundary.execute("DROP TRIGGER mnet_reset_failure");
 		const result = await resetProjectDatabase(boundary, target, second);
-		expect(result).toMatchObject({ operationId: second.operationId, removedRows: before.rowCount, schemaVersion: 17 });
+		expect(result).toMatchObject({ operationId: second.operationId, removedRows: before.rowCount, schemaVersion: 18 });
 		expect(await inspect()).toMatchObject({ rowCount: 0, schemaDigest: before.schemaDigest });
 		expect(await boundary.query("SELECT * FROM mfm_reset_audit")).toEqual(firstAudit);
 		expect(await boundary.query("SELECT result_json FROM mnet_reset_audit")).toEqual([{ result_json: JSON.stringify(result) }]);
-		expect(await boundary.query("SELECT count(*) AS count FROM __app_migrations")).toEqual([{ count: 17 }]);
+		expect(await boundary.query("SELECT count(*) AS count FROM __app_migrations")).toEqual([{ count: 18 }]);
 		await seedConnectionPerson(boundary, 3);
 		const later = await inspect();
 		expect(await resetProjectDatabase(boundary, target, first)).toEqual(firstResult);

@@ -44,11 +44,14 @@ it.each(["ru", "en"] as const)("finishes and edits one durable MFM profile in %s
 		await act({ kind: "language", value: language === "ru" ? "en" : "ru" });
 		expect(view).toMatchObject({ session: { state: { step: "spheres" } } });
 		await act({ kind: "next" });
+		await act({ kind: "choice", value: "joint_projects" });
+		await act({ kind: "next" });
 		const before = view;
 		await act({ kind: "choice", value: "telegram_user" });
-		expect(view).toMatchObject({ kind: "home", profile: { displayName: "Lucas", spheres: ["digital_it"], specializations: [], openTo: [], contact: { kind: "telegram_user" } } });
+		await act({ kind: "next" });
+		expect(view).toMatchObject({ kind: "home", profile: { displayName: "Lucas", spheres: ["digital_it"], openTo: ["joint_projects"], about: null, contact: { kind: "telegram_user" } } });
 		if (before.kind !== "step") throw new Error("expected step");
-		expect(await service.act("1", { kind: "next" }, { generation: before.session.state.generation, revision: before.session.revision })).toMatchObject({ kind: "home" });
+		expect(await service.act("1", { kind: "next" }, { generation: before.session.state.generation, revision: before.session.revision })).toMatchObject({ kind: "home", notice: "stale" });
 		expect(await boundary.query("SELECT * FROM mfm_profiles")).toHaveLength(1);
 		expect(await repository.getSession("1")).toBeUndefined();
 		service = create(false);

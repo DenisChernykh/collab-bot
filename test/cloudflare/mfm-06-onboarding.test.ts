@@ -17,7 +17,7 @@ it("runs the composed MFM journey atomically in workerd and transfers profiles, 
 	// Drain the response so it cannot keep the object alive during eviction.
 	const schema = await stub.fetch("https://local/__cf1/schema");
 	expect(schema.status).toBe(200);
-	expect(await schema.json()).toMatchObject({ migrationCount: 17, integrity: "ok" });
+	expect(await schema.json()).toMatchObject({ migrationCount: 18, integrity: "ok" });
 	await runInDurableObject(stub, async (_instance, state) => {
 		const database = new CloudflareSqlDatabase(state.storage);
 		const repository = new SqliteOnboardingRepository(database);
@@ -46,6 +46,8 @@ it("runs the composed MFM journey atomically in workerd and transfers profiles, 
 			await act(id, { kind: "choice", value: "specialist" }); await act(id, { kind: "city" });
 			if (id === 43) continue; // The transfer must retain an unfinished draft too.
 			await act(id, { kind: "choice", value: "digital_it" }); await act(id, { kind: "next" });
+			await act(id, { kind: "choice", value: "joint_projects" }); await act(id, { kind: "next" });
+			await act(id, { kind: "next" });
 			const update = await event(id, { kind: "next" });
 			if (id === 41) {
 				const before = await repository.getSession(String(id));
@@ -59,7 +61,7 @@ it("runs the composed MFM journey atomically in workerd and transfers profiles, 
 				await database.execute("DROP TRIGGER mfm_failure");
 			}
 			await bot.handleUpdate(update); await bot.handleUpdate(update);
-			expect(await repository.getProfile(String(id))).toMatchObject({ revision: 1, spheres: ["digital_it"], specializations: [], openTo: [] });
+			expect(await repository.getProfile(String(id))).toMatchObject({ revision: 1, spheres: ["digital_it"], openTo: ["joint_projects"], about: null });
 		}
 		// The shortened flow keeps both profiles discoverable without optional detail rows.
 		expect(await database.query("SELECT m.profile_id FROM mfm_profiles m JOIN mfm_profile_spheres s ON s.profile_id = m.profile_id WHERE m.event_status = ? AND s.sphere = ?", ["participant", "digital_it"])).toHaveLength(2);
@@ -67,13 +69,13 @@ it("runs the composed MFM journey atomically in workerd and transfers profiles, 
 	await evictDurableObject(stub);
 	const manifest = await runInDurableObject(stub, (_instance, state) => exportStateTransferManifest(new CloudflareSqlDatabase(state.storage)));
 	const target = env.COLLABORATION_STATE.get(env.COLLABORATION_STATE.idFromName("mfm-06-transfer"));
-	expect(await (await target.fetch("https://local/__cf1/schema")).json()).toMatchObject({ migrationCount: 17, integrity: "ok" });
+	expect(await (await target.fetch("https://local/__cf1/schema")).json()).toMatchObject({ migrationCount: 18, integrity: "ok" });
 	await runInDurableObject(target, async (_instance, state) => {
 		const database = new CloudflareSqlDatabase(state.storage);
 		await importStateTransferManifest(database, manifest);
 		const repository = new SqliteOnboardingRepository(database);
 		expect(await repository.getUser("41")).toMatchObject({ language: "ru", experience: "mfm" });
-		expect(await repository.getProfile("42")).toMatchObject({ specializations: [], openTo: [] });
+		expect(await repository.getProfile("42")).toMatchObject({ openTo: ["joint_projects"], about: null });
 		expect(await repository.getSession("43")).toMatchObject({ state: { step: "spheres", draft: { eventStatus: "participant", displayName: "Example Person" } } });
 		expect((await exportStateTransferManifest(database)).digest).toBe(manifest.digest);
 		expect(await database.query("PRAGMA foreign_key_check")).toEqual([]);
