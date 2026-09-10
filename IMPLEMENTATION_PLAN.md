@@ -2188,8 +2188,9 @@ Shared unit contract: read AGENTS.md, PRD §24/§23/§22, TD fast-onboarding con
 | MFO-01B | completed | MFO-01A | Synchronize workerd schema/transfer expectations with schema17 |
 | MFO-02 | completed | MFO-01B | Short durable onboarding transitions and legacy-session compatibility |
 | MFO-03 | completed | MFO-02 | RU/EN Telegram screens, native contact pickers and ready CTA |
-| MFO-04 | pending | MFO-03 | Optional enrichment, search-purpose entry and accepted-contact preference |
-| MFO-05 | pending | MFO-04 | Workerd/recovery gates, independent review and release documentation |
+| MFO-04A | completed | MFO-03 | Optional specialization editing after completion |
+| MFO-04B | pending | MFO-04A | Search-purpose entry and accepted-contact preference |
+| MFO-05 | pending | MFO-04B | Workerd/recovery gates, independent review and release documentation |
 | MFO-06 | pending | MFO-05 | Rehearse exact third primary-only reset without live deletion |
 | MFO-07 | pending | MFO-06 | Deploy staging then production and clear/verify each current primary |
 
@@ -2224,11 +2225,17 @@ All cards include the shared contract's Read first, Do not touch, Invariants and
 - **Verification:** focused fake/unit tests, `pnpm check`, all fake journeys, Cloudflare typecheck and diff review.
 - **Exit:** a new user reaches Profile ready and Find people through the real composition in 30–60-second-scale interactions.
 
-### MFO-04 — Keep enrichment and accepted contact useful
-- **Scope:** optional specialization/open_to edit entry, purpose-first search presentation/session, explicit-contact accepted resolver and focused integration/fake tests.
-- **Tests first:** empty optional fields remain complete; old values survive required edits; enrichment save/cancel; purpose/any search; preferred channel/group/external contact only after acceptance with existing identity fallback when omitted.
+### MFO-04A — Keep optional specializations editable
+- **Scope:** one optional specialization edit entry after completion plus focused integration/fake tests; do not add an open_to profile editor.
+- **Tests first:** empty optional fields remain complete; old values seed the screen; zero-to-three selection, save/cancel/stale replay and contact/open_to preservation.
+- **Verification:** focused suites, `pnpm check`, fake journey and diff review.
+- **Exit:** removed specializations remain available later without changing completion or blocking access.
+
+### MFO-04B — Ask search purpose and resolve accepted contact
+- **Scope:** purpose-first search presentation/session, explicit-contact accepted resolver and focused integration/fake tests.
+- **Tests first:** purpose/any search without profile mutation; preferred channel/group/external contact only after acceptance with existing current-identity fallback when omitted.
 - **Verification:** focused suites, `pnpm check`, fake journey and privacy regression review.
-- **Exit:** removed required questions remain available later without pre-acceptance disclosure.
+- **Exit:** search purpose remains session-only and no preferred contact appears before acceptance.
 
 ### MFO-05 — Close the release candidate
 - **Scope:** schema16 upgrade, restart/eviction/rollback/replay/feature-off workerd coverage, README/TD/runbook reconciliation and one blocker-limited independent review with at most one correction wave.
@@ -2257,3 +2264,5 @@ All cards include the shared contract's Read first, Do not touch, Invariants and
 - **MFO-02 evidence:** Commit SHA: `SELF`. Clean preflight main at unique MFO-01B `499b9d5`; read-only remote check confirmed unchanged `origin/main` `c4c5bfbc5f9696b63e0acf89182990017c2237fb`; Node24.18.0/pnpm11.15.1. Focused RED proved empty optional arrays were rejected and the old event step still entered intro. GREEN expresses event→name→type→location→spheres→contact, one-to-three sphere bounds, personal/external/native contact completion, initial skip versus editing preservation, and atomic profile/contact/session completion. Legacy intro/specializations/open_to and language return steps normalize on parse without losing draft values. Tests cover two languages, resume/back/stale replay, fourth-choice refusal, existing optional/contact preservation and injected delete rollback. Focused unit/integration PASS18; `pnpm check` PASS (108 unit/120 integration/47 runtime plus lint/architecture/typecheck/build; only two existing generated declaration warnings); final eleven-file source/test diff and `git diff --check` PASS. Telegram contact controls remain MFO-03; no dependency, migration, live, Telegram or remote-Git changes.
 
 - **MFO-03 evidence:** Commit SHA: `SELF`. Clean preflight main at unique MFO-02 `1253347`; read-only remote check confirmed unchanged `origin/main` `c4c5bfbc5f9696b63e0acf89182990017c2237fb`; compatible Node/pnpm unchanged. Focused RED captured the old name label/counter/CTA and missing reply-keyboard pickers. GREEN mounts RU/EN auto-advance screens, exact name/counter/continue copy, deterministic revision-bound and distinct channel/group `request_chat` IDs, accepted-only contact explanation, personal/external/skip controls, public-username fallback prompt and reply-keyboard removal. The MFM router owns `chat_shared` before classic only in private chats; wrong IDs and group delivery cannot mutate the session, and one accepted replay emits no duplicate save or acknowledgement. Completion renders `Профиль готов 🎉`/`Profile ready 🎉` with primary Find people CTA. The real composed fake journey covers username/no-username, channel/group, missing username→external URL, personal Telegram, skip, fourth-choice refusal, CTA navigation and replay. Focused unit/e2e PASS4; all fake PASS49; `pnpm check` PASS108 unit/120 integration/47 runtime plus lint/architecture/typecheck/build; Cloudflare typecheck and final ten-file diff-check PASS. No dependency, migration, live Telegram, deployment or remote-Git changes.
+
+- **MFO-04A evidence:** Commit SHA: `SELF`. Clean preflight main at unique MFO-03 `7d50776abf86568a9a8f40cad46f49b489bdd119`; read-only origin/main remained `c4c5bfbc5f9696b63e0acf89182990017c2237fb`; Node24.18.0/pnpm11.15.1. The supplied specification was re-read after the scope audit: only post-completion specialization editing is required, while the preferred search-purpose variant replaces a new open_to editor. Focused RED showed the absent service entry and RU/EN buttons. GREEN adds one optional, zero-to-three specialization screen seeded from the completed record, with pagination, save, back/cancel and revision-bound replay; required fields, completed_at, open_to and preferred contact survive, including with the feature flag off. Ready and profile screens expose the secondary action without blocking Find people. Focused integration/fake PASS4; `pnpm check` PASS108 unit/121 integration/47 runtime plus lint/architecture/typecheck/build; all fake PASS51; final diff-check PASS. Ten source/test files plus three contract/plan files changed; no migration, dependency, live Telegram, deployment or remote-Git mutation.

@@ -1,5 +1,5 @@
 import type { Experience, Language, MfmContact, MfmDraft, MfmProfileInput, MfmProfileRecord } from "../../domain/mfm-profile.js";
-export const ONBOARDING_STEPS = ["language", "affiliation", "event_status", "display_name", "profile_type", "location", "spheres", "contact"] as const;
+export const ONBOARDING_STEPS = ["language", "affiliation", "event_status", "display_name", "profile_type", "location", "spheres", "contact", "enrichment_specializations"] as const;
 export const LEGACY_ONBOARDING_STEPS = ["intro", "specializations", "open_to"] as const;
 export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
 export interface OnboardingState {

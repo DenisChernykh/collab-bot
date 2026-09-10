@@ -114,6 +114,7 @@ export function createMfmTelegramFeature(options: MfmTelegramOptions) {
 				const edit = view.kind === "step" && next.kind === "step" && view.session.state.step === next.session.state.step && (parsed.action.kind === "choice" || parsed.action.kind === "page");
 				await show(ctx, next, edit);
 			} else if (data === "mfm:edit") await show(ctx, await service.edit(userId));
+			else if (data === "mfm:improve") await show(ctx, await service.improveSpecializations(userId));
 			else await show(ctx, view);
 			return true;
 		},

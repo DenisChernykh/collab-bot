@@ -8,6 +8,7 @@ import { tr, type Translation } from "../../../profiles/index.js";
 
 const READY: Translation = ["Профиль готов 🎉\n\nТеперь можно найти участников по интересам и предложить знакомство.", "Profile ready 🎉\n\nYou can now find people by interests and propose an introduction."];
 const FIND_PEOPLE: Translation = ["Найти людей →", "Find people →"];
+const IMPROVE_PROFILE: Translation = ["✨ Дополнить профиль", "✨ Improve profile"];
 
 export function createConnectionTelegramFeature(service: ConnectionService, introductions?: IntroductionService) {
 	async function show(ctx: Context, view: ConnectionView, prefix = ""): Promise<void> {
@@ -31,7 +32,9 @@ export function createConnectionTelegramFeature(service: ConnectionService, intr
 		async showReady(ctx: Context, userId: string): Promise<void> {
 			const view = await service.view(userId);
 			if (view.kind === "unavailable") { await show(ctx, view); return; }
-			const keyboard = new InlineKeyboard().text(tr(FIND_PEOPLE, view.language), encodeConnectionCallback({ kind: "open", screen: "search" }, view.session));
+			const keyboard = new InlineKeyboard()
+				.text(tr(FIND_PEOPLE, view.language), encodeConnectionCallback({ kind: "open", screen: "search" }, view.session)).row()
+				.text(tr(IMPROVE_PROFILE, view.language), "mfm:improve");
 			await ctx.reply(tr(READY, view.language), { reply_markup: keyboard });
 		},
 		async routeStart(ctx: Context, userId: string, parameter: string): Promise<boolean> {

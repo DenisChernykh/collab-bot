@@ -74,6 +74,7 @@ it("runs RU/EN fast onboarding through both native pickers, external link and sk
 		await runtime.bot.handleUpdate(selected);
 		expect(fake.calls.slice(-2).map((call) => String(call.payload.text))).toEqual([expect.stringContaining("Alice media"), expect.stringContaining("Профиль готов 🎉")]);
 		expect(fake.lastMessage()?.reply_markup?.inline_keyboard?.flat()).toContainEqual(expect.objectContaining({ text: "Найти людей →" }));
+		expect(fake.lastMessage()?.reply_markup?.inline_keyboard?.flat()).toContainEqual(expect.objectContaining({ text: "✨ Дополнить профиль" }));
 		const afterSelectionCalls = fake.calls.length;
 		await runtime.bot.handleUpdate(selected);
 		expect(fake.calls).toHaveLength(afterSelectionCalls);

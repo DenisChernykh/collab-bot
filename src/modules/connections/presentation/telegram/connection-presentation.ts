@@ -20,6 +20,7 @@ export function renderConnection(view: ConnectionView, introductions = false): {
 			if (view.visible) button(["Скрыть из поиска", "Hide from search"], { kind: "visibility", value: false });
 			else if (view.festivalEnabled) button(["👁 Показывать в поиске", "👁 Show in search"], { kind: "visibility", value: true });
 			keyboard.text(t(["✏️ Изменить профиль", "✏️ Edit profile"]), "mfm:edit").row();
+			keyboard.text(t(["✨ Дополнить профиль", "✨ Improve profile"]), "mfm:improve").row();
 		}
 		if (view.festivalEnabled) button(["🔎 Найти людей", "🔎 Find people"], { kind: "open", screen: "search" });
 		if (introductions) keyboard.text(t(["🤝 Мои знакомства", "🤝 My introductions"]), encodeIntroductionCallback({ kind: "list", tab: "incoming" }, view.session)).row();

@@ -2,7 +2,7 @@ import type { Clock } from "../../../shared/application/ports/clock.js";
 import type { CryptoCapabilities } from "../../../shared/application/ports/crypto.js";
 import type { TransactionRunner } from "../../../shared/application/ports/transaction-runner.js";
 import { DomainValidationError } from "../../../shared/domain/value-objects/enums.js";
-import { MFM_EVENT_STATUSES, MFM_PROFILE_TYPES, MFM_SPHERES, mfmText, mfmValue, specializationSphere, validateMfmContact, validateMfmProfile, type Language, type MfmContact, type MfmDraft, type MfmProfileRecord } from "../domain/mfm-profile.js";
+import { MFM_EVENT_STATUSES, MFM_PROFILE_TYPES, MFM_SPECIALIZATIONS, MFM_SPHERES, mfmText, mfmValue, specializationSphere, validateMfmContact, validateMfmProfile, type Language, type MfmContact, type MfmDraft, type MfmProfileRecord } from "../domain/mfm-profile.js";
 import type { ExperienceUser, OnboardingRepository, OnboardingSession, OnboardingState, OnboardingStep } from "./ports/onboarding-repository.js";
 import type { ProfileService } from "./profile-service.js";
 
@@ -91,6 +91,18 @@ export class OnboardingService {
 		});
 	}
 
+	async improveSpecializations(userId: string): Promise<OnboardingView> {
+		return this.transactions.withTransaction(async () => {
+			const user = await this.repository.getUser(userId);
+			if (user?.status !== "active" || user.experience !== "mfm") return this.view(userId);
+			if (await this.repository.getSession(userId) !== undefined) return this.view(userId);
+			const profile = await this.repository.getProfile(userId);
+			if (profile === undefined) return this.view(userId);
+			await this.save(userId, { ...this.initial("enrichment_specializations", profile), editing: true });
+			return this.view(userId);
+		});
+	}
+
 	async cancel(userId: string): Promise<OnboardingView> {
 		return this.transactions.withTransaction(async () => {
 			const user = await this.repository.getUser(userId);
@@ -157,6 +169,10 @@ export class OnboardingService {
 			return this.view(userId);
 		}
 		if (action.kind === "back") {
+			if (state.step === "enrichment_specializations") {
+				await this.repository.deleteSession(userId);
+				return this.view(userId);
+			}
 			const minimum = state.editing ? FLOW.indexOf("display_name") : 0;
 			const index = FLOW.indexOf(state.step);
 			if (index <= minimum) return this.view(userId);
@@ -165,7 +181,14 @@ export class OnboardingService {
 			await this.save(userId, { ...state, step, page: 0 });
 			return this.view(userId);
 		}
+		if (action.kind === "page" && state.step === "enrichment_specializations") {
+			const page = Number(action.value);
+			if (!Number.isSafeInteger(page) || page < 0 || page >= (state.draft.spheres?.length ?? 0)) return this.view(userId, "invalid");
+			await this.save(userId, { ...state, page });
+			return this.view(userId);
+		}
 		if (action.kind === "next") {
+			if (state.step === "enrichment_specializations") return this.complete(userId, state, undefined);
 			if (state.step === "spheres") return (state.draft.spheres?.length ?? 0) === 0 ? this.view(userId, "required") : this.move(userId, state, "contact", state.draft);
 			if (state.step === "contact") return this.complete(userId, state, state.editing ? undefined : null);
 			return this.view(userId, "invalid");
@@ -196,6 +219,12 @@ export class OnboardingService {
 			const specializations = (draft.specializations ?? []).filter((x) => spheres.includes(specializationSphere(x)));
 			removed = specializations.length !== (draft.specializations?.length ?? 0);
 			draft = { ...draft, spheres, specializations };
+		} else if (state.step === "enrichment_specializations") {
+			const available = (draft.spheres ?? []).flatMap((sphere) => MFM_SPECIALIZATIONS[sphere]);
+			const key = mfmValue(value, available);
+			const specializations = toggleChoice(draft.specializations ?? [], key);
+			if (specializations === undefined) return this.view(userId, "limit");
+			draft = { ...draft, specializations };
 		} else return this.view(userId, "invalid");
 		await this.save(userId, { ...state, draft });
 		return this.view(userId, removed ? "removed" : undefined);

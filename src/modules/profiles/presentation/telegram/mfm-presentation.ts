@@ -1,7 +1,7 @@
 import { InlineKeyboard, Keyboard } from "grammy";
 import type { OnboardingAction, OnboardingView } from "../../application/onboarding-service.js";
 import type { OnboardingSession } from "../../application/ports/onboarding-repository.js";
-import { MFM_EVENT_STATUSES, MFM_PROFILE_TYPES, MFM_SPHERES, type Language, type MfmProfileInput } from "../../domain/mfm-profile.js";
+import { MFM_EVENT_STATUSES, MFM_PROFILE_TYPES, MFM_SPECIALIZATIONS, MFM_SPHERES, type Language, type MfmProfileInput } from "../../domain/mfm-profile.js";
 import { COPY, EVENT_LABELS, TYPE_LABELS, SPHERE_LABELS, SPECIALIZATION_LABELS, OPEN_TO_LABELS, NOTICES, tr, type Translation } from "./mfm-copy.js";
 import { encodeMfmCallback } from "./mfm-callback-codec.js";
 
@@ -14,11 +14,11 @@ export function renderOnboarding(view: OnboardingView): { text: string; keyboard
 	const keyboard = new InlineKeyboard();
 	const prefix = view.notice === undefined ? "" : `${t(NOTICES[view.notice])}\n\n`;
 	if (view.notice === "paused" && view.kind === "step") return { text: t(NOTICES.paused), keyboard: keyboard.text(t(COPY.resume), "mfm:resume") };
-	if (view.kind === "home") return { text: prefix + ownProfile(view.profile, language, view.festivalEnabled), keyboard: keyboard.text(t(COPY.edit), "mfm:edit") };
+	if (view.kind === "home") return { text: prefix + ownProfile(view.profile, language, view.festivalEnabled), keyboard: keyboard.text(t(COPY.edit), "mfm:edit").row().text(t(COPY.improve), "mfm:improve") };
 	if (view.kind === "classic") throw new Error("classic rendering belongs to the existing router");
 	if (view.kind !== "step") return { text: prefix + t(COPY[view.kind]), keyboard };
 	const { session } = view;
-	const { step, draft, editing } = session.state;
+	const { step, draft, editing, page } = session.state;
 	if (step === "contact") {
 		const requestIds = contactRequestIds(session);
 		const contactKeyboard = new Keyboard()
@@ -30,7 +30,7 @@ export function renderOnboarding(view: OnboardingView): { text: string; keyboard
 			.resized().oneTime();
 		return { text: prefix + t(COPY.contact), keyboard: contactKeyboard };
 	}
-	let text: string = t(COPY[step]);
+	let text: string = t(step === "enrichment_specializations" ? COPY.specializations : COPY[step]);
 	const button = (label: string, action: OnboardingAction) => keyboard.text(label, encodeMfmCallback(action, session)).row();
 	const choice = (value: string, label: Translation, selected = false) => button(`${selected ? "✅ " : ""}${t(label)}`, { kind: "choice", value });
 	switch (step) {
@@ -56,6 +56,19 @@ export function renderOnboarding(view: OnboardingView): { text: string; keyboard
 			for (const key of MFM_SPHERES) choice(key, SPHERE_LABELS[key], draft.spheres?.includes(key));
 			button(t(COPY.continue), { kind: "next" });
 			break;
+		case "enrichment_specializations": {
+			const spheres = draft.spheres ?? [];
+			const sphere = spheres[Math.min(page, Math.max(0, spheres.length - 1))];
+			text += `\n\n${t(COPY.selected)}: ${draft.specializations?.length ?? 0} ${t(COPY.ofThree)}`;
+			if (sphere !== undefined) {
+				text += `\n${t(SPHERE_LABELS[sphere])} (${page + 1}/${spheres.length})`;
+				for (const key of MFM_SPECIALIZATIONS[sphere]) choice(key, SPECIALIZATION_LABELS[key], draft.specializations?.includes(key));
+			}
+			if (page > 0) button("◀", { kind: "page", value: String(page - 1) });
+			if (page + 1 < spheres.length) button("▶", { kind: "page", value: String(page + 1) });
+			button(t(COPY.save), { kind: "next" });
+			break;
+		}
 	}
 	if (step !== "language" && step !== "affiliation") {
 		if (!(editing && step === "display_name")) button(t(COPY.back), { kind: "back" });

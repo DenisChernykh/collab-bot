@@ -28,6 +28,7 @@ export const COPY = {
 	later: ["Продолжить позже", "Continue later"], cancel: ["Отменить изменения", "Cancel changes"],
 	keep: ["✓ Оставить как есть", "✓ Keep as is"], city: ["📍 Екатеринбург, Россия", "📍 Yekaterinburg, Russia"],
 	create: ["👤 Создать профиль", "👤 Create profile"], edit: ["✏️ Изменить профиль", "✏️ Edit profile"],
+	improve: ["✨ Дополнить профиль", "✨ Improve profile"], save: ["Сохранить", "Save"],
 	resume: ["▶️ Продолжить профиль", "▶️ Continue profile"], resumePrompt: ["Продолжим заполнение профиля? Ваши данные сохранены.", "Continue your profile? Your progress is saved."],
 	paused: ["Заполнение профиля сейчас приостановлено. Ваши данные сохранены.", "Profile setup is currently paused. Your progress is saved."],
 	needs_start: ["Откройте бот командой /start.\nOpen the bot with /start.", "Open the bot with /start."],
