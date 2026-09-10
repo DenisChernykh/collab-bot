@@ -3,7 +3,12 @@ import { webCryptoCapabilities } from "../crypto/capabilities.js";
 import { CLOUDFLARE_MIGRATION_MANIFEST } from "./cloudflare-migration-manifest.js";
 import { stateTransferTableNames } from "./state-transfer.js";
 
-const RESET_AUDITS = { "mfm-2026-reset": "mfm_reset_audit", "mnet-2026-reset": "mnet_reset_audit" } as const;
+const RESET_AUDITS = { "mfm-2026-reset": "mfm_reset_audit", "mnet-2026-reset": "mnet_reset_audit", "mfo-2026-reset": "mfo_reset_audit" } as const;
+const RESET_PREREQUISITES: Readonly<Record<keyof typeof RESET_AUDITS, readonly (keyof typeof RESET_AUDITS)[]>> = {
+	"mfm-2026-reset": [],
+	"mnet-2026-reset": ["mfm-2026-reset"],
+	"mfo-2026-reset": ["mfm-2026-reset", "mnet-2026-reset"],
+};
 const AUDITS: readonly string[] = Object.values(RESET_AUDITS);
 const AUXILIARY = ["cf1_preflight_cache", "cf1_state_import_audit", "cf1_runtime_probe"] as const;
 const DELETE_GUARDS = ["product_events_append_only_delete", "operator_actions_append_only_delete"] as const;
@@ -66,9 +71,9 @@ export async function resetProjectDatabase(database: SqlDatabase, actualTarget: 
 	if (!Object.hasOwn(RESET_AUDITS, request.operationId)) throw new Error("reset_unsupported_operation");
 	const audit = RESET_AUDITS[request.operationId as keyof typeof RESET_AUDITS];
 	return database.withTransaction(async () => {
-		if (request.operationId === "mnet-2026-reset") {
-			const previous = await readResetResult(database, RESET_AUDITS["mfm-2026-reset"]);
-			if (previous === undefined || previous.operationId !== "mfm-2026-reset") throw new Error("reset_previous_operation_missing");
+		for (const previousOperation of RESET_PREREQUISITES[request.operationId as keyof typeof RESET_AUDITS]) {
+			const previous = await readResetResult(database, RESET_AUDITS[previousOperation]);
+			if (previous === undefined || previous.operationId !== previousOperation) throw new Error("reset_previous_operation_missing");
 			if (previous.target !== actualTarget) throw new Error("reset_target_mismatch");
 		}
 		const recorded = await readResetResult(database, audit);
