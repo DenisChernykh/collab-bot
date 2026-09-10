@@ -9,6 +9,12 @@ export interface SearchFilters {
 export const FILTER_FIELDS = ["eventStatus", "sphere", "specialization", "openTo"] as const;
 export type FilterField = typeof FILTER_FIELDS[number];
 export type ConnectionScreen = "home" | "profile" | "search" | "filter";
+export type IntroductionTab = "incoming" | "sent" | "accepted";
+export type IntroductionNavigation =
+	| { screen: "compose"; targetProfileId: string; message?: string }
+	| { screen: "confirm"; targetProfileId: string; message: string }
+	| { screen: "request"; token: string }
+	| { screen: "list"; tab: IntroductionTab; offset: number };
 export interface ConnectionState {
 	version: 1;
 	generation: string;
@@ -16,6 +22,7 @@ export interface ConnectionState {
 	filters: SearchFilters;
 	offset: number;
 	filterField?: FilterField;
+	introduction?: IntroductionNavigation;
 }
 export interface ConnectionSession { state: ConnectionState; revision: number; updatedAt: number }
 export interface ConnectionProof { generation: string; revision: number }
@@ -60,5 +67,19 @@ export function parseConnectionState(value: unknown): ConnectionState {
 	if (raw.specialization !== undefined) filters.specialization = mfmValue(raw.specialization, filterChoices("specialization", filters)) as MfmSpecialization;
 	if (raw.openTo !== undefined) filters.openTo = mfmValue(raw.openTo, MFM_OPEN_TO);
 	return { version: 1, generation: v.generation, screen: mfmValue(v.screen, ["home", "profile", "search", "filter"]), filters, offset: v.offset as number,
-		...(v.filterField === undefined ? {} : { filterField: mfmValue(v.filterField, FILTER_FIELDS) }) };
+		...(v.filterField === undefined ? {} : { filterField: mfmValue(v.filterField, FILTER_FIELDS) }),
+		...(v.introduction === undefined ? {} : { introduction: parseIntroductionNavigation(v.introduction) }) };
+}
+
+function parseIntroductionNavigation(value: unknown): IntroductionNavigation {
+	if (typeof value !== "object" || value === null) throw new Error("invalid introduction navigation");
+	const v = value as Record<string, unknown>;
+	if (v.screen === "list" && Number.isSafeInteger(v.offset) && (v.offset as number) >= 0) return { screen: "list", tab: mfmValue(v.tab, ["incoming", "sent", "accepted"]), offset: v.offset as number };
+	if (v.screen === "request" && typeof v.token === "string" && /^[A-Za-z0-9_-]{22}$/.test(v.token)) return { screen: "request", token: v.token };
+	if ((v.screen === "compose" || v.screen === "confirm") && typeof v.targetProfileId === "string" && /^[a-f0-9-]{36}$/.test(v.targetProfileId)) {
+		if (v.message !== undefined && (typeof v.message !== "string" || v.message.trim() !== v.message || v.message.length < 10 || v.message.length > 500 || v.message.includes("\u0000"))) throw new Error("invalid introduction draft");
+		if (v.screen === "confirm") { if (typeof v.message !== "string") throw new Error("missing introduction message"); return { screen: "confirm", targetProfileId: v.targetProfileId, message: v.message }; }
+		return { screen: "compose", targetProfileId: v.targetProfileId, ...(v.message === undefined ? {} : { message: v.message as string }) };
+	}
+	throw new Error("unsupported introduction navigation");
 }

@@ -115,7 +115,7 @@ function isSafeInlineKeyboard(value: unknown, method: "send" | "edit"): value is
 }
 
 function isAllowedTelegramUrl(value: string): boolean {
-	return /^https:\/\/t\.me\/[A-Za-z0-9_]{1,64}\?start=c_[A-Za-z0-9_-]{22}$/.test(value) ||
+	return /^https:\/\/t\.me\/[A-Za-z0-9_]{1,64}\?start=[cn]_[A-Za-z0-9_-]{22}$/.test(value) ||
 		/^https:\/\/t\.me\/[A-Za-z0-9_]{5,32}$/.test(value) ||
 		/^tg:\/\/user\?id=[1-9][0-9]{0,19}$/.test(value);
 }

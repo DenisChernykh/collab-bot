@@ -18,6 +18,7 @@ export class ConnectionService {
 			if (action !== undefined) {
 				if (!this.enabled && !(action.kind === "visibility" && !action.value) && !(action.kind === "open" && action.screen !== "search")) return this.render(actor, session, "disabled");
 				const next = { ...session.state, filters: { ...session.state.filters } };
+				delete next.introduction;
 				switch (action.kind) {
 					case "open": next.screen = action.screen; break;
 					case "visibility": await this.repository.setVisible(actor.profile.profileId, action.value, this.clock.now().getTime()); break;
