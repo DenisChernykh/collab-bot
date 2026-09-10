@@ -26,8 +26,9 @@ export function renderOnboarding(view: OnboardingView): { text: string; keyboard
 			.requestChat(t(COPY.contactChannel), requestIds.channel, { chat_is_channel: true, request_title: true, request_username: true }).row()
 			.requestChat(t(COPY.contactGroup), requestIds.group, { chat_is_channel: false, request_title: true, request_username: true }).row()
 			.text(t(COPY.contactOther)).text(t(COPY.skip)).row()
-			.text(t(COPY.back)).text(t(editing ? COPY.cancel : COPY.later))
-			.resized().oneTime();
+			.text(t(COPY.back));
+		if (editing) contactKeyboard.text(t(COPY.cancel));
+		contactKeyboard.resized().oneTime();
 		return { text: prefix + t(COPY.contact), keyboard: contactKeyboard };
 	}
 	let text: string = t(step === "enrichment_specializations" ? COPY.specializations : COPY[step]);
@@ -44,7 +45,10 @@ export function renderOnboarding(view: OnboardingView): { text: string; keyboard
 			break;
 		case "event_status": for (const key of MFM_EVENT_STATUSES) choice(key, EVENT_LABELS[key], draft.eventStatus === key); break;
 		case "display_name":
-			if (draft.displayName !== undefined) { text += `\n\n${draft.displayName}`; button(t(COPY.keep), { kind: "keep" }); }
+			if (draft.displayName !== undefined) {
+				text += "\n\n" + t(COPY.displayNameCurrent) + ": " + draft.displayName + "\n\n" + t(COPY.displayNameHint);
+				button(t(COPY.keep), { kind: "keep" });
+			}
 			break;
 		case "profile_type": for (const key of MFM_PROFILE_TYPES) choice(key, TYPE_LABELS[key], draft.profileType === key); break;
 		case "location":
@@ -54,7 +58,7 @@ export function renderOnboarding(view: OnboardingView): { text: string; keyboard
 		case "spheres":
 			text += `\n\n${t(COPY.selected)}: ${draft.spheres?.length ?? 0} ${t(COPY.ofThree)}`;
 			for (const key of MFM_SPHERES) choice(key, SPHERE_LABELS[key], draft.spheres?.includes(key));
-			button(t(COPY.continue), { kind: "next" });
+			if ((draft.spheres?.length ?? 0) > 0) button(t(COPY.continue), { kind: "next" });
 			break;
 		case "enrichment_specializations": {
 			const spheres = draft.spheres ?? [];
@@ -72,7 +76,7 @@ export function renderOnboarding(view: OnboardingView): { text: string; keyboard
 	}
 	if (step !== "language" && step !== "affiliation") {
 		if (!(editing && step === "display_name")) button(t(COPY.back), { kind: "back" });
-		button(t(editing ? COPY.cancel : COPY.later), { kind: "cancel" });
+		if (editing) button(t(COPY.cancel), { kind: "cancel" });
 	}
 	return { text: prefix + text, keyboard };
 }

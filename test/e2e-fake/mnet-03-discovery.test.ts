@@ -6,7 +6,7 @@ import { createFakeBotRuntime } from "../support/fake-bot-runtime.js";
 import { callbackForUser, privateMessageForUser } from "../support/fake-telegram.js";
 import { connectionClock, seedConnectionPerson } from "../support/connections-fixture.js";
 
-it.each(["ru", "en"] as const)("offers consent and persistent discovery in the actual %s bot", async language => {
+it.each(["ru", "en"] as const)("offers default and persistent discovery in the actual %s bot", async language => {
 	const directory = await mkdtemp(join(tmpdir(), "mnet-bot-"));
 	const databasePath = join(directory, "app.sqlite");
 	let fixture = await createFakeBotRuntime({ databasePath, mfmFeatureEnabled: true, clock: connectionClock });
@@ -27,15 +27,14 @@ it.each(["ru", "en"] as const)("offers consent and persistent discovery in the a
 		await seedConnectionPerson(fixture.runtime.boundary, 2, { language, openTo: ["city_and_events"] });
 		for (const id of [1, 2]) {
 			await message(id, "/start"); await choose(id, t("👤 Мой профиль", "👤 My profile"));
-			expect(String(fixture.fake.lastMessage()?.text)).toContain(t("скрыт", "hidden"));
-			await choose(id, t("👁 Показывать в поиске", "👁 Show in search"));
+			expect(String(fixture.fake.lastMessage()?.text)).toContain(t("виден", "visible"));
 		}
 		await message(1, "/start"); await choose(1, t("🔎 Найти людей", "🔎 Find people"));
 		expect(String(fixture.fake.lastMessage()?.text)).toContain(t("Для чего хотите познакомиться?", "Why would you like to connect?"));
 		await choose(1, t("Любая цель", "Any purpose"));
 		expect(String(fixture.fake.lastMessage()?.text)).toContain("Synthetic 2");
 		expect(String(fixture.fake.lastMessage()?.text)).not.toContain("private_person");
-		await choose(1, t("Сфера", "Field")); await choose(1, t("💻 Цифровизация и IT", "💻 Digitalization and IT"));
+		await choose(1, t("Сфера", "Field")); await choose(1, t("💻 IT и технологии", "💻 IT and technology"));
 		await choose(1, t("Специализация", "Specialization")); await choose(1, t("AI / нейросети", "AI / neural networks"));
 		await fixture.runtime.shutdown(); fixture = await createFakeBotRuntime({ databasePath, mfmFeatureEnabled: true, clock: connectionClock, fake: fixture.fake });
 		await message(1, "/start");

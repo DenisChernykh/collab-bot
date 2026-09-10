@@ -32,19 +32,19 @@ export class SqliteConnectionRepository implements ConnectionRepository {
 	}
 	async isVisible(profileId: string): Promise<boolean> {
 		const [row] = await this.database.query<{ visible: number }>("SELECT visible FROM mfm_discovery_settings WHERE profile_id = ?", [profileId]);
-		return row?.visible === 1;
+		return row === undefined || row.visible === 1;
 	}
 	async setVisible(profileId: string, visible: boolean, now: number): Promise<void> {
 		await this.database.execute("INSERT INTO mfm_discovery_settings VALUES (?, ?, 1, ?) ON CONFLICT(profile_id) DO UPDATE SET visible = excluded.visible, revision = mfm_discovery_settings.revision + 1, updated_at = excluded.updated_at", [profileId, visible ? 1 : 0, now]);
 	}
 	async search(excludeProfileId: string, filters: SearchFilters, offset: number): Promise<{ person: PublicPerson | null; hasNext: boolean }> {
-		const conditions = [ELIGIBLE, "d.visible = 1", "p.id <> ?"];
+		const conditions = [ELIGIBLE, "COALESCE(d.visible, 1) = 1", "p.id <> ?"];
 		const values: SqlValue[] = [excludeProfileId];
 		if (filters.eventStatus !== undefined) { conditions.push("m.event_status = ?"); values.push(filters.eventStatus); }
 		if (filters.sphere !== undefined) { conditions.push("EXISTS (SELECT 1 FROM mfm_profile_spheres s WHERE s.profile_id = p.id AND s.sphere = ?)"); values.push(filters.sphere); }
 		if (filters.specialization !== undefined) { conditions.push("EXISTS (SELECT 1 FROM mfm_profile_specializations s WHERE s.profile_id = p.id AND s.specialization = ?)"); values.push(filters.specialization); }
 		if (filters.openTo !== undefined) { conditions.push("EXISTS (SELECT 1 FROM mfm_profile_open_to o WHERE o.profile_id = p.id AND o.intent = ?)"); values.push(filters.openTo); }
-		const rows = await this.database.query<{ profile_id: string }>(`SELECT m.profile_id FROM mfm_profiles m JOIN profiles p ON p.id = m.profile_id JOIN telegram_users u ON u.telegram_user_id = p.telegram_user_id JOIN mfm_discovery_settings d ON d.profile_id = p.id WHERE ${conditions.join(" AND ")} ORDER BY m.completed_at, p.id LIMIT 2 OFFSET ?`, [...values, offset]);
+		const rows = await this.database.query<{ profile_id: string }>(`SELECT m.profile_id FROM mfm_profiles m JOIN profiles p ON p.id = m.profile_id JOIN telegram_users u ON u.telegram_user_id = p.telegram_user_id LEFT JOIN mfm_discovery_settings d ON d.profile_id = p.id WHERE ${conditions.join(" AND ")} ORDER BY m.completed_at, p.id LIMIT 2 OFFSET ?`, [...values, offset]);
 		return { person: rows[0] === undefined ? null : (await this.getPerson(rows[0].profile_id)) ?? null, hasNext: rows.length > 1 };
 	}
 }

@@ -7,20 +7,22 @@ export const COPY = {
 	affiliation: ["Вы связаны с МФМ-2026? 🌍", "Are you connected with MFM-2026? 🌍"],
 	event_status: ["Как вы участвуете в МФМ-2026?", "How are you taking part in MFM-2026?"],
 	intro: ["Создайте короткий профиль 👋\n\nТак другие участники смогут найти вас по интересам и понять, чем вы можете быть полезны друг другу. Это займёт пару минут.", "Create a short profile 👋\n\nHelp other participants discover your interests and see how you could help each other. It takes a couple of minutes."],
-	display_name: ["Как вас представить другим?\n\nУкажите имя или название проекта.", "How should we introduce you?\n\nEnter your name or project name."],
-	profile_type: ["Кого вы представляете?", "Who do you represent?"],
+	display_name: ["Как вас представить другим?", "How should we introduce you?"],
+	displayNameCurrent: ["Сейчас", "Current"],
+	displayNameHint: ["Если хотите изменить, напишите ниже имя или название проекта.", "To change it, send your name or project name below."],
+	profile_type: ["Кого или что вы представляете?\n\nВыберите основной вариант.", "Who or what do you represent?\n\nChoose the main option."],
 	location: ["Откуда вы?\n\nУкажите город и страну.", "Where are you from?\n\nEnter your city and country."],
-	spheres: ["Выберите вашу профессиональную сферу\n\nМожно выбрать до 3 направлений.", "Choose your professional field\n\nSelect up to 3 fields."],
+	spheres: ["В каких сферах вы работаете или развиваете проекты?\n\nВыберите до 3 направлений.\n\nОни помогут другим участникам находить вас для знакомств и коллабораций.", "What fields do you work in or build projects in?\n\nChoose up to 3 fields.\n\nThey help other participants find you for networking and collaborations."],
 	specializations: ["Уточните специализацию\n\nМожно выбрать до 3 суммарно.", "Choose your specializations\n\nSelect up to 3 in total."],
 	open_to: ["К чему вы открыты?\n\nМожно выбрать несколько вариантов.\n🌆 Прогулки и мероприятия — компания для прогулки, кофе, события или знакомства с Екатеринбургом.", "What are you open to?\n\nYou can select several options.\n🌆 Walks and events — company for a walk, coffee, an event or exploring Yekaterinburg."],
-	contact: ["Как с вами связаться?\n\nКонтакт увидит только человек, чьё знакомство вы приняли. Выберите вариант или отправьте публичную HTTPS-ссылку.", "How can people contact you?\n\nOnly a person whose introduction you accept will see this contact. Choose an option or send a public HTTPS link."],
-	contactTelegram: ["👤 Мой Telegram", "👤 My Telegram"],
-	contactChannel: ["📣 Выбрать публичный канал", "📣 Choose a public channel"],
-	contactGroup: ["👥 Выбрать публичную группу", "👥 Choose a public group"],
-	contactOther: ["🔗 Другая ссылка", "🔗 Another link"],
+	contact: ["Как с вами связаться?\n\nДобавьте Telegram или другую ссылку, чтобы участники могли написать вам после знакомства.", "How can people contact you?\n\nAdd Telegram or another link so participants can message you after connecting."],
+	contactTelegram: ["✈️ Использовать мой Telegram", "✈️ Use my Telegram"],
+	contactChannel: ["📣 Добавить канал", "📣 Add a channel"],
+	contactGroup: ["👥 Добавить группу", "👥 Add a group"],
+	contactOther: ["🔗 Указать другую ссылку", "🔗 Add another link"],
 	contactPublicLink: ["Отправьте публичную ссылку в формате https://… Закрытые ссылки-приглашения не подходят.", "Send a public link in the https://… format. Private invitation links are not supported."],
 	contactStale: ["Этот выбор чата уже неактуален. Используйте кнопки текущего шага.", "This chat selection is out of date. Use the buttons from the current step."],
-	contactSelected: ["Контакт выбран", "Contact selected"],
+	contactSelected: ["✅ Добавлено", "✅ Added"],
 	contactSkipped: ["Контакт пропущен.", "Contact skipped."],
 	contactClosed: ["Выбор контакта закрыт.", "Contact selection closed."],
 	done: ["✅ Готово", "✅ Done"], back: ["← Назад", "← Back"],
@@ -41,7 +43,7 @@ export const COPY = {
 export const NOTICES: Record<OnboardingNotice, Translation> = {
 	stale: ["Эта кнопка уже неактуальна. Продолжите с текущего шага.", "This button is out of date. Continue from the current step."],
 	invalid: ["Проверьте ввод. Категории выбираются кнопками; имя — до 100, город и страна — до 200 символов.", "Check your input. Use buttons for categories; name up to 100 characters, location up to 200."],
-	limit: ["Можно выбрать максимум 3 варианта.", "You can select up to 3 options."],
+	limit: ["Можно выбрать до 3 направлений.", "You can select up to 3 fields."],
 	required: ["Выберите хотя бы один вариант.", "Select at least one option."],
 	removed: ["Специализации удалённой сферы убраны из выбора.", "Specializations from the removed field have been deselected."],
 	saved: ["Профиль сохранён ✅", "Profile saved ✅"],
@@ -51,10 +53,10 @@ export const EVENT_LABELS: Record<MfmProfileInput["eventStatus"], Translation> =
 	participant: ["🌍 Участник МФМ-2026", "🌍 MFM-2026 participant"], citizen_program: ["🏙 Участник программы «Горожане»", "🏙 Citizens programme participant"], volunteer: ["💚 Волонтёр МФМ", "💚 MFM volunteer"],
 };
 export const TYPE_LABELS: Record<MfmProfileInput["profileType"], Translation> = {
-	specialist: ["👤 Себя / специалиста", "👤 Myself / a specialist"], media: ["📣 Блог / медиа / канал", "📣 Blog / media / channel"], project: ["🚀 Проект / команду", "🚀 Project / team"], business: ["🏢 Бизнес / бренд / площадку", "🏢 Business / brand / venue"],
+	specialist: ["👤 Себя / свою экспертизу", "👤 Myself / my expertise"], media: ["📣 Блог / медиа / канал", "📣 Blog / media / channel"], project: ["🚀 Проект / сообщество / команду", "🚀 Project / community / team"], business: ["🏢 Бизнес / бренд / организацию", "🏢 Business / brand / organization"],
 };
 export const SPHERE_LABELS: Record<MfmSphere, Translation> = {
-	public_administration: ["🏛 Государственное управление", "🏛 Public administration"], media: ["📣 Медиа", "📣 Media"], science_education: ["🎓 Наука и образование", "🎓 Science and education"], entrepreneurship: ["💼 Предпринимательство", "💼 Entrepreneurship"], digital_it: ["💻 Цифровизация и IT", "💻 Digitalization and IT"], creative_industries: ["🎨 Креативные индустрии, культура и творчество", "🎨 Creative industries, culture and arts"], civic_engagement: ["🤝 Гражданская активность", "🤝 Civic engagement"], sports_health: ["🏃 Спорт и здоровье", "🏃 Sport and health"],
+	public_administration: ["🏛 Государство и управление", "🏛 Government and public administration"], media: ["📣 Медиа и коммуникации", "📣 Media and communications"], science_education: ["🎓 Наука и образование", "🎓 Science and education"], entrepreneurship: ["💼 Бизнес и предпринимательство", "💼 Business and entrepreneurship"], digital_it: ["💻 IT и технологии", "💻 IT and technology"], creative_industries: ["🎨 Культура и креатив", "🎨 Culture and creative industries"], civic_engagement: ["🤝 Общественные проекты и НКО", "🤝 Community projects and NGOs"], sports_health: ["🏃 Спорт и здоровье", "🏃 Sport and health"],
 };
 export const SPECIALIZATION_LABELS: Record<MfmSpecialization, Translation> = {
 	blogger: ["Блогер / контент-креатор", "Blogger / content creator"], journalism: ["Журналистика", "Journalism"], smm: ["SMM / соцсети", "SMM / social media"], pr: ["PR / коммуникации", "PR / communications"], photo_video: ["Фото / видео", "Photography / video"], producing: ["Продюсирование", "Producing"],

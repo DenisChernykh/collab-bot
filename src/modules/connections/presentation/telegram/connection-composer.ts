@@ -6,7 +6,7 @@ import { renderIntroduction } from "./introduction-presentation.js";
 import { decodeIntroductionCallback } from "./introduction-callback-codec.js";
 import { tr, type Translation } from "../../../profiles/index.js";
 
-const READY: Translation = ["Профиль готов 🎉\n\nТеперь можно найти участников по интересам и предложить знакомство.", "Profile ready 🎉\n\nYou can now find people by interests and propose an introduction."];
+const READY: Translation = ["Профиль готов 🎉\n\nТеперь вы можете находить людей и коллаборации.", "Profile ready 🎉\n\nYou can now find people and collaborations."];
 const FIND_PEOPLE: Translation = ["Найти людей →", "Find people →"];
 const IMPROVE_PROFILE: Translation = ["✨ Дополнить профиль", "✨ Improve profile"];
 

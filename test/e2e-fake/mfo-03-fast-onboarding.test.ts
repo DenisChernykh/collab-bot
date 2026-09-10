@@ -118,7 +118,7 @@ it("runs RU/EN fast onboarding through both native pickers, external link and sk
 
 		const personal = actor(105, "en", "Personal Telegram");
 		await personal.reachContact("civic_engagement");
-		await personal.text("👤 My Telegram");
+		await personal.text("✈️ Use my Telegram");
 		expect(await runtime.boundary.query("SELECT kind FROM mfm_profile_contacts WHERE profile_id = (SELECT id FROM profiles WHERE telegram_user_id = '105')")).toEqual([{ kind: "telegram_user" }]);
 	} finally {
 		await runtime.shutdown();
