@@ -1,0 +1,64 @@
+import { MFM_EVENT_STATUSES, MFM_OPEN_TO, MFM_SPECIALIZATIONS, MFM_SPHERES, mfmValue, type Language, type MfmProfileInput, type MfmSpecialization, type MfmSphere } from "../../profiles/application/index.js";
+
+export interface SearchFilters {
+	eventStatus?: MfmProfileInput["eventStatus"];
+	sphere?: MfmSphere;
+	specialization?: MfmSpecialization;
+	openTo?: MfmProfileInput["openTo"][number];
+}
+export const FILTER_FIELDS = ["eventStatus", "sphere", "specialization", "openTo"] as const;
+export type FilterField = typeof FILTER_FIELDS[number];
+export type ConnectionScreen = "home" | "profile" | "search" | "filter";
+export interface ConnectionState {
+	version: 1;
+	generation: string;
+	screen: ConnectionScreen;
+	filters: SearchFilters;
+	offset: number;
+	filterField?: FilterField;
+}
+export interface ConnectionSession { state: ConnectionState; revision: number; updatedAt: number }
+export interface ConnectionProof { generation: string; revision: number }
+export type PublicPerson = MfmProfileInput & { profileId: string };
+export interface ConnectionActor { userId: string; language: Language; profile: PublicPerson }
+export type ConnectionNotice = "stale" | "invalid" | "disabled";
+export type ConnectionView = { kind: "unavailable" } | {
+	kind: ConnectionScreen;
+	language: Language;
+	festivalEnabled: boolean;
+	visible: boolean;
+	profile: PublicPerson;
+	session: ConnectionSession;
+	person: PublicPerson | null;
+	hasNext: boolean;
+	notice?: ConnectionNotice;
+};
+export type ConnectionAction =
+	| { kind: "open"; screen: "home" | "profile" | "search" }
+	| { kind: "visibility"; value: boolean }
+	| { kind: "page"; delta: -1 | 1 }
+	| { kind: "choose_filter"; field: FilterField }
+	| { kind: "set_filter"; field: FilterField; value: string | null }
+	| { kind: "reset_filters" };
+
+export function filterChoices(field: FilterField, filters: SearchFilters): readonly string[] {
+	switch (field) {
+		case "eventStatus": return MFM_EVENT_STATUSES;
+		case "sphere": return MFM_SPHERES;
+		case "specialization": return filters.sphere === undefined ? [] : MFM_SPECIALIZATIONS[filters.sphere];
+		case "openTo": return MFM_OPEN_TO;
+	}
+}
+export function parseConnectionState(value: unknown): ConnectionState {
+	if (typeof value !== "object" || value === null) throw new Error("invalid connection state");
+	const v = value as Record<string, unknown>;
+	if (v.version !== 1 || typeof v.generation !== "string" || !/^[a-f0-9]{16}$/.test(v.generation) || !Number.isSafeInteger(v.offset) || (v.offset as number) < 0 || typeof v.filters !== "object" || v.filters === null) throw new Error("unsupported connection state");
+	const raw = v.filters as Record<string, unknown>;
+	const filters: SearchFilters = {};
+	if (raw.eventStatus !== undefined) filters.eventStatus = mfmValue(raw.eventStatus, MFM_EVENT_STATUSES);
+	if (raw.sphere !== undefined) filters.sphere = mfmValue(raw.sphere, MFM_SPHERES);
+	if (raw.specialization !== undefined) filters.specialization = mfmValue(raw.specialization, filterChoices("specialization", filters)) as MfmSpecialization;
+	if (raw.openTo !== undefined) filters.openTo = mfmValue(raw.openTo, MFM_OPEN_TO);
+	return { version: 1, generation: v.generation, screen: mfmValue(v.screen, ["home", "profile", "search", "filter"]), filters, offset: v.offset as number,
+		...(v.filterField === undefined ? {} : { filterField: mfmValue(v.filterField, FILTER_FIELDS) }) };
+}

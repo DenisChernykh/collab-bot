@@ -1,6 +1,6 @@
 /* global module */
 /** @type {import("dependency-cruiser").IConfiguration} */
-const FEATURE_MODULES = ["profiles", "collaborations", "marketplace", "applications", "moderation"];
+const FEATURE_MODULES = ["profiles", "collaborations", "marketplace", "applications", "moderation", "connections"];
 
 const crossModuleInternalRules = FEATURE_MODULES.map((moduleName) => ({
 	name: `module-internals-must-not-cross-feature-boundaries-${moduleName}`,
