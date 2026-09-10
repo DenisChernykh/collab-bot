@@ -108,3 +108,20 @@ supersession notice after clearing the retained snapshot. Restore original permi
 No import, PITR restore, polling startup, Telegram test messages or Git push is part of
 the reset. Subsequent MNET feature deployment uses normal `src/worker.ts`, schema16,
 explicit `MFM_FEATURE_ENABLED:true` and the staging-first release verification.
+
+## MNET-08 execution record — 2026-09-10
+
+Operation `mnet-2026-reset` completed on the same exact six inventoried project databases. All product/service rows were zero after inspection, schemas/history/guards remained unchanged, the earlier MFM result was preserved verbatim and the separate MNET result was retained. Every identical retry returned the recorded result.
+
+- **staging:aec0ad2bc6f0c391c815102baec88b8ea4300737cfa45307b3399b1549a70973**, schema 15, 1 → 0 rows. Before `6323e2cf54c623ece51dc1be473c5d00a49f6381b6bfb9e2780e6533f5cfd105`; after `683d45211877fc81631e0e5de74ec942709e9794b04dcb010e2d3516e03dc983`.
+- **staging:483591a3219bd403b7a4f64ff96ab92ca6c7b14fa02b15799dbbe6c6bee74753**, schema 13, 0 → 0 rows. Before `76006bf3d782a45d4840feaebe27c2e40d2e1900c5a1f8bff96aae5a269da075`; after `76006bf3d782a45d4840feaebe27c2e40d2e1900c5a1f8bff96aae5a269da075`.
+- **production:7c3fd71a1bfba2be912e976e9855b4a0193c291fdf26c07437599a75bdf6961e**, schema 15, 45 → 0 rows. Before `dd66a4581ee4223a14d395d5a5c76744b3182143c3854ec33cd3ca0d96d1a805`; after `683d45211877fc81631e0e5de74ec942709e9794b04dcb010e2d3516e03dc983`.
+- **local:/Users/denischernykh/Documents/ChatGPT/collab-bot/.runtime/app.sqlite**, schema 13, 0 → 0 rows. Before `a413c9a309a9a612d6c12fe518c60686d90b7ecc62a0d6dc1cc75d64cfd4caac`; after `a413c9a309a9a612d6c12fe518c60686d90b7ecc62a0d6dc1cc75d64cfd4caac`.
+- **local:/Users/denischernykh/Documents/ChatGPT/collab-bot/.runtime/app.pre-s4-01-20260827T172913.sqlite**, schema 11, 0 → 0 rows. Before `6dc61cf2138cfbc4839e8efe744462ec51c8533e67106bd55fffbab842cac66a`; after `6dc61cf2138cfbc4839e8efe744462ec51c8533e67106bd55fffbab842cac66a`.
+- **local:/Users/denischernykh/Library/Application Support/CollaborationBot/cf3-00-freeze-20260830T033847+0500/authoritative.sqlite**, schema 13, 0 → 0 rows. Before `a413c9a309a9a612d6c12fe518c60686d90b7ecc62a0d6dc1cc75d64cfd4caac`; after `a413c9a309a9a612d6c12fe518c60686d90b7ecc62a0d6dc1cc75d64cfd4caac`.
+
+Staging primary contained only one preflight-cache row. Production primary contained 44 canonical rows (one completed profile and its ingress/history/structured profile data) plus one preflight-cache row. Rehearsal and the three local databases were already empty. The second reset records a distinct operation without erasing the first audit.
+
+Staging maintenance version `130d39d8-dbfc-4e7a-9190-1c91a5014abf` was replaced by the exact prior normal version `b4d79bda-d848-4dcd-935b-34fc2d5a82f0` at100%, deployment `f78194e0-064b-4e79-9f71-2021476ee39c`. Production maintenance version `d604da96-8fd5-4570-8c5f-6a8a8a865529` was replaced by the exact prior normal version `c4a99757-2f2a-468e-be76-b42ad5999a86` at100%, deployment `af245de0-2d30-4781-a389-0bae83b4465d`. Both normal versions returned health `ok`, protected reset route404 and exact four secret bindings with no RESET bindings. Bot/webhook identities, pending0 and max_connections1 were verified during maintenance immediately before restoring. Production alarm remained null. Each deletion followed more than60 seconds of idle maintenance. No webhook change or Telegram test message occurred.
+
+Local integrity/FK checks passed before and after, no DB/WAL/SHM holders were present and the polling LaunchAgent was absent. Original modes600/600/400 and directory permissions were restored. The snapshot's earlier notice was preserved and a separate owner-only MNET notice added. No backup copy, import or PITR restore was made. Full state export was removed from the operation after automatic approval review rejected that private payload transfer; hosted inspections return only counts/hashes/audit metadata. The later release verifies canonical schema16 state through the protected summary endpoint.
