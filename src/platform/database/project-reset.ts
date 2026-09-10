@@ -9,6 +9,9 @@ const DELETE_GUARDS = ["product_events_append_only_delete", "operator_actions_ap
 const TABLES: readonly string[] = [...stateTransferTableNames(), ...AUXILIARY];
 const hash = (value: unknown) => webCryptoCapabilities.hashUtf8(JSON.stringify(value));
 const quote = (value: string) => `"${value.replaceAll('"', '""')}"`;
+export class UnreviewedResetTablesError extends Error {
+	constructor(readonly tableNames: readonly string[]) { super("reset_unreviewed_table"); }
+}
 export interface ResetRequest { readonly operationId: string; readonly target: string; readonly expectedDigest: string }
 export interface ResetInspection {
 	readonly target: string; readonly digest: string; readonly schemaDigest: string; readonly schemaVersion: number;
@@ -24,7 +27,9 @@ export async function inspectProjectReset(database: SqlDatabase, target: string)
 	return database.withTransaction(async () => {
 		const schema = await database.query<{ type: string; name: string; sql: string | null }>("SELECT type, name, sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name");
 		const tableNames = schema.filter((row) => row.type === "table").map((row) => row.name);
-		if (tableNames.some((name) => name !== "__app_migrations" && name !== AUDIT && !TABLES.includes(name))) throw new Error("reset_unreviewed_table");
+		// Cloudflare owns _cf_METADATA (alarm/PITR bookkeeping); never query or delete its rows.
+		const unknown = tableNames.filter((name) => name !== "__app_migrations" && name !== AUDIT && name !== "_cf_METADATA" && !TABLES.includes(name));
+		if (unknown.length > 0) throw new UnreviewedResetTablesError(unknown);
 		const migrations = await database.query<{ id: number; filename: string; checksum: string }>("SELECT id, filename, checksum FROM __app_migrations ORDER BY id");
 		if (migrations.length < 11 || migrations.length > CLOUDFLARE_MIGRATION_MANIFEST.length || migrations.some((m, index) => {
 			const expected = CLOUDFLARE_MIGRATION_MANIFEST[index];

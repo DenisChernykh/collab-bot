@@ -44,7 +44,7 @@ it("refuses unreviewed tables and nonterminal delivery state", async () => {
 		expect(before.quiescent).toBe(false);
 		await expect(resetProjectDatabase(boundary, "local:test", { operationId: "mfm-2026-reset", target: before.target, expectedDigest: before.digest })).rejects.toThrow("reset_delivery_not_quiescent");
 		await boundary.execute("CREATE TABLE unknown_project_data (id INTEGER PRIMARY KEY)");
-		await expect(inspectProjectReset(boundary, "local:test")).rejects.toThrow("reset_unreviewed_table");
+		await expect(inspectProjectReset(boundary, "local:test")).rejects.toMatchObject({ message: "reset_unreviewed_table", tableNames: ["unknown_project_data"] });
 	});
 });
 

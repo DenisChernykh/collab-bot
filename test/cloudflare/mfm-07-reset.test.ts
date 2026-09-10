@@ -19,6 +19,9 @@ it("resets the same DO storage atomically with append-only guards restored and a
 	await stub.fetch("https://local/__cf1/schema");
 	await runInDurableObject(stub, async (_instance, state) => {
 		const database = new CloudflareSqlDatabase(state.storage);
+		await state.storage.setAlarm(Date.now() + 600_000);
+		await state.storage.deleteAlarm();
+		expect(await database.query("SELECT name FROM sqlite_master WHERE name = '_cf_METADATA'")).toHaveLength(1);
 		const runtime = { COLLABORATION_STATE: env.COLLABORATION_STATE, DEPLOYMENT_ENVIRONMENT: "staging", RESET_OPERATION_ID: "mfm-2026-reset" };
 		const helper = new ResetState(state, runtime);
 		await database.execute("INSERT INTO telegram_users (telegram_user_id, display_name, status, created_at, updated_at) VALUES ('1', 'Synthetic', 'active', 1, 1)");
@@ -47,5 +50,7 @@ it("resets the same DO storage atomically with append-only guards restored and a
 		await expect(database.execute("DELETE FROM product_events")).rejects.toThrow("append-only");
 		expect(await (await new ResetState(state, runtime).fetch(request())).json()).toEqual(result);
 		expect(await database.query("SELECT count(*) AS count FROM product_events")).toEqual([{ count: 1 }]);
+		expect(await state.storage.getAlarm()).toBeNull();
+		expect(await database.query("SELECT name FROM sqlite_master WHERE name = '_cf_METADATA'")).toHaveLength(1);
 	});
 });

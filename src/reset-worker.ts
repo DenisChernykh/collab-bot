@@ -3,7 +3,7 @@
  * It does not import the bot, apply migrations, process updates or deliver messages.
  */
 import { CloudflareSqlDatabase } from "./platform/database/cloudflare-sql-database.js";
-import { inspectProjectReset, resetProjectDatabase, type ResetRequest } from "./platform/database/project-reset.js";
+import { inspectProjectReset, resetProjectDatabase, UnreviewedResetTablesError, type ResetRequest } from "./platform/database/project-reset.js";
 import { constantTimeEqual } from "./runtime/cloudflare/webhook.js";
 
 interface ResetEnvironment {
@@ -56,6 +56,7 @@ export class CollaborationBotState implements DurableObject {
 				|| !("target" in input) || typeof input.target !== "string" || !("expectedDigest" in input) || typeof input.expectedDigest !== "string") return json({ error: "reset_invalid_request" }, 400);
 			return json(await resetProjectDatabase(database, target, input as ResetRequest));
 		} catch (error) {
+			if (error instanceof UnreviewedResetTablesError) return json({ error: error.message, tableNames: error.tableNames }, 409);
 			const message = error instanceof Error && /^reset_[a-z_]+$/u.test(error.message) ? error.message : "reset_failed";
 			return json({ error: message }, 409);
 		}
