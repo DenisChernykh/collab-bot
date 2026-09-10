@@ -4,7 +4,7 @@
 - Версия: `1.2`
 - Дата: `2026-09-10`
 - Цель: сохранить работающий Telegram-цикл и перенести его на бесплатный Cloudflare runtime без ослабления durable/transactional гарантий
-- Ограничение: один stage за пользовательскую авторизацию, один локальный commit на unit; deploy и внешние mutations только в явно разрешённых cards CF2/CF3, MFM-08 и MFMR-01; push/PR отдельно
+- Ограничение: один stage за пользовательскую авторизацию, один локальный commit на unit; deploy и внешние mutations только в явно разрешённых cards CF2/CF3, MFM-08, MFMR-01, MNET-08/09 и MFO-07; push/PR отдельно
 
 ## 1. Источники и граница
 
@@ -51,6 +51,7 @@
 | CF3 — Production cutover | `completed` | 4 | Данные перенесены, production webhook включён, hosted journey подтверждён и operations handoff закрыт с явным recovery boundary |
 | MFMR — MFM hosted release | `completed` | 1 | Authorized staging-first MFM release on the existing production bot |
 | MNET — MFM discovery and introductions | `completed` | 12 | Private profile discovery, introduction requests, authorized reset and hosted release |
+| MFO — Fast MFM onboarding | `in_progress` | 8 | Short RU/EN registration, optional accepted-only contact, staging-first release and clean hosted primaries |
 
 ```text
 P0-01 → P0-02
@@ -2173,3 +2174,71 @@ All cards include the shared contract's Read first, Do not touch, Invariants and
 - **MNET-08 completion evidence:** Commit SHA: `SELF`. Preflight main at unique MNET-07A `4be0a9bd095a87433b0055923c41ff5f0f361668`, origin/main unchanged `c4c5bfbc5f9696b63e0acf89182990017c2237fb`, Node24.18.0/pnpm11.15.1. User confirmation covers all six project databases and the later feature release. Fresh Cloudflare namespace/object inventory and local path/holder/integrity inspection matched exactly. Executed only `mnet-2026-reset`: staging primary1→0 (cache only), rehearsal0→0; production primary45→0 (44 canonical rows plus cache); local schemas13/11/13 each0→0. Before each hosted deletion, exact version/namespace/object/prior audit/schema/digest matched after the idle window; receipts/outbox quiescent, alarm absent and Telegram pending0. After each, zero counts, schema equality and both exact audits were verified; identical replay returned the recorded result. Maintenance then restored the exact pre-reset normal versions, healthok, reset404, no RESET bindings and four original secrets; production alarmnull. All target digests and maintenance/restoration versions are recorded in docs/MFM_RESET_RUNBOOK.md. Local modes and earlier notice preserved, new snapshot notice owner-only, integrity/FKs/holders rechecked; polling LaunchAgent absent. Operator requests and results retained owner-only outside Git with no full exports or credentials in output. Required runtime351-test gates/reviews remain valid on unchanged code. Final diff/diff-check/exact-secret scan PASS. Changed files: docs/MFM_RESET_RUNBOOK.md, IMPLEMENTATION_PLAN.md. No feature release, Git push, webhook mutation, Telegram test message, import or restore of data in08.
 
 - **MNET-09 completion evidence:** Commit SHA: `SELF`. Clean preflight main at unique MNET-08 `083a72b91ac2dd96a595fb49be5565cd4e0f19f6`; origin/main unchanged `c4c5bfbc5f9696b63e0acf89182990017c2237fb`; Node24.18.0/pnpm11.15.1. Application source/migrations/dependencies/config exactly match reviewed MNET-07A `4be0a9bd095a87433b0055923c41ff5f0f361668`; only reset evidence changed. Both inspected dry-runs PASS, identical893.86KiB/165.45KiB gzip normal bundle with no reset implementation. Deployed staging then production, waiting for complete staging verification. Both primary schema15→16 migrations passed history/FK checks and protected summary25/0rows; all table counts/digests and canonical digest match independently generated empty schema16 in-memory SQLite. Readiness ready, bot identity verified, showcase capability usable, quiescent/null alarm, exact namespaces/four existing secrets, MFMtrue/importfalse, reset404 and unauthenticated summary/export401. Production webhook URL/allowed updates/max_connections1 unchanged, pending0/no error. Staging webhook was checked through maintenance before restoration; final readiness verifies hosted bot identity, no separate post-release staging webhook-info read. Final versions/deployments,351 passing test gates and independent reviews, authorization/privacy refinement and schema16-only shutdown are recorded in docs/MNET_RELEASE_RUNBOOK.md. No further runtime changes or repeated unchanged test gates were needed in09. Final documentation diff/diff-check/exact-secret scan PASS. Changed files: IMPLEMENTATION_PLAN.md, README.md, docs/TECHNICAL_DESIGN.md, docs/CF2_STAGING_RUNBOOK.md, docs/CF3_PRODUCTION_RUNBOOK.md, docs/MFM_RELEASE_RUNBOOK.md, docs/MNET_RELEASE_RUNBOOK.md. Stage complete; no Git push, webhook mutation, user-facing Telegram test, import/restore, polling startup, billing or resource expansion.
+
+## 13. MFO — Fast MFM onboarding (2026-09-10)
+
+User supplied the short-onboarding specification and explicitly chose MFM-only scope, retaining required event status and location. Contact is optional and accepted-only; channel/group use separate native pickers. The same authorization includes staging-first deployment and one fresh logical clearing of only the current staging and production primary databases after release so registration can be retested from scratch. Rehearsal/local databases, Telegram history, webhook changes and Git push remain outside authorization.
+
+Shared unit contract: read AGENTS.md, PRD §24/§23/§22, TD fast-onboarding contract, the complete current card and predecessor evidence. Before each unit verify main/HEAD/status, origin/main, unique predecessor and Node/pnpm contract. Exactly one unit is in_progress; runtime units start with focused failing tests, preserve unrelated work and stay within the unit size boundary. Preserve classic behavior, existing MFM data, private-contact boundary, transactional save/receipt/outbox guarantees and feature-off behavior. Stop for target/schema drift, non-quiescent delivery, private-data exposure, incompatible toolchain or any mutation beyond MFO-07. Each unit records evidence, uses `Commit SHA: SELF`, creates one Task-ID commit and ends clean.
+
+| Unit | Status | Dependencies | Scope and observable result |
+|---|---|---|---|
+| MFO-00 | completed | MNET-09 | Approved product/technical contract and executable cards |
+| MFO-01 | pending | MFO-00 | Additive schema17 contact persistence and preserving transfer |
+| MFO-02 | pending | MFO-01 | Short durable onboarding transitions and legacy-session compatibility |
+| MFO-03 | pending | MFO-02 | RU/EN Telegram screens, native contact pickers and ready CTA |
+| MFO-04 | pending | MFO-03 | Optional enrichment, search-purpose entry and accepted-contact preference |
+| MFO-05 | pending | MFO-04 | Workerd/recovery gates, independent review and release documentation |
+| MFO-06 | pending | MFO-05 | Rehearse exact third primary-only reset without live deletion |
+| MFO-07 | pending | MFO-06 | Deploy staging then production and clear/verify each current primary |
+
+All cards include the shared contract's Read first, Do not touch, Invariants and Stop conditions above.
+
+### MFO-00 — Define the approved fast-onboarding contract
+- **Scope:** docs/PRD.md, docs/TECHNICAL_DESIGN.md and IMPLEMENTATION_PLAN.md only.
+- **Verification:** reconcile the supplied specification/user decisions with current MFM/MNET contracts; final diff and `git diff --check`.
+- **Exit:** no unresolved product conflict; one local commit and clean tree.
+
+### MFO-01 — Add preserving preferred-contact schema
+- **Scope:** migration17, MFM contact domain/repository, state-transfer/Cloudflare manifests and focused populated upgrade/roundtrip tests.
+- **Tests first:** schema16 rows and optional arrays survive; zero/one constrained contact; invalid kinds/URLs fail; schema17 transfer and FK rollback preserve all existing IDs/data.
+- **Verification:** focused unit/integration/Cloudflare schema tests, `pnpm check`, db/manifest/type gates and diff review.
+- **Exit:** schema17 is additive and no live database changes.
+
+### MFO-02 — Shorten the durable application flow
+- **Scope:** onboarding state/service/repository parsing and focused unit/integration tests; no Telegram rendering.
+- **Tests first:** event/name/type/location, 1–3 sphere flow, fourth-choice refusal, contact skip/selection, atomic completion, optional empty arrays, back/resume/replay, editing preservation and legacy removed-step redirects.
+- **Verification:** focused suites, typecheck/architecture/lint and diff review.
+- **Exit:** typed views/actions fully express the new flow without classic or live changes.
+
+### MFO-03 — Mount the bilingual Telegram journey
+- **Scope:** RU/EN copy/keyboards/composer/router plus actual fake-bot journeys for username/no-username, two native chat pickers, external URL, skip and ready CTA.
+- **Tests first:** exact auto-advance UX, selected counters/CTA, one accepted `chat_shared`, stale/wrong request refusal, private-chat guard and no duplicate picker/confirmation.
+- **Verification:** focused fake/unit tests, `pnpm check`, all fake journeys, Cloudflare typecheck and diff review.
+- **Exit:** a new user reaches Profile ready and Find people through the real composition in 30–60-second-scale interactions.
+
+### MFO-04 — Keep enrichment and accepted contact useful
+- **Scope:** optional specialization/open_to edit entry, purpose-first search presentation/session, explicit-contact accepted resolver and focused integration/fake tests.
+- **Tests first:** empty optional fields remain complete; old values survive required edits; enrichment save/cancel; purpose/any search; preferred channel/group/external contact only after acceptance with existing identity fallback when omitted.
+- **Verification:** focused suites, `pnpm check`, fake journey and privacy regression review.
+- **Exit:** removed required questions remain available later without pre-acceptance disclosure.
+
+### MFO-05 — Close the release candidate
+- **Scope:** schema16 upgrade, restart/eviction/rollback/replay/feature-off workerd coverage, README/TD/runbook reconciliation and one blocker-limited independent review with at most one correction wave.
+- **Verification:** `pnpm check`, all fake/workerd suites, db:verify, Cloudflare types/typecheck/manifest, dry-run bundles, final diff and secret-pattern checks.
+- **Exit:** committed immutable runtime candidate and complete non-live evidence.
+
+### MFO-06 — Rehearse the third exact reset
+- **Scope:** add only `mfo-2026-reset`/`mfo_reset_audit`, require both earlier exact-target audits, support schema17/contact rows and update the operator runbook/tests. No live deletion.
+- **Tests first:** predecessor audits, exact target/digest/retry, later-row protection, quiescence, rollback/guard restoration, unknown-table refusal and schema17 zero verification.
+- **Verification:** focused Node/workerd reset tests, applicable aggregate gates, maintenance dry-run and final diff.
+- **Exit:** third reset is idempotent and limited to the two user-authorized hosted primaries.
+
+### MFO-07 — Release and provide clean primaries
+- **Scope:** current existing staging and production Workers/primary objects only. For each environment: exact preflight → normal schema17 deploy → health/readiness/protected summary verification → bounded maintenance reset → restore that just-verified normal version → empty schema17 verification. Complete staging before production.
+- **Do not touch:** rehearsal/local databases, namespaces/resources, billing, bot/webhook identities, secrets, import/restore, real Telegram messages, Git remote/push/PR/merge.
+- **Verification:** exact account/Worker/namespace/object/version and four secret names; pending updates zero; quiescent receipts/outbox/null alarm; schema17/26 transfer tables and canonical digests; one deletion and exact retry; retained three reset audits; reset routes/bindings absent after restoration.
+- **Exit:** both primary databases are empty and running the same committed candidate; release/reset evidence committed and tree clean.
+- **Stop:** any identity/target/schema drift, pending/error webhook, non-quiescent delivery, unknown table, failed staging gate or private-data/credential exposure.
+
+- **MFO-00 evidence:** Commit SHA: `SELF`. Clean preflight main at unique MNET-09 `ba35da6`; read-only origin/main `c4c5bfbc5f9696b63e0acf89182990017c2237fb`; Node24.18.0/pnpm11.15.1 satisfy package.json. Reconciled the supplied short-onboarding specification with PRD §22/§23, current FSM/profile/contact/search implementation and the user's explicit decisions: MFM only; event status/location retained; optional accepted-only contact; two native chat pickers; current staging/production primaries cleared after their releases while rehearsal/local remain untouched. Telegram Bot API/grammY 1.45.1 requires boolean `chat_is_channel`, so one native picker cannot cover both chat classes. PRD §24 and TD now supersede the conflicting mandatory specialization/open_to policy and define schema17, legacy preservation, search-purpose and the third exact reset. Changed only docs/PRD.md, docs/TECHNICAL_DESIGN.md and IMPLEMENTATION_PLAN.md; `git diff --check` PASS and final diff reviewed. No runtime, dependency, live, Telegram or Git-remote mutation.
