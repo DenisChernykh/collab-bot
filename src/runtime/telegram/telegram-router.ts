@@ -46,10 +46,12 @@ import {
 import { registerDurableTelegramIngress } from "./durable-telegram-ingress.js";
 import { routeTelegramText } from "./telegram-routing.js";
 import { webCryptoCapabilities } from "../../platform/crypto/capabilities.js";
+import { createConnectionTelegramFeature, type ConnectionService } from "../../modules/connections/index.js";
 
 const AUDIENCE_SNAPSHOT_UNAVAILABLE = "Аудиторию Telegram определить не удалось; профиль сохранён, число можно указать позже в «Мой профиль».";
 
 export interface TelegramRouterOptions {
+	readonly connectionService?: ConnectionService;
 	readonly onboardingService?: OnboardingService;
 	readonly profileService: ProfileService;
 	readonly profileAudienceService?: ProfileAudienceService;
@@ -137,6 +139,7 @@ export function registerTelegramRouter(bot: Bot, options: TelegramRouterOptions)
 	});
 
 	const mfmFeature = options.onboardingService === undefined ? undefined : createMfmTelegramFeature({
+		...(options.connectionService === undefined ? {} : { completed: createConnectionTelegramFeature(options.connectionService) }),
 		service: options.onboardingService,
 		helpContact: options.helpContact,
 		renderClassic: async (ctx, pendingStart) => {

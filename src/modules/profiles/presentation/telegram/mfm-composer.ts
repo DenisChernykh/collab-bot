@@ -2,17 +2,25 @@ import { InlineKeyboard, type Context } from "grammy";
 import type { OnboardingService, OnboardingView } from "../../application/onboarding-service.js";
 import { decodeMfmCallback } from "./mfm-callback-codec.js";
 import { renderOnboarding } from "./mfm-presentation.js";
-import { COPY, tr } from "./mfm-copy.js";
+import { COPY, NOTICES, tr } from "./mfm-copy.js";
 
 export interface MfmTelegramOptions {
 	readonly service: OnboardingService;
 	readonly helpContact: string;
 	readonly renderClassic: (ctx: Context, pendingStart?: string) => Promise<void>;
+	readonly completed?: {
+		show(ctx: Context, userId: string, prefix?: string): Promise<void>;
+		routeText(ctx: Context, userId: string, text: string): Promise<void>;
+		routeCallback(ctx: Context, userId: string, data: string): Promise<boolean>;
+	};
 }
 export function createMfmTelegramFeature(options: MfmTelegramOptions) {
 	const service = options.service;
 	async function show(ctx: Context, view: OnboardingView, edit = false): Promise<void> {
 		if (view.kind === "classic") { await options.renderClassic(ctx, view.pendingStart); return; }
+		if (view.kind === "home" && options.completed !== undefined && ctx.from !== undefined) {
+			await options.completed.show(ctx, String(ctx.from.id), view.notice === undefined ? "" : `${tr(NOTICES[view.notice], view.language)}\n\n`); return;
+		}
 		const rendered = renderOnboarding(view);
 		if (edit && ctx.callbackQuery?.message !== undefined) await ctx.editMessageText(rendered.text, { reply_markup: rendered.keyboard });
 		else await ctx.reply(rendered.text, { reply_markup: rendered.keyboard });
@@ -36,6 +44,7 @@ export function createMfmTelegramFeature(options: MfmTelegramOptions) {
 			const view = await service.view(userId);
 			if (view.kind === "classic") return false;
 			if (command === "/help") { await ctx.reply(tr(COPY.help, view.language) + options.helpContact); return true; }
+			if (view.kind === "home" && options.completed !== undefined) { await options.completed.routeText(ctx, userId, text); return true; }
 			if (command === "/cancel") { await show(ctx, await service.cancel(userId)); return true; }
 			if (view.kind === "step" && !text.startsWith("/")) {
 				await show(ctx, await service.act(userId, { kind: "text", value: text }, { generation: view.session.state.generation, revision: view.session.revision }));
@@ -45,6 +54,7 @@ export function createMfmTelegramFeature(options: MfmTelegramOptions) {
 		async routeCallback(ctx: Context, userId: string, data: string): Promise<boolean> {
 			const view = await service.view(userId);
 			if (view.kind === "classic" && !data.startsWith("m:") && !data.startsWith("mfm:")) return false;
+			if (view.kind === "home" && options.completed !== undefined && await options.completed.routeCallback(ctx, userId, data)) return true;
 			const parsed = decodeMfmCallback(data);
 			if (parsed !== undefined) {
 				const next = await service.act(userId, parsed.action, parsed.token);

@@ -28,6 +28,7 @@ import { createCollaborationsFeature } from "../../modules/collaborations/index.
 import { createMarketplaceFeature } from "../../modules/marketplace/index.js";
 import { createModerationFeature } from "../../modules/moderation/index.js";
 import { createProfilesFeature } from "../../modules/profiles/index.js";
+import { createConnectionsFeature } from "../../modules/connections/index.js";
 import type { BotRuntimeLifecycleOperations } from "../lifecycle/bot-lifecycle.js";
 import { DeliveryWorker } from "../lifecycle/delivery-worker.js";
 import { preflightShowcase } from "./showcase-preflight.js";
@@ -75,6 +76,7 @@ export function composeBotApplication(options: BotApplicationCompositionOptions)
 		reason: options.showcaseCapability === undefined ? "showcase preflight has not run" : options.showcaseCapability.reason,
 	};
 	const outboxStore = new SqliteOutboxDeliveryRepository(database);
+	const connectionsFeature = createConnectionsFeature({ database, transactions: transactionRunner, clock, crypto, mfmFeatureEnabled: options.config.mfmFeatureEnabled ?? false });
 	const profilesFeature = createProfilesFeature({
 		mfmFeatureEnabled: options.config.mfmFeatureEnabled ?? false,
 		crypto,
@@ -142,6 +144,7 @@ export function composeBotApplication(options: BotApplicationCompositionOptions)
 		}
 	});
 	registerTelegramRouter(bot, {
+		connectionService: connectionsFeature.api,
 		profileService: profilesFeature.api,
 		onboardingService: profilesFeature.onboarding,
 		profileAudienceService: profilesFeature.audience,

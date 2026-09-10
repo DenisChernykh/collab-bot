@@ -1,6 +1,6 @@
 import { InlineKeyboard } from "grammy";
 import type { OnboardingAction, OnboardingView } from "../../application/onboarding-service.js";
-import { MFM_EVENT_STATUSES, MFM_PROFILE_TYPES, MFM_SPHERES, MFM_SPECIALIZATIONS, MFM_OPEN_TO, type Language, type MfmProfileRecord } from "../../domain/mfm-profile.js";
+import { MFM_EVENT_STATUSES, MFM_PROFILE_TYPES, MFM_SPHERES, MFM_SPECIALIZATIONS, MFM_OPEN_TO, type Language, type MfmProfileInput } from "../../domain/mfm-profile.js";
 import { COPY, EVENT_LABELS, TYPE_LABELS, SPHERE_LABELS, SPECIALIZATION_LABELS, OPEN_TO_LABELS, NOTICES, tr, type Translation } from "./mfm-copy.js";
 import { encodeMfmCallback } from "./mfm-callback-codec.js";
 
@@ -68,9 +68,12 @@ export function renderOnboarding(view: OnboardingView): { text: string; keyboard
 	}
 	return { text: prefix + text, keyboard };
 }
-function ownProfile(profile: MfmProfileRecord, language: Language, festivalEnabled: boolean): string {
+function ownProfile(profile: MfmProfileInput, language: Language, festivalEnabled: boolean): string {
+	return `${tr(COPY.home, language)}\n\n${renderMfmProfile(profile, language, festivalEnabled)}`;
+}
+export function renderMfmProfile(profile: MfmProfileInput, language: Language, festivalEnabled: boolean): string {
 	const t = (value: Translation) => tr(value, language);
-	return [t(COPY.home), "", profile.displayName,
+	return [profile.displayName,
 		...(festivalEnabled ? [t(EVENT_LABELS[profile.eventStatus])] : []),
 		`${t(COPY.typeLabel)}: ${t(TYPE_LABELS[profile.profileType])}`,
 		`${t(COPY.locationLabel)}: ${profile.locationText}`,
