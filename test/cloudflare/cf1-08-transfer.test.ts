@@ -24,7 +24,7 @@ describe("CF1-08 local Durable Object transfer", () => {
 			);
 			return exportStateTransferManifest(database);
 		});
-		expect(manifest.tables).toHaveLength(22);
+		expect(manifest.tables).toHaveLength(25);
 		expect(manifest.tables.map((table) => table.name)).not.toContain("__app_migrations");
 
 		await target.fetch("https://local/__cf1/ready");
@@ -32,7 +32,7 @@ describe("CF1-08 local Durable Object transfer", () => {
 			const database = new CloudflareSqlDatabase(state.storage);
 			return importStateTransferManifest(database, manifest, () => 3_000_001);
 		});
-		expect(imported).toMatchObject({ digest: manifest.digest, tableCount: 22, rowCount: 1 });
+		expect(imported).toMatchObject({ digest: manifest.digest, tableCount: 25, rowCount: 1 });
 		const targetManifest = await runInDurableObject(target, (_instance, state) => exportStateTransferManifest(new CloudflareSqlDatabase(state.storage)));
 		expect(targetManifest.digest).toBe(manifest.digest);
 		await expect(runInDurableObject(target, async (_instance, state) => importStateTransferManifest(new CloudflareSqlDatabase(state.storage), manifest))).rejects.toThrow("state transfer target is not empty");
@@ -45,7 +45,7 @@ describe("CF1-08 local Durable Object transfer", () => {
 		const exported = await stub.fetch("https://local/__cf1/state/export");
 		expect(exported.status).toBe(200);
 		const manifest = await exported.json() as { tables: readonly { name: string }[]; digest: string };
-		expect(manifest.tables).toHaveLength(22);
+		expect(manifest.tables).toHaveLength(25);
 		expect(manifest.tables.map((table) => table.name)).not.toContain("__app_migrations");
 		expect(manifest.digest).toMatch(/^[0-9a-f]{64}$/u);
 		const disabled = await stub.fetch("https://local/__cf1/state/import", {
@@ -89,7 +89,7 @@ describe("CF1-08 local Durable Object transfer", () => {
 			body: JSON.stringify(manifest),
 		}), runtimeEnvironment);
 		expect(imported.status).toBe(200);
-		expect(await imported.json()).toMatchObject({ digest: manifest.digest, tableCount: 22, rowCount: 1 });
+		expect(await imported.json()).toMatchObject({ digest: manifest.digest, tableCount: 25, rowCount: 1 });
 
 		const exported = await worker.fetch(new Request("https://local/ops/state/export", {
 			headers: { authorization: `Bearer ${REVIEW_OPERATIONS_TOKEN}` },
