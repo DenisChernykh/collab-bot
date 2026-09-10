@@ -76,7 +76,7 @@ export function composeBotApplication(options: BotApplicationCompositionOptions)
 		reason: options.showcaseCapability === undefined ? "showcase preflight has not run" : options.showcaseCapability.reason,
 	};
 	const outboxStore = new SqliteOutboxDeliveryRepository(database);
-	const connectionsFeature = createConnectionsFeature({ database, transactions: transactionRunner, clock, crypto, mfmFeatureEnabled: options.config.mfmFeatureEnabled ?? false });
+	const connectionsFeature = createConnectionsFeature({ database, transactions: transactionRunner, clock, crypto, mfmFeatureEnabled: options.config.mfmFeatureEnabled ?? false, outboxStore, botUsername: options.config.expectedBotUsername });
 	const profilesFeature = createProfilesFeature({
 		mfmFeatureEnabled: options.config.mfmFeatureEnabled ?? false,
 		crypto,
@@ -145,6 +145,7 @@ export function composeBotApplication(options: BotApplicationCompositionOptions)
 	});
 	registerTelegramRouter(bot, {
 		connectionService: connectionsFeature.api,
+		...(connectionsFeature.introductions === undefined ? {} : { introductionService: connectionsFeature.introductions }),
 		profileService: profilesFeature.api,
 		onboardingService: profilesFeature.onboarding,
 		profileAudienceService: profilesFeature.audience,

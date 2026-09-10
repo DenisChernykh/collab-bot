@@ -10,6 +10,7 @@ export interface MfmTelegramOptions {
 	readonly renderClassic: (ctx: Context, pendingStart?: string) => Promise<void>;
 	readonly completed?: {
 		show(ctx: Context, userId: string, prefix?: string): Promise<void>;
+		routeStart(ctx: Context, userId: string, parameter: string): Promise<boolean>;
 		routeText(ctx: Context, userId: string, text: string): Promise<void>;
 		routeCallback(ctx: Context, userId: string, data: string): Promise<boolean>;
 	};
@@ -31,6 +32,7 @@ export function createMfmTelegramFeature(options: MfmTelegramOptions) {
 			const before = await service.view(userId);
 			const name = [ctx.from?.first_name, ctx.from?.last_name].filter(Boolean).join(" ").trim();
 			const view = await service.start(userId, name, pendingStart);
+			if (view.kind === "home" && pendingStart !== undefined && options.completed !== undefined && await options.completed.routeStart(ctx, userId, pendingStart)) return;
 			if (before.kind === "step" && view.kind === "step" && view.session.state.step !== "language") {
 				await ctx.reply(tr(COPY.resumePrompt, view.language), { reply_markup: new InlineKeyboard().text(tr(COPY.resume, view.language), "mfm:resume") });
 				return;
