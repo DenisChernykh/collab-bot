@@ -1,3 +1,4 @@
+import { CURRENT_MIGRATION_IDS } from "../support/canonical-migrations.js";
 import { fileURLToPath } from "node:url";
 import { copyFile, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -57,7 +58,7 @@ describe("S2-02 showcase publication", () => {
 		const clock = new FakeClock(new Date("2023-11-14T10:00:00.000Z"));
 		try {
 			const source = await MigrationSource.fromDirectory(migrationsPath);
-			expect((await new MigrationRunner(source, clock).migrate(boundary)).applied).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
+			expect((await new MigrationRunner(source, clock).migrate(boundary)).applied).toEqual(CURRENT_MIGRATION_IDS);
 			await seedProfile(boundary, clock);
 			const transactions = new DatabaseBoundaryTransactionRunner(boundary);
 			const collaborations = new SqliteCollaborationRepository(boundary);
@@ -142,7 +143,7 @@ describe("S2-02 showcase publication", () => {
 });
 
 async function migrateAll(boundary: DatabaseBoundary, clock: FakeClock): Promise<void> {
-	expect((await new MigrationRunner(await MigrationSource.fromDirectory(migrationsPath), clock).migrate(boundary)).applied).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
+	expect((await new MigrationRunner(await MigrationSource.fromDirectory(migrationsPath), clock).migrate(boundary)).applied).toEqual(CURRENT_MIGRATION_IDS);
 }
 
 async function preparePublication(boundary: DatabaseBoundary, clock: FakeClock): Promise<{ service: CollaborationPublicationService; outbox: SqliteOutboxDeliveryRepository; collaborations: SqliteCollaborationRepository; collaborationId: string; deliveryId: string }> {

@@ -1,3 +1,4 @@
+import { CURRENT_MIGRATION_IDS } from "../support/canonical-migrations.js";
 import { copyFile, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -54,7 +55,7 @@ describe("S4-01 moderation migration", () => {
 		const boundary = new DatabaseBoundary(join(directory, "app.sqlite"));
 		try {
 			const runner = new MigrationRunner(await MigrationSource.fromDirectory(migrationsPath), new FakeClock(NOW));
-			expect((await runner.migrate(boundary)).applied).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
+			expect((await runner.migrate(boundary)).applied).toEqual(CURRENT_MIGRATION_IDS);
 			expect(await boundary.query("SELECT name FROM pragma_table_info('collaborations') WHERE name IN ('hidden_at', 'hidden_from_status') ORDER BY name")).toEqual([
 				{ name: "hidden_at" },
 				{ name: "hidden_from_status" },

@@ -2058,7 +2058,7 @@ Shared unit contract: read AGENTS.md, PRD §23/§22, TD MFM discovery contract, 
 | Unit | Status | Dependencies | Scope and observable result |
 |---|---|---|---|
 | MNET-00 | completed | MFMR-01 | Approved product/technical contract and executable cards |
-| MNET-01A | pending | MNET-00 | Adapt integration fixture head checks for additive migrations |
+| MNET-01A | completed | MNET-00 | Adapt integration fixture head checks for additive migrations |
 | MNET-01B | pending | MNET-01A | Preserving schema16, transfer25 and Cloudflare coverage |
 | MNET-02 | pending | MNET-01B | Discovery consent/filter/session application and repository |
 | MNET-03 | pending | MNET-02 | Usable RU/EN discovery in the actual bot |
@@ -2129,3 +2129,5 @@ All cards include the shared contract's Read first, Do not touch, Invariants and
 - **Stop:** missing exact scope, live identity/schema drift, delivery ambiguity or any operation beyond reset authorization. Feature release is separate.
 
 - **MNET-00 evidence:** Commit SHA: `SELF`. Clean main at MFMR-01 eef7c1bb43169d2fcc9f1ed6f057d9a7d9f8087f, unique predecessor; read-only origin/main c4c5bfbc5f9696b63e0acf89182990017c2237fb; Node24.18.0/pnpm11.15.1. Existing profile/FSM/router, application decisions, outbox payload constraints, migration/transfer/reset ownership inspected. User-approved proposal now explicitly extends MFM-F04; no automatic channel publication or existing-profile opt-in. User clarified reset scope: all project databases as in the prior operation, covering the six MFM-08 targets after fresh inventory. Changed exactly docs/PRD.md, docs/TECHNICAL_DESIGN.md, IMPLEMENTATION_PLAN.md. Documentation-only: final diff reviewed, git diff --check PASS; no runtime or live changes.
+
+- **MNET-01A evidence:** Commit SHA: `SELF`. Clean main at MNET-00 c9a42edef21994a1257a2e7ff388afd40f244d73; origin/main unchanged c4c5bfbc5f9696b63e0acf89182990017c2237fb; compatible toolchain unchanged. Test-only preparation within eight source/test files: SQL-directory-derived expected IDs replace scattered fixture boot counts while populated-upgrade business assertions remain intact. `pnpm test:integration` PASS104; `pnpm typecheck` PASS; git diff --check PASS and final diff reviewed. No runtime/dependency/live changes; focused failing runtime tests begin in MNET-01B. Changed files: IMPLEMENTATION_PLAN.md, test/integration/ap-01-profile-migration.test.ts, test/integration/mfm-07-reset.test.ts, test/integration/r1-07-test-support.test.ts, test/integration/s2-02-publication.test.ts, test/integration/s3-03-application.test.ts, test/integration/s3-04-application-decision.test.ts, test/integration/s4-01-admin-hide.test.ts, test/support/canonical-migrations.ts.

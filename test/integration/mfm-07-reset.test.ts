@@ -1,3 +1,4 @@
+import { CURRENT_SCHEMA_VERSION } from "../support/canonical-migrations.js";
 import { copyFile, mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -16,9 +17,9 @@ it("requires the exact target and digest, clears data once and preserves the sch
 		await expect(resetProjectDatabase(boundary, "local:other", request)).rejects.toThrow("reset_target_mismatch");
 		await expect(resetProjectDatabase(boundary, "local:test", { ...request, expectedDigest: "a".repeat(64) })).rejects.toThrow("reset_digest_mismatch");
 		const result = await resetProjectDatabase(boundary, "local:test", request);
-		expect(result).toMatchObject({ target: "local:test", removedRows: 1, beforeDigest: before.digest, schemaVersion: 15 });
+		expect(result).toMatchObject({ target: "local:test", removedRows: 1, beforeDigest: before.digest, schemaVersion: CURRENT_SCHEMA_VERSION });
 		expect((await inspectProjectReset(boundary, "local:test")).rowCount).toBe(0);
-		expect(await boundary.query("SELECT count(*) AS count FROM __app_migrations")).toEqual([{ count: 15 }]);
+		expect(await boundary.query("SELECT count(*) AS count FROM __app_migrations")).toEqual([{ count: CURRENT_SCHEMA_VERSION }]);
 		await boundary.execute("INSERT INTO telegram_users (telegram_user_id, display_name, status, created_at, updated_at) VALUES ('2', 'After reset', 'active', 2, 2)");
 		expect(await resetProjectDatabase(boundary, "local:test", request)).toEqual(result);
 		expect((await inspectProjectReset(boundary, "local:test")).rowCount).toBe(1);

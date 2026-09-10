@@ -1,3 +1,4 @@
+import { CURRENT_MIGRATION_IDS } from "../support/canonical-migrations.js";
 import { copyFile, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -81,7 +82,7 @@ describe("S3-03 application migration", () => {
 		const boundary = new DatabaseBoundary(join(directory, "app.sqlite"));
 		try {
 			const runner = new MigrationRunner(await MigrationSource.fromDirectory(migrationsPath), new FakeClock(NOW));
-			expect((await runner.migrate(boundary)).applied).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
+			expect((await runner.migrate(boundary)).applied).toEqual(CURRENT_MIGRATION_IDS);
 			expect((await boundary.query<{ name: string }>("PRAGMA table_info(applications)")).map((column) => column.name)).toEqual([
 				"id",
 				"collaboration_id",
@@ -434,7 +435,7 @@ async function withApplicationDatabase(work: (fixture: ApplicationFixture) => Pr
 		prefix: "collaboration-s3-03-service-",
 		clock,
 	}, async ({ boundary, appliedMigrations }) => {
-		expect(appliedMigrations).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
+		expect(appliedMigrations).toEqual(CURRENT_MIGRATION_IDS);
 		await seedApplicationFixture(boundary);
 		await work({
 			boundary,

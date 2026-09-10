@@ -1,3 +1,4 @@
+import { CURRENT_MIGRATION_IDS } from "../support/canonical-migrations.js";
 import { copyFile, mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -31,7 +32,7 @@ it("upgrades populated profiles to nullable type without changing IDs, children 
 		const beforePlatforms = await database.query("SELECT * FROM profile_platforms");
 		const beforeTopics = await database.query("SELECT * FROM profile_topics");
 		const runner = new MigrationRunner(await MigrationSource.fromDirectory(canonicalPath));
-		expect((await runner.migrate(database)).applied).toEqual([14, 15]);
+		expect((await runner.migrate(database)).applied).toEqual(CURRENT_MIGRATION_IDS.filter((id) => id >= 14));
 		expect(await database.query("SELECT id, telegram_user_id, type, display_name, description, city_code, status, created_at, updated_at FROM profiles")).toEqual(beforeProfile);
 		expect(await database.query("SELECT * FROM profile_platforms")).toEqual(beforePlatforms);
 		expect(await database.query("SELECT * FROM profile_topics")).toEqual(beforeTopics);
