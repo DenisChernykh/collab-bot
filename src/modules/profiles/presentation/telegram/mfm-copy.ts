@@ -13,6 +13,7 @@ export const COPY = {
 	spheres: ["Выберите вашу профессиональную сферу\n\nМожно выбрать до 3 направлений.", "Choose your professional field\n\nSelect up to 3 fields."],
 	specializations: ["Уточните специализацию\n\nМожно выбрать до 3 суммарно.", "Choose your specializations\n\nSelect up to 3 in total."],
 	open_to: ["К чему вы открыты?\n\nМожно выбрать несколько вариантов.\n🌆 Прогулки и мероприятия — компания для прогулки, кофе, события или знакомства с Екатеринбургом.", "What are you open to?\n\nYou can select several options.\n🌆 Walks and events — company for a walk, coffee, an event or exploring Yekaterinburg."],
+	contact: ["Как с вами связаться?\n\nОтправьте публичную HTTPS-ссылку или выберите вариант ниже.", "How can people contact you?\n\nSend a public HTTPS link or choose an option below."],
 	done: ["✅ Готово", "✅ Done"], back: ["← Назад", "← Back"],
 	later: ["Продолжить позже", "Continue later"], cancel: ["Отменить изменения", "Cancel changes"],
 	keep: ["Оставить", "Keep this"], city: ["📍 Екатеринбург, Россия", "📍 Yekaterinburg, Russia"],

@@ -1,7 +1,7 @@
 import type { SqlDatabase } from "../../../shared/application/ports/sql-database.js";
 import { resolveSqlDatabase, type SqlDatabaseInput } from "../../../platform/database/node-sql-database.js";
 import { MFM_EVENT_STATUSES, MFM_OPEN_TO, MFM_PROFILE_TYPES, MFM_SPECIALIZATIONS, MFM_SPHERES, mfmText, mfmValue, specializationSphere, validateMfmContact, validateMfmProfile, type MfmContact, type MfmDraft, type MfmProfileInput, type MfmProfileRecord } from "../domain/mfm-profile.js";
-import { ONBOARDING_STEPS, type ExperienceUser, type OnboardingRepository, type OnboardingSession, type OnboardingState } from "../application/ports/onboarding-repository.js";
+import { LEGACY_ONBOARDING_STEPS, ONBOARDING_STEPS, type ExperienceUser, type OnboardingRepository, type OnboardingSession, type OnboardingState } from "../application/ports/onboarding-repository.js";
 
 export class SqliteOnboardingRepository implements OnboardingRepository {
 	private readonly database: SqlDatabase;
@@ -76,12 +76,19 @@ function parseState(value: unknown): OnboardingState {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error("invalid onboarding state");
 	const v = value as Record<string, unknown>;
 	if (v.version !== 1 || typeof v.generation !== "string" || !/^[a-f0-9]{16}$/.test(v.generation) || typeof v.editing !== "boolean" || !Number.isSafeInteger(v.page) || (v.page as number) < 0 || (v.page as number) > 2) throw new Error("unsupported onboarding state");
-	const step = mfmValue(v.step, ONBOARDING_STEPS);
 	const draft = parseDraft(v.draft);
-	return { version: 1, generation: v.generation, step, draft, editing: v.editing, page: v.page as number,
+	const rawStep = mfmValue(v.step, [...ONBOARDING_STEPS, ...LEGACY_ONBOARDING_STEPS]);
+	const step = normalizeStep(rawStep);
+	const rawReturnStep = v.returnStep === undefined ? undefined : mfmValue(v.returnStep, [...ONBOARDING_STEPS, ...LEGACY_ONBOARDING_STEPS, "home"]);
+	return { version: 1, generation: v.generation, step, draft, editing: v.editing, page: step === rawStep ? v.page as number : 0,
 		...(v.pendingStart === undefined ? {} : { pendingStart: mfmText(v.pendingStart, 64) }),
-		...(v.returnStep === undefined ? {} : { returnStep: mfmValue(v.returnStep, [...ONBOARDING_STEPS, "home"]) }),
+		...(rawReturnStep === undefined ? {} : { returnStep: rawReturnStep === "home" ? rawReturnStep : normalizeStep(rawReturnStep) }),
 	};
+}
+function normalizeStep(step: (typeof ONBOARDING_STEPS)[number] | (typeof LEGACY_ONBOARDING_STEPS)[number]): OnboardingState["step"] {
+	if (step === "intro") return "display_name";
+	if (step === "specializations" || step === "open_to") return "contact";
+	return step;
 }
 function parseDraft(value: unknown): MfmDraft {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error("invalid MFM draft");

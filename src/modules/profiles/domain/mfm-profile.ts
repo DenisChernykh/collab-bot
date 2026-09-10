@@ -77,19 +77,19 @@ export function specializationSphere(value: MfmSpecialization): MfmSphere {
 export function validateMfmProfile(value: unknown): MfmProfileInput {
 	if (typeof value !== "object" || value === null) throw new DomainValidationError("invalid MFM profile");
 	const input = value as Record<string, unknown>;
-	const spheres = choices(input.spheres, MFM_SPHERES);
-	const specializations = choices(input.specializations, Object.values(MFM_SPECIALIZATIONS).flat());
+	const spheres = choices(input.spheres, MFM_SPHERES, 1);
+	const specializations = choices(input.specializations, Object.values(MFM_SPECIALIZATIONS).flat(), 0);
 	if (!specializations.every((key) => spheres.includes(specializationSphere(key)))) throw new DomainValidationError("specialization must belong to a selected sphere");
 	return {
 		eventStatus: mfmValue(input.eventStatus, MFM_EVENT_STATUSES),
 		displayName: mfmText(input.displayName, 100),
 		profileType: mfmValue(input.profileType, MFM_PROFILE_TYPES),
 		locationText: mfmText(input.locationText, 200),
-		spheres, specializations, openTo: choices(input.openTo, MFM_OPEN_TO),
+		spheres, specializations, openTo: choices(input.openTo, MFM_OPEN_TO, 0),
 	};
 }
-function choices<T extends string>(value: unknown, allowed: readonly T[]): readonly T[] {
-	if (!Array.isArray(value) || value.length < 1 || value.length > 3 || new Set(value).size !== value.length) throw new DomainValidationError("select one to three distinct MFM choices");
+function choices<T extends string>(value: unknown, allowed: readonly T[], minimum: 0 | 1): readonly T[] {
+	if (!Array.isArray(value) || value.length < minimum || value.length > 3 || new Set(value).size !== value.length) throw new DomainValidationError("select up to three distinct MFM choices");
 	return value.map((key: unknown) => mfmValue(key, allowed));
 }
 
