@@ -31,7 +31,6 @@ export class ConnectionService {
 					case "set_filter": {
 						if (action.value !== null && !filterChoices(action.field, next.filters).includes(action.value)) return this.render(actor, session, "invalid");
 						const raw = { ...next.filters, [action.field]: action.value ?? undefined };
-						if (action.field === "sphere" && action.value !== next.filters.sphere) delete raw.specialization;
 						next.filters = parseConnectionState({ ...next, filters: raw }).filters; next.offset = 0; next.screen = "search"; break;
 					}
 				}

@@ -100,7 +100,7 @@ export function createMfmTelegramFeature(options: MfmTelegramOptions) {
 			const title = rawTitle === undefined || rawTitle.length === 0 || rawTitle.length > 100 ? undefined : rawTitle;
 			const next = await service.selectContact(userId, { kind, url: `https://t.me/${username}`, username, telegramChatId: String(shared.chat_id), ...(title === undefined ? {} : { title }) }, { generation: view.session.state.generation, revision: view.session.revision });
 			const selected = title ?? `@${username}`;
-			if (next.kind === "home") await leaveContact(ctx, next, `${tr(COPY.contactSelected, view.language)}: ${selected}`);
+			if (next.kind !== "step" || next.session.state.step !== "contact") await leaveContact(ctx, next, `${tr(COPY.contactSelected, view.language)}: ${selected}`);
 			else await show(ctx, next);
 			return true;
 		},
@@ -111,10 +111,9 @@ export function createMfmTelegramFeature(options: MfmTelegramOptions) {
 			const parsed = decodeMfmCallback(data);
 			if (parsed !== undefined) {
 				const next = await service.act(userId, parsed.action, parsed.token);
-				const edit = view.kind === "step" && next.kind === "step" && view.session.state.step === next.session.state.step && (parsed.action.kind === "choice" || parsed.action.kind === "page");
+				const edit = view.kind === "step" && next.kind === "step" && view.session.state.step === next.session.state.step && parsed.action.kind === "choice";
 				await show(ctx, next, edit);
 			} else if (data === "mfm:edit") await show(ctx, await service.edit(userId));
-			else if (data === "mfm:improve") await show(ctx, await service.improveSpecializations(userId));
 			else await show(ctx, view);
 			return true;
 		},

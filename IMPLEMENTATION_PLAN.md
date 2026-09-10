@@ -2319,8 +2319,8 @@ Shared contract: read AGENTS.md, PRD §25, the focused TD contract and the compl
 |---|---|---|---|
 | MFP-00 | completed | MFO-10 | Approved schema18/profile/search/release contract; MFO-11 superseded |
 | MFP-01 | completed | MFP-00 | Schema18 and profile persistence without specializations |
-| MFP-02 | in_progress | MFP-01 | Required goals and final optional-about onboarding/edit flow |
-| MFP-03 | pending | MFP-02 | Purpose-first search and public about rendering without Improve profile |
+| MFP-02 | completed | MFP-01 | Required goals and final optional-about onboarding/edit flow |
+| MFP-03 | in_progress | MFP-02 | Purpose-first search and public about rendering without Improve profile |
 | MFP-04 | pending | MFP-03 | Direct production release and exact production-only reset |
 
 ### MFP-00 — Fix the product and execution contract
@@ -2352,3 +2352,5 @@ Shared contract: read AGENTS.md, PRD §25, the focused TD contract and the compl
 - **MFP-00 evidence:** Commit SHA: `SELF`. Preflight main at unique MFO-10 `5a380c2dce166fe6c75dcd2665d3b04bf1916e3e`; read-only remote `origin/main` remained `c4c5bfbc5f9696b63e0acf89182990017c2237fb`; Node24.18.0/pnpm11.15.1 satisfy package.json. The user explicitly replaced the unexecuted MFO-11 timing with schema18 implementation → direct production deploy → production-only reset, accepted destructive specialization removal/no export, required one-to-three profile goals, optional public about and purpose-first search on every entry. The exact uncommitted `mfo-2026-final-reset` two-line setup was removed before documentation work. No runtime, database, Telegram, deployment or remote-Git mutation.
 
 - **MFP-01 evidence:** Commit SHA: `SELF`. Clean preflight at unique MFP-00 `8d0c3ca823688f582e6e543728fe9ff4017003bf`; remote `origin/main` remained `c4c5bfbc5f9696b63e0acf89182990017c2237fb`; Node24.18.0/pnpm11.15.1 unchanged. Focused RED proved migration18/about/required goals/table-count were absent. GREEN adds destructive schema17→18 specialization-table removal, nullable constrained about persistence, schema18/25-table transfer and regenerated Cloudflare manifest. Existing remaining MFM profile/goals/contact data survive; about replace/clear and transaction rollback pass. Focused unit/integration PASS22; typecheck, build, manifest drift and diff-check PASS. No hosted/local database, Telegram, dependency, staging or remote-Git mutation.
+
+- **MFP-02 evidence:** Commit SHA: `SELF`. Clean preflight at unique MFP-01 `0e847bff49a7cf1b3778959b5d4645a5a1bf7375`; compatible Node/pnpm and unchanged read-only remote were confirmed. Focused RED showed spheres advancing directly to contact and mandatory goals absent. GREEN makes open_to a required one-to-three multi-select before contact, keeps the selected/skipped contact in the durable draft, adds final optional about with edit-preserve and explicit clear, and commits profile/goals/contact/about atomically. Specialization domain, editor, callback, rendering and tests plus every Improve profile action were removed; legacy specialization sessions normalize to open_to without retaining specialization data. Focused 17 tests and typecheck PASS; diff-check PASS. No dependency, hosted database, Telegram, staging or remote-Git mutation.

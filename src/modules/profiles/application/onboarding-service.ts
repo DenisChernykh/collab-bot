@@ -2,11 +2,11 @@ import type { Clock } from "../../../shared/application/ports/clock.js";
 import type { CryptoCapabilities } from "../../../shared/application/ports/crypto.js";
 import type { TransactionRunner } from "../../../shared/application/ports/transaction-runner.js";
 import { DomainValidationError } from "../../../shared/domain/value-objects/enums.js";
-import { MFM_EVENT_STATUSES, MFM_PROFILE_TYPES, MFM_SPECIALIZATIONS, MFM_SPHERES, mfmText, mfmValue, specializationSphere, validateMfmContact, validateMfmProfile, type Language, type MfmContact, type MfmDraft, type MfmProfileRecord } from "../domain/mfm-profile.js";
+import { MFM_EVENT_STATUSES, MFM_OPEN_TO, MFM_PROFILE_TYPES, MFM_SPHERES, mfmAbout, mfmText, mfmValue, validateMfmContact, validateMfmProfile, type Language, type MfmContact, type MfmDraft, type MfmProfileRecord } from "../domain/mfm-profile.js";
 import type { ExperienceUser, OnboardingRepository, OnboardingSession, OnboardingState, OnboardingStep } from "./ports/onboarding-repository.js";
 import type { ProfileService } from "./profile-service.js";
 
-export type OnboardingNotice = "stale" | "invalid" | "limit" | "required" | "removed" | "saved" | "paused";
+export type OnboardingNotice = "stale" | "invalid" | "limit" | "required" | "saved" | "paused";
 type ViewContext = { readonly language: Language; readonly festivalEnabled: boolean; readonly notice?: OnboardingNotice };
 export type OnboardingView = ViewContext & (
 	| { readonly kind: "classic"; readonly pendingStart?: string }
@@ -16,9 +16,9 @@ export type OnboardingView = ViewContext & (
 );
 export interface OnboardingToken { readonly generation: string; readonly revision: number; }
 export type OnboardingAction =
-	| { readonly kind: "language" | "affiliation" | "choice" | "text" | "page"; readonly value: string }
-	| { readonly kind: "next" | "back" | "keep" | "city" | "cancel" };
-const FLOW: readonly OnboardingStep[] = ["affiliation", "event_status", "display_name", "profile_type", "location", "spheres", "contact"];
+	| { readonly kind: "language" | "affiliation" | "choice" | "text"; readonly value: string }
+	| { readonly kind: "next" | "back" | "keep" | "city" | "clear" | "cancel" };
+const FLOW: readonly OnboardingStep[] = ["affiliation", "event_status", "display_name", "profile_type", "location", "spheres", "open_to", "contact", "about"];
 
 export class OnboardingService {
 	constructor(
@@ -86,19 +86,7 @@ export class OnboardingService {
 			if (await this.repository.getSession(userId) !== undefined) return this.view(userId);
 			const profile = await this.repository.getProfile(userId);
 			if (profile === undefined) return this.view(userId);
-			await this.save(userId, { ...this.initial("display_name", profile), editing: true });
-			return this.view(userId);
-		});
-	}
-
-	async improveSpecializations(userId: string): Promise<OnboardingView> {
-		return this.transactions.withTransaction(async () => {
-			const user = await this.repository.getUser(userId);
-			if (user?.status !== "active" || user.experience !== "mfm") return this.view(userId);
-			if (await this.repository.getSession(userId) !== undefined) return this.view(userId);
-			const profile = await this.repository.getProfile(userId);
-			if (profile === undefined) return this.view(userId);
-			await this.save(userId, { ...this.initial("enrichment_specializations", profile), editing: true });
+			await this.save(userId, { ...this.initial("display_name", profile), contact: profile.contact, editing: true });
 			return this.view(userId);
 		});
 	}
@@ -143,7 +131,10 @@ export class OnboardingService {
 			if (current === undefined || current.revision !== expected.revision || current.state.generation !== expected.generation) return this.view(userId, "stale");
 			if (current.state.step !== "contact") return this.view(userId, "invalid");
 			if (!this.enabled && user.experience === "mfm" && await this.repository.getProfile(userId) === undefined) return this.view(userId);
-			try { return await this.complete(userId, current.state, validateMfmContact(contact)); }
+			try {
+				await this.save(userId, { ...current.state, step: "about", contact: validateMfmContact(contact) });
+				return this.view(userId);
+			}
 			catch (error) {
 				if (error instanceof DomainValidationError) return this.view(userId, "invalid");
 				throw error;
@@ -169,41 +160,34 @@ export class OnboardingService {
 			return this.view(userId);
 		}
 		if (action.kind === "back") {
-			if (state.step === "enrichment_specializations") {
-				await this.repository.deleteSession(userId);
-				return this.view(userId);
-			}
 			const minimum = state.editing ? FLOW.indexOf("display_name") : 0;
 			const index = FLOW.indexOf(state.step);
 			if (index <= minimum) return this.view(userId);
 			const step = FLOW[index - 1];
 			if (step === undefined) return this.view(userId);
-			await this.save(userId, { ...state, step, page: 0 });
-			return this.view(userId);
-		}
-		if (action.kind === "page" && state.step === "enrichment_specializations") {
-			const page = Number(action.value);
-			if (!Number.isSafeInteger(page) || page < 0 || page >= (state.draft.spheres?.length ?? 0)) return this.view(userId, "invalid");
-			await this.save(userId, { ...state, page });
+			await this.save(userId, { ...state, step });
 			return this.view(userId);
 		}
 		if (action.kind === "next") {
-			if (state.step === "enrichment_specializations") return this.complete(userId, state, undefined);
-			if (state.step === "spheres") return (state.draft.spheres?.length ?? 0) === 0 ? this.view(userId, "required") : this.move(userId, state, "contact", state.draft);
-			if (state.step === "contact") return this.complete(userId, state, state.editing ? undefined : null);
+			if (state.step === "spheres") return (state.draft.spheres?.length ?? 0) === 0 ? this.view(userId, "required") : this.move(userId, state, "open_to", state.draft);
+			if (state.step === "open_to") return (state.draft.openTo?.length ?? 0) === 0 ? this.view(userId, "required") : this.move(userId, state, "contact", state.draft);
+			if (state.step === "contact") { await this.save(userId, { ...state, step: "about", contact: state.editing ? state.contact ?? null : null }); return this.view(userId); }
+			if (state.step === "about") return this.complete(userId, state, state.draft.about ?? null);
 			return this.view(userId, "invalid");
 		}
+		if (action.kind === "clear" && state.step === "about" && state.editing) return this.complete(userId, state, null);
 		if (action.kind === "city" && state.step === "location") return this.move(userId, state, "spheres", { ...state.draft, locationText: user.language === "en" ? "Yekaterinburg, Russia" : "Екатеринбург, Россия" });
 		if (action.kind === "text" || action.kind === "keep") {
 			if (state.step === "display_name") return this.move(userId, state, "profile_type", { ...state.draft, displayName: mfmText(action.kind === "text" ? action.value : state.draft.displayName, 100) });
 			if (state.step === "location") return this.move(userId, state, "spheres", { ...state.draft, locationText: mfmText(action.kind === "text" ? action.value : state.draft.locationText, 200) });
-			if (state.step === "contact" && action.kind === "text") return this.complete(userId, state, validateMfmContact({ kind: "external", url: action.value }));
+			if (state.step === "contact" && action.kind === "text") { await this.save(userId, { ...state, step: "about", contact: validateMfmContact({ kind: "external", url: action.value }) }); return this.view(userId); }
+			if (state.step === "about" && action.kind === "text") return this.complete(userId, state, mfmAbout(action.value));
 			return this.view(userId, "invalid");
 		}
 		if (action.kind === "choice") {
 			if (state.step === "event_status") return this.move(userId, state, "display_name", { ...state.draft, eventStatus: mfmValue(action.value, MFM_EVENT_STATUSES) });
 			if (state.step === "profile_type") return this.move(userId, state, "location", { ...state.draft, profileType: mfmValue(action.value, MFM_PROFILE_TYPES) });
-			if (state.step === "contact" && action.value === "telegram_user") return this.complete(userId, state, { kind: "telegram_user" });
+			if (state.step === "contact" && action.value === "telegram_user") { await this.save(userId, { ...state, step: "about", contact: { kind: "telegram_user" } }); return this.view(userId); }
 			return this.toggle(userId, state, action.value);
 		}
 		return this.view(userId, "invalid");
@@ -211,30 +195,26 @@ export class OnboardingService {
 
 	private async toggle(userId: string, state: OnboardingState, value: string): Promise<OnboardingView> {
 		let draft = state.draft;
-		let removed = false;
 		if (state.step === "spheres") {
 			const key = mfmValue(value, MFM_SPHERES);
 			const spheres = toggleChoice(draft.spheres ?? [], key);
 			if (spheres === undefined) return this.view(userId, "limit");
-			const specializations = (draft.specializations ?? []).filter((x) => spheres.includes(specializationSphere(x)));
-			removed = specializations.length !== (draft.specializations?.length ?? 0);
-			draft = { ...draft, spheres, specializations };
-		} else if (state.step === "enrichment_specializations") {
-			const available = (draft.spheres ?? []).flatMap((sphere) => MFM_SPECIALIZATIONS[sphere]);
-			const key = mfmValue(value, available);
-			const specializations = toggleChoice(draft.specializations ?? [], key);
-			if (specializations === undefined) return this.view(userId, "limit");
-			draft = { ...draft, specializations };
+			draft = { ...draft, spheres };
+		} else if (state.step === "open_to") {
+			const key = mfmValue(value, MFM_OPEN_TO);
+			const openTo = toggleChoice(draft.openTo ?? [], key);
+			if (openTo === undefined) return this.view(userId, "limit");
+			draft = { ...draft, openTo };
 		} else return this.view(userId, "invalid");
 		await this.save(userId, { ...state, draft });
-		return this.view(userId, removed ? "removed" : undefined);
-	}
-	private async move(userId: string, state: OnboardingState, step: OnboardingStep, draft: MfmDraft): Promise<OnboardingView> {
-		await this.save(userId, { ...state, step, draft, page: 0 });
 		return this.view(userId);
 	}
-	private async complete(userId: string, state: OnboardingState, contact: MfmContact | null | undefined): Promise<OnboardingView> {
-		await this.repository.saveProfile(userId, validateMfmProfile({ ...state.draft, specializations: state.draft.specializations ?? [], openTo: state.draft.openTo ?? [] }), this.now(), contact);
+	private async move(userId: string, state: OnboardingState, step: OnboardingStep, draft: MfmDraft): Promise<OnboardingView> {
+		await this.save(userId, { ...state, step, draft });
+		return this.view(userId);
+	}
+	private async complete(userId: string, state: OnboardingState, about: string | null): Promise<OnboardingView> {
+		await this.repository.saveProfile(userId, validateMfmProfile({ ...state.draft, about }), this.now(), state.contact ?? null);
 		await this.repository.deleteSession(userId);
 		return this.view(userId, "saved");
 	}
@@ -243,7 +223,7 @@ export class OnboardingService {
 		await this.repository.deleteSession(userId);
 		return { kind: "classic", language: user.language ?? "ru", festivalEnabled: this.enabled, ...(pendingStart === undefined ? {} : { pendingStart }) };
 	}
-	private initial(step: OnboardingStep, draft: MfmDraft): OnboardingState { return { version: 1, generation: this.crypto.randomHex(8), step, draft, editing: false, page: 0 }; }
+	private initial(step: OnboardingStep, draft: MfmDraft): OnboardingState { return { version: 1, generation: this.crypto.randomHex(8), step, draft, editing: false }; }
 	private save(userId: string, state: OnboardingState): Promise<OnboardingSession> { return this.repository.saveSession(userId, state, this.now()); }
 	private now(): number { return this.clock.now().getTime(); }
 }

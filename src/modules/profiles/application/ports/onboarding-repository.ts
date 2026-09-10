@@ -1,14 +1,14 @@
 import type { Experience, Language, MfmContact, MfmDraft, MfmProfileInput, MfmProfileRecord } from "../../domain/mfm-profile.js";
-export const ONBOARDING_STEPS = ["language", "affiliation", "event_status", "display_name", "profile_type", "location", "spheres", "contact", "enrichment_specializations"] as const;
-export const LEGACY_ONBOARDING_STEPS = ["intro", "specializations", "open_to"] as const;
+export const ONBOARDING_STEPS = ["language", "affiliation", "event_status", "display_name", "profile_type", "location", "spheres", "open_to", "contact", "about"] as const;
+export const LEGACY_ONBOARDING_STEPS = ["intro", "specializations", "enrichment_specializations"] as const;
 export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
 export interface OnboardingState {
 	readonly version: 1;
 	readonly generation: string;
 	readonly step: OnboardingStep;
 	readonly draft: MfmDraft;
+	readonly contact?: MfmContact | null;
 	readonly editing: boolean;
-	readonly page: number;
 	readonly pendingStart?: string;
 	readonly returnStep?: OnboardingStep | "home";
 }

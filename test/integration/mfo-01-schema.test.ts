@@ -10,7 +10,7 @@ import { NodeSqlDatabase } from "../../src/platform/database/node-sql-database.j
 import { exportStateTransferManifest, importStateTransferManifest, STATE_TRANSFER_AUDIT_TABLE } from "../../src/platform/database/state-transfer.js";
 
 const profileId = "17000000-0000-4000-8000-000000000001";
-const profileInput = { eventStatus: "participant" as const, displayName: "Saved person", profileType: "media" as const, locationText: "Yekaterinburg, Russia", spheres: ["media" as const], specializations: ["blogger" as const], openTo: ["joint_projects" as const], about: null };
+const profileInput = { eventStatus: "participant" as const, displayName: "Saved person", profileType: "media" as const, locationText: "Yekaterinburg, Russia", spheres: ["media" as const], openTo: ["joint_projects" as const], about: null };
 const contact = { kind: "telegram_group" as const, url: "https://t.me/public_group", username: "public_group", telegramChatId: "-10017", title: "Public group" };
 
 it("upgrades populated schema16 without rewriting data and transfers one preferred contact", async () => {
@@ -70,7 +70,7 @@ it("persists, preserves and explicitly clears a preferred contact in the profile
 		const repository = new SqliteOnboardingRepository(database);
 		await repository.setUser("17", "en", "mfm");
 		await repository.saveProfile("17", profileInput, 2, contact);
-		expect(await repository.getProfile("17")).toMatchObject({ ...profileInput, specializations: [], contact });
+		expect(await repository.getProfile("17")).toMatchObject({ ...profileInput, contact });
 		await repository.saveProfile("17", { ...profileInput, displayName: "Changed" }, 3);
 		expect((await repository.getProfile("17"))?.contact).toEqual(contact);
 		await repository.saveProfile("17", profileInput, 4, null);

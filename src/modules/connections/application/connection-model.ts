@@ -1,12 +1,11 @@
-import { MFM_EVENT_STATUSES, MFM_OPEN_TO, MFM_SPECIALIZATIONS, MFM_SPHERES, mfmValue, type Language, type MfmProfileInput, type MfmSpecialization, type MfmSphere } from "../../profiles/application/index.js";
+import { MFM_EVENT_STATUSES, MFM_OPEN_TO, MFM_SPHERES, mfmValue, type Language, type MfmProfileInput, type MfmSphere } from "../../profiles/application/index.js";
 
 export interface SearchFilters {
 	eventStatus?: MfmProfileInput["eventStatus"];
 	sphere?: MfmSphere;
-	specialization?: MfmSpecialization;
 	openTo?: MfmProfileInput["openTo"][number];
 }
-export const FILTER_FIELDS = ["eventStatus", "sphere", "specialization", "openTo"] as const;
+export const FILTER_FIELDS = ["eventStatus", "sphere", "openTo"] as const;
 export type FilterField = typeof FILTER_FIELDS[number];
 export type ConnectionScreen = "home" | "profile" | "search" | "filter";
 export type IntroductionTab = "incoming" | "sent" | "accepted";
@@ -52,7 +51,6 @@ export function filterChoices(field: FilterField, filters: SearchFilters): reado
 	switch (field) {
 		case "eventStatus": return MFM_EVENT_STATUSES;
 		case "sphere": return MFM_SPHERES;
-		case "specialization": return filters.sphere === undefined ? [] : MFM_SPECIALIZATIONS[filters.sphere];
 		case "openTo": return MFM_OPEN_TO;
 	}
 }
@@ -64,10 +62,9 @@ export function parseConnectionState(value: unknown): ConnectionState {
 	const filters: SearchFilters = {};
 	if (raw.eventStatus !== undefined) filters.eventStatus = mfmValue(raw.eventStatus, MFM_EVENT_STATUSES);
 	if (raw.sphere !== undefined) filters.sphere = mfmValue(raw.sphere, MFM_SPHERES);
-	if (raw.specialization !== undefined) filters.specialization = mfmValue(raw.specialization, filterChoices("specialization", filters)) as MfmSpecialization;
 	if (raw.openTo !== undefined) filters.openTo = mfmValue(raw.openTo, MFM_OPEN_TO);
 	return { version: 1, generation: v.generation, screen: mfmValue(v.screen, ["home", "profile", "search", "filter"]), filters, offset: v.offset as number,
-		...(v.filterField === undefined ? {} : { filterField: mfmValue(v.filterField, FILTER_FIELDS) }),
+		...(v.filterField === undefined || v.filterField === "specialization" ? {} : { filterField: mfmValue(v.filterField, FILTER_FIELDS) }),
 		...(v.introduction === undefined ? {} : { introduction: parseIntroductionNavigation(v.introduction) }) };
 }
 

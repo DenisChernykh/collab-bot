@@ -1,6 +1,6 @@
 import type { SqlDatabase } from "../../../shared/application/ports/sql-database.js";
 import { resolveSqlDatabase, type SqlDatabaseInput } from "../../../platform/database/node-sql-database.js";
-import { MFM_EVENT_STATUSES, MFM_OPEN_TO, MFM_PROFILE_TYPES, MFM_SPECIALIZATIONS, MFM_SPHERES, mfmText, mfmValue, validateMfmContact, validateMfmProfile, type MfmContact, type MfmDraft, type MfmProfileInput, type MfmProfileRecord } from "../domain/mfm-profile.js";
+import { MFM_EVENT_STATUSES, MFM_OPEN_TO, MFM_PROFILE_TYPES, MFM_SPHERES, mfmAbout, mfmText, mfmValue, validateMfmContact, validateMfmProfile, type MfmContact, type MfmDraft, type MfmProfileInput, type MfmProfileRecord } from "../domain/mfm-profile.js";
 import { LEGACY_ONBOARDING_STEPS, ONBOARDING_STEPS, type ExperienceUser, type OnboardingRepository, type OnboardingSession, type OnboardingState } from "../application/ports/onboarding-repository.js";
 
 export class SqliteOnboardingRepository implements OnboardingRepository {
@@ -40,7 +40,7 @@ export class SqliteOnboardingRepository implements OnboardingRepository {
 		const contact = contactRow === undefined ? null : validateMfmContact(contactRow.kind === "telegram_user" ? { kind: contactRow.kind }
 			: contactRow.kind === "external" ? { kind: contactRow.kind, url: contactRow.url }
 				: { kind: contactRow.kind, url: contactRow.url, username: contactRow.username, telegramChatId: contactRow.telegram_chat_id, ...(contactRow.title === null ? {} : { title: contactRow.title }) });
-		return { ...validateMfmProfile({ eventStatus: row.event_status, displayName: row.display_name, profileType: row.profile_type, locationText: row.location_text, spheres: spheres.map((x) => x.sphere), specializations: [], openTo: openTo.map((x) => x.intent), about: row.about_text }), profileId: row.profile_id, contact, completedAt: row.completed_at, updatedAt: row.updated_at, revision: row.revision };
+		return { ...validateMfmProfile({ eventStatus: row.event_status, displayName: row.display_name, profileType: row.profile_type, locationText: row.location_text, spheres: spheres.map((x) => x.sphere), openTo: openTo.map((x) => x.intent), about: row.about_text }), profileId: row.profile_id, contact, completedAt: row.completed_at, updatedAt: row.updated_at, revision: row.revision };
 	}
 	async saveProfile(userId: string, input: MfmProfileInput, now: number, contact?: MfmContact | null): Promise<MfmProfileRecord> {
 		const checked = validateMfmProfile(input);
@@ -73,19 +73,20 @@ export class SqliteOnboardingRepository implements OnboardingRepository {
 function parseState(value: unknown): OnboardingState {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error("invalid onboarding state");
 	const v = value as Record<string, unknown>;
-	if (v.version !== 1 || typeof v.generation !== "string" || !/^[a-f0-9]{16}$/.test(v.generation) || typeof v.editing !== "boolean" || !Number.isSafeInteger(v.page) || (v.page as number) < 0 || (v.page as number) > 2) throw new Error("unsupported onboarding state");
+	if (v.version !== 1 || typeof v.generation !== "string" || !/^[a-f0-9]{16}$/.test(v.generation) || typeof v.editing !== "boolean") throw new Error("unsupported onboarding state");
 	const draft = parseDraft(v.draft);
 	const rawStep = mfmValue(v.step, [...ONBOARDING_STEPS, ...LEGACY_ONBOARDING_STEPS]);
 	const step = normalizeStep(rawStep);
 	const rawReturnStep = v.returnStep === undefined ? undefined : mfmValue(v.returnStep, [...ONBOARDING_STEPS, ...LEGACY_ONBOARDING_STEPS, "home"]);
-	return { version: 1, generation: v.generation, step, draft, editing: v.editing, page: step === rawStep ? v.page as number : 0,
+	return { version: 1, generation: v.generation, step, draft, editing: v.editing,
+		...(v.contact === undefined ? {} : { contact: v.contact === null ? null : validateMfmContact(v.contact) }),
 		...(v.pendingStart === undefined ? {} : { pendingStart: mfmText(v.pendingStart, 64) }),
 		...(rawReturnStep === undefined ? {} : { returnStep: rawReturnStep === "home" ? rawReturnStep : normalizeStep(rawReturnStep) }),
 	};
 }
 function normalizeStep(step: (typeof ONBOARDING_STEPS)[number] | (typeof LEGACY_ONBOARDING_STEPS)[number]): OnboardingState["step"] {
 	if (step === "intro") return "display_name";
-	if (step === "specializations" || step === "open_to") return "contact";
+	if (step === "specializations" || step === "enrichment_specializations") return "open_to";
 	return step;
 }
 function parseDraft(value: unknown): MfmDraft {
@@ -97,8 +98,8 @@ function parseDraft(value: unknown): MfmDraft {
 		...(v.displayName === undefined ? {} : { displayName: mfmText(v.displayName, 100) }),
 		...(v.locationText === undefined ? {} : { locationText: mfmText(v.locationText, 200) }),
 		...(v.spheres === undefined ? {} : { spheres: draftChoices(v.spheres, MFM_SPHERES) }),
-		...(v.specializations === undefined ? {} : { specializations: draftChoices(v.specializations, Object.values(MFM_SPECIALIZATIONS).flat()) }),
 		...(v.openTo === undefined ? {} : { openTo: draftChoices(v.openTo, MFM_OPEN_TO) }),
+		...(v.about === undefined ? {} : { about: v.about === null ? null : mfmAbout(v.about) }),
 	};
 }
 function draftChoices<T extends string>(value: unknown, allowed: readonly T[]): readonly T[] {

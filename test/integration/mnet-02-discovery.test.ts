@@ -23,10 +23,8 @@ it("discovers completed MFM people by default with optional filters, never impli
 		expect(await act("1", { kind: "set_filter", field: "eventStatus", value: "participant" })).toMatchObject({ person: null });
 		expect(await act("1", { kind: "reset_filters" })).toMatchObject({ person: { profileId: connectionProfileId(2) }, hasNext: true });
 		await act("1", { kind: "set_filter", field: "sphere", value: "digital_it" });
-		expect(await act("1", { kind: "set_filter", field: "specialization", value: "ai" })).toMatchObject({ person: { profileId: connectionProfileId(2) } });
 		const changed = await act("1", { kind: "set_filter", field: "sphere", value: "media" });
 		expect(changed).toMatchObject({ person: null });
-		if (changed.kind !== "unavailable") expect(changed.session.state.filters.specialization).toBeUndefined();
 		for (const id of ["4", "5", "6"]) expect(await api.open(id, "search")).toMatchObject({ kind: "unavailable" });
 	});
 });

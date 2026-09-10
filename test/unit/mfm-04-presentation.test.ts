@@ -4,7 +4,7 @@ import { decodeMfmCallback } from "../../src/modules/profiles/presentation/teleg
 import type { OnboardingView } from "../../src/modules/profiles/application/onboarding-service.js";
 
 it.each(["ru", "en"] as const)("renders selected choices and bounded callbacks in %s", (language) => {
-	const view: OnboardingView = { kind: "step", language, festivalEnabled: true, session: { state: { version: 1, generation: "a".repeat(16), step: "spheres", draft: { spheres: ["media"] }, editing: false, page: 0 }, revision: 12, updatedAt: 100 } };
+	const view: Extract<OnboardingView, { kind: "step" }> = { kind: "step", language, festivalEnabled: true, session: { state: { version: 1, generation: "a".repeat(16), step: "spheres", draft: { spheres: ["media"] }, editing: false }, revision: 12, updatedAt: 100 } };
 	const rendered = renderOnboarding(view);
 	if (!("inline_keyboard" in rendered.keyboard)) throw new Error("expected inline keyboard");
 	const buttons = rendered.keyboard.inline_keyboard.flat();

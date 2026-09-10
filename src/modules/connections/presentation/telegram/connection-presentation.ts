@@ -1,11 +1,11 @@
 import { InlineKeyboard } from "grammy";
-import { EVENT_LABELS, SPHERE_LABELS, SPECIALIZATION_LABELS, OPEN_TO_LABELS, renderMfmProfile, tr, type Translation } from "../../../profiles/index.js";
+import { EVENT_LABELS, SPHERE_LABELS, OPEN_TO_LABELS, renderMfmProfile, tr, type Translation } from "../../../profiles/index.js";
 import { FILTER_FIELDS, filterChoices, type ConnectionAction, type ConnectionView, type FilterField } from "../../application/index.js";
 import { encodeConnectionCallback } from "./connection-callback-codec.js";
 import { encodeIntroductionCallback } from "./introduction-callback-codec.js";
 
-const FIELDS: Record<FilterField, Translation> = { eventStatus: ["Участие", "Participation"], sphere: ["Сфера", "Field"], specialization: ["Специализация", "Specialization"], openTo: ["К чему открыт", "Open to"] };
-const LABELS: Record<FilterField, Readonly<Record<string, Translation>>> = { eventStatus: EVENT_LABELS, sphere: SPHERE_LABELS, specialization: SPECIALIZATION_LABELS, openTo: OPEN_TO_LABELS };
+const FIELDS: Record<FilterField, Translation> = { eventStatus: ["Участие", "Participation"], sphere: ["Сфера", "Field"], openTo: ["К чему открыт", "Open to"] };
+const LABELS: Record<FilterField, Readonly<Record<string, Translation>>> = { eventStatus: EVENT_LABELS, sphere: SPHERE_LABELS, openTo: OPEN_TO_LABELS };
 const PURPOSE: Translation = ["Для чего хотите познакомиться?", "Why would you like to connect?"];
 const PURPOSE_LABELS: Readonly<Record<string, Translation>> = {
 	joint_projects: ["🤝 Для совместного проекта", "🤝 For a joint project"],
@@ -26,7 +26,6 @@ export function renderConnection(view: ConnectionView, introductions = false): {
 			if (view.visible) button(["Скрыть из поиска", "Hide from search"], { kind: "visibility", value: false });
 			else if (view.festivalEnabled) button(["👁 Показывать в поиске", "👁 Show in search"], { kind: "visibility", value: true });
 			keyboard.text(t(["✏️ Изменить профиль", "✏️ Edit profile"]), "mfm:edit").row();
-			keyboard.text(t(["✨ Дополнить профиль", "✨ Improve profile"]), "mfm:improve").row();
 		}
 		if (view.festivalEnabled) button(["🔎 Найти людей", "🔎 Find people"], filters.openTo === undefined ? { kind: "choose_filter", field: "openTo" } : { kind: "open", screen: "search" });
 		if (introductions) keyboard.text(t(["🤝 Мои знакомства", "🤝 My introductions"]), encodeIntroductionCallback({ kind: "list", tab: "incoming" }, view.session)).row();
@@ -34,7 +33,6 @@ export function renderConnection(view: ConnectionView, introductions = false): {
 	} else if (view.kind === "filter") {
 		const field = view.session.state.filterField ?? "eventStatus";
 		text = t(field === "openTo" ? PURPOSE : FIELDS[field]);
-		if (field === "specialization" && filters.sphere === undefined) text += "\n" + t(["Сначала выберите сферу.", "Choose a field first."]);
 		for (const value of filterChoices(field, filters)) {
 			const label = (field === "openTo" ? PURPOSE_LABELS : LABELS[field])[value]!;
 			button(`${filters[field] === value ? "✅ " : ""}${t(label)}`, { kind: "set_filter", field, value });

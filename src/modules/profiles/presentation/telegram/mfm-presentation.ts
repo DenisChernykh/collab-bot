@@ -1,8 +1,8 @@
 import { InlineKeyboard, Keyboard } from "grammy";
 import type { OnboardingAction, OnboardingView } from "../../application/onboarding-service.js";
 import type { OnboardingSession } from "../../application/ports/onboarding-repository.js";
-import { MFM_EVENT_STATUSES, MFM_PROFILE_TYPES, MFM_SPECIALIZATIONS, MFM_SPHERES, type Language, type MfmProfileInput } from "../../domain/mfm-profile.js";
-import { COPY, EVENT_LABELS, TYPE_LABELS, SPHERE_LABELS, SPECIALIZATION_LABELS, OPEN_TO_LABELS, NOTICES, tr, type Translation } from "./mfm-copy.js";
+import { MFM_EVENT_STATUSES, MFM_OPEN_TO, MFM_PROFILE_TYPES, MFM_SPHERES, type Language, type MfmProfileInput } from "../../domain/mfm-profile.js";
+import { COPY, EVENT_LABELS, TYPE_LABELS, SPHERE_LABELS, OPEN_TO_LABELS, NOTICES, tr, type Translation } from "./mfm-copy.js";
 import { encodeMfmCallback } from "./mfm-callback-codec.js";
 
 type OnboardingKeyboard = InlineKeyboard | Keyboard;
@@ -14,11 +14,11 @@ export function renderOnboarding(view: OnboardingView): { text: string; keyboard
 	const keyboard = new InlineKeyboard();
 	const prefix = view.notice === undefined ? "" : `${t(NOTICES[view.notice])}\n\n`;
 	if (view.notice === "paused" && view.kind === "step") return { text: t(NOTICES.paused), keyboard: keyboard.text(t(COPY.resume), "mfm:resume") };
-	if (view.kind === "home") return { text: prefix + ownProfile(view.profile, language, view.festivalEnabled), keyboard: keyboard.text(t(COPY.edit), "mfm:edit").row().text(t(COPY.improve), "mfm:improve") };
+	if (view.kind === "home") return { text: prefix + ownProfile(view.profile, language, view.festivalEnabled), keyboard: keyboard.text(t(COPY.edit), "mfm:edit") };
 	if (view.kind === "classic") throw new Error("classic rendering belongs to the existing router");
 	if (view.kind !== "step") return { text: prefix + t(COPY[view.kind]), keyboard };
 	const { session } = view;
-	const { step, draft, editing, page } = session.state;
+	const { step, draft, editing } = session.state;
 	if (step === "contact") {
 		const requestIds = contactRequestIds(session);
 		const contactKeyboard = new Keyboard()
@@ -31,7 +31,7 @@ export function renderOnboarding(view: OnboardingView): { text: string; keyboard
 		contactKeyboard.resized().oneTime();
 		return { text: prefix + t(COPY.contact), keyboard: contactKeyboard };
 	}
-	let text: string = t(step === "enrichment_specializations" ? COPY.specializations : COPY[step]);
+	let text: string = t(COPY[step]);
 	const button = (label: string, action: OnboardingAction) => keyboard.text(label, encodeMfmCallback(action, session)).row();
 	const choice = (value: string, label: Translation, selected = false) => button(`${selected ? "✅ " : ""}${t(label)}`, { kind: "choice", value });
 	switch (step) {
@@ -60,17 +60,15 @@ export function renderOnboarding(view: OnboardingView): { text: string; keyboard
 			for (const key of MFM_SPHERES) choice(key, SPHERE_LABELS[key], draft.spheres?.includes(key));
 			if ((draft.spheres?.length ?? 0) > 0) button(t(COPY.continue), { kind: "next" });
 			break;
-		case "enrichment_specializations": {
-			const spheres = draft.spheres ?? [];
-			const sphere = spheres[Math.min(page, Math.max(0, spheres.length - 1))];
-			text += `\n\n${t(COPY.selected)}: ${draft.specializations?.length ?? 0} ${t(COPY.ofThree)}`;
-			if (sphere !== undefined) {
-				text += `\n${t(SPHERE_LABELS[sphere])} (${page + 1}/${spheres.length})`;
-				for (const key of MFM_SPECIALIZATIONS[sphere]) choice(key, SPECIALIZATION_LABELS[key], draft.specializations?.includes(key));
-			}
-			if (page > 0) button("◀", { kind: "page", value: String(page - 1) });
-			if (page + 1 < spheres.length) button("▶", { kind: "page", value: String(page + 1) });
-			button(t(COPY.save), { kind: "next" });
+		case "open_to":
+			text += `\n\n${t(COPY.selected)}: ${draft.openTo?.length ?? 0} ${t(COPY.ofThree)}`;
+			for (const key of MFM_OPEN_TO) choice(key, OPEN_TO_LABELS[key], draft.openTo?.includes(key));
+			if ((draft.openTo?.length ?? 0) > 0) button(t(COPY.continue), { kind: "next" });
+			break;
+		case "about": {
+			if (draft.about !== undefined && draft.about !== null) text += `\n\n${t(COPY.aboutCurrent)}: ${draft.about}`;
+			button(t(COPY.skip), { kind: "next" });
+			if (editing && draft.about !== undefined && draft.about !== null) button(t(COPY.clear), { kind: "clear" });
 			break;
 		}
 	}
@@ -98,7 +96,7 @@ export function renderMfmProfile(profile: MfmProfileInput, language: Language, f
 		`${t(COPY.typeLabel)}: ${t(TYPE_LABELS[profile.profileType])}`,
 		`${t(COPY.locationLabel)}: ${profile.locationText}`,
 		`${t(COPY.spheresLabel)}: ${profile.spheres.map((x) => t(SPHERE_LABELS[x])).join(", ")}`,
-		`${t(COPY.specializationsLabel)}: ${profile.specializations.map((x) => t(SPECIALIZATION_LABELS[x])).join(", ")}`,
 		`${t(COPY.openToLabel)}: ${profile.openTo.map((x) => t(OPEN_TO_LABELS[x])).join(", ")}`,
+		...(profile.about === null ? [] : [`${t(COPY.aboutLabel)}: ${profile.about}`]),
 	].join("\n");
 }

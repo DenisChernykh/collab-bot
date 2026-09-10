@@ -1,4 +1,4 @@
-import { MFM_EVENT_STATUSES, MFM_OPEN_TO, MFM_SPECIALIZATIONS, MFM_SPHERES } from "../../../profiles/application/index.js";
+import { MFM_EVENT_STATUSES, MFM_OPEN_TO, MFM_SPHERES } from "../../../profiles/application/index.js";
 import { FILTER_FIELDS, type ConnectionAction, type ConnectionProof, type ConnectionSession } from "../../application/index.js";
 
 const ACTIONS: ConnectionAction[] = [
@@ -9,7 +9,6 @@ const ACTIONS: ConnectionAction[] = [
 	...FILTER_FIELDS.map(field => ({ kind: "set_filter", field, value: null }) as ConnectionAction),
 	...MFM_EVENT_STATUSES.map(value => ({ kind: "set_filter", field: "eventStatus", value }) as ConnectionAction),
 	...MFM_SPHERES.map(value => ({ kind: "set_filter", field: "sphere", value }) as ConnectionAction),
-	...Object.values(MFM_SPECIALIZATIONS).flat().map(value => ({ kind: "set_filter", field: "specialization", value }) as ConnectionAction),
 	...MFM_OPEN_TO.map(value => ({ kind: "set_filter", field: "openTo", value }) as ConnectionAction),
 ];
 export function encodeConnectionCallback(action: ConnectionAction, session: ConnectionSession): string {
