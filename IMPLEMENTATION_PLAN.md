@@ -51,7 +51,8 @@
 | CF3 — Production cutover | `completed` | 4 | Данные перенесены, production webhook включён, hosted journey подтверждён и operations handoff закрыт с явным recovery boundary |
 | MFMR — MFM hosted release | `completed` | 1 | Authorized staging-first MFM release on the existing production bot |
 | MNET — MFM discovery and introductions | `completed` | 12 | Private profile discovery, introduction requests, authorized reset and hosted release |
-| MFO — Fast MFM onboarding | `in_progress` | 9 | Short RU/EN registration, optional accepted-only contact, staging-first release and clean hosted primaries |
+| MFO — Fast MFM onboarding | `completed` | 14 | Short RU/EN registration released; the unexecuted MFO-11 reset was superseded by MFP |
+| MFP — Focused MFM profile | `in_progress` | 5 | Required goals, optional about, purpose-first discovery and production-only reset |
 
 ```text
 P0-01 → P0-02
@@ -2196,7 +2197,7 @@ Shared unit contract: read AGENTS.md, PRD §24/§23/§22, TD fast-onboarding con
 | MFO-08 | completed | MFO-07 | Align visible onboarding copy and make completed profiles discoverable by default |
 | MFO-09 | completed | MFO-08 | Deploy the approved correction directly to production |
 | MFO-10 | completed | MFO-09 | Prepare a distinct one-time production reset after the correction |
-| MFO-11 | in_progress | MFO-10 | Clear and verify only the current production primary |
+| MFO-11 | superseded | MFO-10 | Replaced before execution by the schema18 MFP production release/reset |
 
 All cards include the shared contract's Read first, Do not touch, Invariants and Stop conditions above.
 
@@ -2278,6 +2279,7 @@ All cards include the shared contract's Read first, Do not touch, Invariants and
 - **Exit:** one distinct production-only reset operation is committed and cannot replay an earlier deletion.
 
 ### MFO-11 — Clear the corrected production primary
+- **Status:** superseded before execution by the user-authorized MFP stage. No database reset or production mutation is claimed by this card.
 - **Scope:** current production Worker and primary object only: exact protected preflight, bounded maintenance reset, exact retry, restore corrected normal version and prove zero canonical rows.
 - **Do not touch:** staging, rehearsal/local databases, migrations, tests, namespaces/resources, Telegram/webhook configuration, secrets and remote Git.
 - **Verification:** exact account/Worker/namespace/object/version and four secret names; pending updates zero; quiescent receipts/outbox/null alarm; schema17 and inspected digest; retained four reset audits; restored health, MFM flag and absent reset route.
@@ -2308,3 +2310,43 @@ All cards include the shared contract's Read first, Do not touch, Invariants and
 - **MFO-09 evidence:** Commit SHA: `SELF`. The user explicitly requested a direct production deployment with no staging and no new checks. Committed MFO-08 `35d008b` was deployed through the normal `src/worker.ts` entrypoint with `MFM_FEATURE_ENABLED:true`. Wrangler uploaded 914.01KiB/169.40KiB gzip, reported startup21ms and activated production version `062f5d02-77e6-4b13-88b8-2fc5806373f0`. The deploy output retained the existing production Durable Object and environment bindings. No test, post-deploy probe, database reset, staging deployment, Telegram message, webhook/secret/resource change or Git push was performed.
 
 - **MFO-10 evidence:** Commit SHA: `SELF`. Clean main preflight at unique MFO-09 `843198dfdd1628a1dbcf9a5a751c1612327964fd`; local `origin/main` remained `c4c5bfbc5f9696b63e0acf89182990017c2237fb`; Node24.18.0/pnpm11.15.1 satisfy the repository contract. The current production target was read-only inspected before implementation: corrected normal version `062f5d02-77e6-4b13-88b8-2fc5806373f0`, deployment `2c0ed8ab-1e97-4bb0-b97f-387a675231e5`, schema17/26 tables, 370 canonical rows, quiescent delivery and null alarm. Added exactly one new audit/operation mapping; it requires all three existing same-target reset results and leaves the normal application runtime and schema unchanged. The exact three-file source/documentation diff was inspected. No test, dry run, staging/local/live database mutation, Telegram/webhook/secret/resource change or Git push was performed by explicit launch-priority instruction.
+
+## MFP — Focused MFM profile and production-only reset (2026-09-10)
+
+Shared contract: read AGENTS.md, PRD §25, the focused TD contract and the complete current card. Preserve classic behavior and MNET privacy/idempotency. The user explicitly accepts destructive specialization removal and no export because there are no users. Staging, rehearsal/local databases, Telegram history, webhooks, secrets and remote Git remain out of scope. Runtime units start with focused failing tests; run `pnpm check` only once on the final candidate. Stop before reset for target/schema drift, failed normal deploy, pending Telegram updates, non-quiescent delivery or an unexpected prior MFO-11 completion.
+
+| Unit | Status | Depends on | Observable result |
+|---|---|---|---|
+| MFP-00 | completed | MFO-10 | Approved schema18/profile/search/release contract; MFO-11 superseded |
+| MFP-01 | in_progress | MFP-00 | Schema18 and profile persistence without specializations |
+| MFP-02 | pending | MFP-01 | Required goals and final optional-about onboarding/edit flow |
+| MFP-03 | pending | MFP-02 | Purpose-first search and public about rendering without Improve profile |
+| MFP-04 | pending | MFP-03 | Direct production release and exact production-only reset |
+
+### MFP-00 — Fix the product and execution contract
+- **Scope:** supersede unexecuted MFO-11; record required profile goals, optional public about, complete specialization removal, purpose-first search on every entry and direct production-only release/reset.
+- **Verification:** source precedence, exact dirty-reset cleanup and final documentation diff.
+- **Exit:** PRD/TD/plan agree and exactly MFP-01 is in progress.
+
+### MFP-01 — Remove specializations and advance schema18
+- **Scope:** migration18 drops `mfm_profile_specializations`, adds constrained nullable about, removes specialization domain/repository/transfer contracts and advances the Cloudflare manifest/state transfer.
+- **Tests first:** schema17→18 destructive upgrade, fresh schema, about validation/persistence and schema18 transfer.
+- **Exit:** schema18 has 25 product tables and the remaining MFM state round-trips.
+
+### MFP-02 — Put goals and about in the main wizard
+- **Scope:** spheres → required open_to → contact → optional about; persist contact in the durable draft; edit supports about preserve/replace/clear; remove enrichment_specializations and `mfm:improve` from profiles-owned presentation.
+- **Tests first:** RU/EN one-to-three goals, empty refusal, contact/about atomicity, skip/preserve/clear, back/resume/stale replay and legacy-step normalization.
+- **Exit:** create/edit completes only with goals and exposes no Improve profile action.
+
+### MFP-03 — Keep every search entry purpose-first
+- **Scope:** Find people always opens the existing search-only goal picker; selected goal/Any filters without profile mutation; remove specialization filtering and render non-empty about on all MFM cards.
+- **Tests first:** three goal choices plus Any on repeated entry, filtering/pagination, profile immutability and own/search/request about rendering.
+- **Verification:** focused suites, one `pnpm check`, Cloudflare typecheck/manifest, production dry-run and one blocker-limited review.
+- **Exit:** committed candidate is ready for the separately sequenced authorized live unit.
+
+### MFP-04 — Deploy production and clear only its primary
+- **Scope:** add exact `mfp-2026-reset`; deploy normal schema18 directly to production; verify exact target/version/health/schema, pending-zero and quiescence; use bounded maintenance after one 60-second idle window; exact replay; restore normal version and prove zero rows.
+- **Do not touch:** staging, rehearsal/local databases, Telegram history, webhooks, secrets, resources and remote Git.
+- **Exit:** production runs the committed normal schema18 candidate, reports 25 tables/zero product rows/health ok, and exposes no reset route.
+
+- **MFP-00 evidence:** Commit SHA: `SELF`. Preflight main at unique MFO-10 `5a380c2dce166fe6c75dcd2665d3b04bf1916e3e`; read-only remote `origin/main` remained `c4c5bfbc5f9696b63e0acf89182990017c2237fb`; Node24.18.0/pnpm11.15.1 satisfy package.json. The user explicitly replaced the unexecuted MFO-11 timing with schema18 implementation → direct production deploy → production-only reset, accepted destructive specialization removal/no export, required one-to-three profile goals, optional public about and purpose-first search on every entry. The exact uncommitted `mfo-2026-final-reset` two-line setup was removed before documentation work. No runtime, database, Telegram, deployment or remote-Git mutation.
