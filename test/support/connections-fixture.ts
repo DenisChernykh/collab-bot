@@ -15,9 +15,8 @@ export async function seedConnectionPerson(database: SqlDatabase, id: number, in
 	await database.execute("INSERT INTO telegram_users (telegram_user_id, username, display_name, status, blocked_at, experience, preferred_language, created_at, updated_at) VALUES (?, ?, 'Synthetic Person', ?, ?, ?, ?, 1, 1)", [String(id), `private_person_${id}`, input.blocked ? "blocked" : "active", input.blocked ? 1 : null, input.experience ?? "mfm", input.language ?? "ru"]);
 	await database.execute("INSERT INTO profiles (id, telegram_user_id, display_name, type, city_code, status, created_at, updated_at) VALUES (?, ?, ?, NULL, 'ekaterinburg', 'active', 1, 1)", [profileId, String(id), input.displayName ?? `Synthetic ${id}`]);
 	if (input.incomplete || input.experience === "classic") return profileId;
-	await database.execute("INSERT INTO mfm_profiles VALUES (?, ?, 'specialist', 'Synthetic City', ?, ?, 1)", [profileId, input.eventStatus ?? "participant", id, id]);
+	await database.execute("INSERT INTO mfm_profiles (profile_id, event_status, profile_type, location_text, completed_at, updated_at, revision, about_text) VALUES (?, ?, 'specialist', 'Synthetic City', ?, ?, 1, ?)", [profileId, input.eventStatus ?? "participant", id, id, input.about ?? null]);
 	for (const sphere of input.spheres ?? ["digital_it"]) await database.execute("INSERT INTO mfm_profile_spheres VALUES (?, ?)", [profileId, sphere]);
-	for (const specialization of input.specializations ?? ["ai"]) await database.execute("INSERT INTO mfm_profile_specializations VALUES (?, 'digital_it', ?)", [profileId, specialization]);
 	for (const intent of input.openTo ?? ["joint_projects"]) await database.execute("INSERT INTO mfm_profile_open_to VALUES (?, ?)", [profileId, intent]);
 	return profileId;
 }

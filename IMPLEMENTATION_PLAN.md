@@ -2318,8 +2318,8 @@ Shared contract: read AGENTS.md, PRD §25, the focused TD contract and the compl
 | Unit | Status | Depends on | Observable result |
 |---|---|---|---|
 | MFP-00 | completed | MFO-10 | Approved schema18/profile/search/release contract; MFO-11 superseded |
-| MFP-01 | in_progress | MFP-00 | Schema18 and profile persistence without specializations |
-| MFP-02 | pending | MFP-01 | Required goals and final optional-about onboarding/edit flow |
+| MFP-01 | completed | MFP-00 | Schema18 and profile persistence without specializations |
+| MFP-02 | in_progress | MFP-01 | Required goals and final optional-about onboarding/edit flow |
 | MFP-03 | pending | MFP-02 | Purpose-first search and public about rendering without Improve profile |
 | MFP-04 | pending | MFP-03 | Direct production release and exact production-only reset |
 
@@ -2328,8 +2328,8 @@ Shared contract: read AGENTS.md, PRD §25, the focused TD contract and the compl
 - **Verification:** source precedence, exact dirty-reset cleanup and final documentation diff.
 - **Exit:** PRD/TD/plan agree and exactly MFP-01 is in progress.
 
-### MFP-01 — Remove specializations and advance schema18
-- **Scope:** migration18 drops `mfm_profile_specializations`, adds constrained nullable about, removes specialization domain/repository/transfer contracts and advances the Cloudflare manifest/state transfer.
+### MFP-01 — Remove specialization persistence and advance schema18
+- **Scope:** migration18 drops `mfm_profile_specializations`, adds constrained nullable about, removes specialization repository/transfer persistence and advances the Cloudflare manifest/state transfer. Active presentation/domain symbols are removed with their sole consumers in MFP-02/03.
 - **Tests first:** schema17→18 destructive upgrade, fresh schema, about validation/persistence and schema18 transfer.
 - **Exit:** schema18 has 25 product tables and the remaining MFM state round-trips.
 
@@ -2350,3 +2350,5 @@ Shared contract: read AGENTS.md, PRD §25, the focused TD contract and the compl
 - **Exit:** production runs the committed normal schema18 candidate, reports 25 tables/zero product rows/health ok, and exposes no reset route.
 
 - **MFP-00 evidence:** Commit SHA: `SELF`. Preflight main at unique MFO-10 `5a380c2dce166fe6c75dcd2665d3b04bf1916e3e`; read-only remote `origin/main` remained `c4c5bfbc5f9696b63e0acf89182990017c2237fb`; Node24.18.0/pnpm11.15.1 satisfy package.json. The user explicitly replaced the unexecuted MFO-11 timing with schema18 implementation → direct production deploy → production-only reset, accepted destructive specialization removal/no export, required one-to-three profile goals, optional public about and purpose-first search on every entry. The exact uncommitted `mfo-2026-final-reset` two-line setup was removed before documentation work. No runtime, database, Telegram, deployment or remote-Git mutation.
+
+- **MFP-01 evidence:** Commit SHA: `SELF`. Clean preflight at unique MFP-00 `8d0c3ca823688f582e6e543728fe9ff4017003bf`; remote `origin/main` remained `c4c5bfbc5f9696b63e0acf89182990017c2237fb`; Node24.18.0/pnpm11.15.1 unchanged. Focused RED proved migration18/about/required goals/table-count were absent. GREEN adds destructive schema17→18 specialization-table removal, nullable constrained about persistence, schema18/25-table transfer and regenerated Cloudflare manifest. Existing remaining MFM profile/goals/contact data survive; about replace/clear and transaction rollback pass. Focused unit/integration PASS22; typecheck, build, manifest drift and diff-check PASS. No hosted/local database, Telegram, dependency, staging or remote-Git mutation.

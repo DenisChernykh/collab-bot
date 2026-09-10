@@ -27,7 +27,7 @@ describe("CF1-08 local Durable Object transfer", () => {
 				["80010000-0000-4000-8000-000000000001", 3_000_000, 3_000_000],
 			);
 			await database.execute(
-				"INSERT INTO mfm_profiles VALUES (?, 'participant', 'media', 'Yekaterinburg, Russia', ?, ?, 1)",
+				"INSERT INTO mfm_profiles (profile_id, event_status, profile_type, location_text, completed_at, updated_at, revision, about_text) VALUES (?, 'participant', 'media', 'Yekaterinburg, Russia', ?, ?, 1, 'I connect people through useful projects.')",
 				["80010000-0000-4000-8000-000000000001", 3_000_000, 3_000_000],
 			);
 			await database.execute(
@@ -40,7 +40,7 @@ describe("CF1-08 local Durable Object transfer", () => {
 			);
 			return exportStateTransferManifest(database);
 		});
-		expect(manifest.tables).toHaveLength(26);
+		expect(manifest.tables).toHaveLength(25);
 		expect(manifest.tables.map((table) => table.name)).not.toContain("__app_migrations");
 
 		await target.fetch("https://local/__cf1/ready");
@@ -50,7 +50,7 @@ describe("CF1-08 local Durable Object transfer", () => {
 			const contacts = await database.query("SELECT kind, url, username, telegram_chat_id, title FROM mfm_profile_contacts");
 			return { result, contacts };
 		});
-		expect(imported.result).toMatchObject({ digest: manifest.digest, tableCount: 26, rowCount: 5 });
+		expect(imported.result).toMatchObject({ digest: manifest.digest, tableCount: 25, rowCount: 5 });
 		expect(imported.contacts).toEqual([{ kind: "telegram_group", url: "https://t.me/transfer_group", username: "transfer_group", telegram_chat_id: "-1008001", title: "Transfer group" }]);
 		const targetManifest = await runInDurableObject(target, (_instance, state) => exportStateTransferManifest(new CloudflareSqlDatabase(state.storage)));
 		expect(targetManifest.digest).toBe(manifest.digest);
@@ -64,7 +64,7 @@ describe("CF1-08 local Durable Object transfer", () => {
 		const exported = await stub.fetch("https://local/__cf1/state/export");
 		expect(exported.status).toBe(200);
 		const manifest = await exported.json() as { tables: readonly { name: string }[]; digest: string };
-		expect(manifest.tables).toHaveLength(26);
+		expect(manifest.tables).toHaveLength(25);
 		expect(manifest.tables.map((table) => table.name)).not.toContain("__app_migrations");
 		expect(manifest.digest).toMatch(/^[0-9a-f]{64}$/u);
 		const disabled = await stub.fetch("https://local/__cf1/state/import", {
@@ -108,7 +108,7 @@ describe("CF1-08 local Durable Object transfer", () => {
 			body: JSON.stringify(manifest),
 		}), runtimeEnvironment);
 		expect(imported.status).toBe(200);
-		expect(await imported.json()).toMatchObject({ digest: manifest.digest, tableCount: 26, rowCount: 1 });
+		expect(await imported.json()).toMatchObject({ digest: manifest.digest, tableCount: 25, rowCount: 1 });
 
 		const exported = await worker.fetch(new Request("https://local/ops/state/export", {
 			headers: { authorization: `Bearer ${REVIEW_OPERATIONS_TOKEN}` },

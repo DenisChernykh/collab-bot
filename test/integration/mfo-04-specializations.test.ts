@@ -17,7 +17,7 @@ it("edits only optional specializations after completion and preserves the profi
 		const profiles = new SqliteProfileRepository(boundary);
 		await profiles.createInitial("1", "Saved", 1);
 		const repository = new SqliteOnboardingRepository(boundary);
-		await repository.saveProfile("1", { eventStatus: "volunteer", displayName: "Saved", profileType: "media", locationText: "Belgrade, Serbia", spheres: ["media", "digital_it"], specializations: ["blogger"], openTo: ["professional_communication"] }, 2, contact);
+		await repository.saveProfile("1", { eventStatus: "volunteer", displayName: "Saved", profileType: "media", locationText: "Belgrade, Serbia", spheres: ["media", "digital_it"], specializations: ["blogger"], openTo: ["professional_communication"], about: null }, 2, contact);
 		const transactions = new DatabaseBoundaryTransactionRunner(boundary);
 		const service = new OnboardingService(repository, new ProfileService(profiles, transactions, clock), transactions, clock, webCryptoCapabilities, false);
 		const before = await repository.getProfile("1");

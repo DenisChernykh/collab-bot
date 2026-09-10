@@ -76,7 +76,7 @@ it("preserves optional profile data while editing and normalizes removed legacy 
 		const profiles = new SqliteProfileRepository(boundary);
 		await profiles.createInitial("1", "Saved", 1);
 		const repository = new SqliteOnboardingRepository(boundary);
-		await repository.saveProfile("1", { eventStatus: "volunteer", displayName: "Saved", profileType: "media", locationText: "Belgrade, Serbia", spheres: ["media"], specializations: ["blogger"], openTo: ["professional_communication"] }, 2, groupContact);
+		await repository.saveProfile("1", { eventStatus: "volunteer", displayName: "Saved", profileType: "media", locationText: "Belgrade, Serbia", spheres: ["media"], specializations: ["blogger"], openTo: ["professional_communication"], about: null }, 2, groupContact);
 		const transactions = new DatabaseBoundaryTransactionRunner(boundary);
 		let service = new OnboardingService(repository, new ProfileService(profiles, transactions, clock), transactions, clock, webCryptoCapabilities, true);
 		let view = await service.edit("1");

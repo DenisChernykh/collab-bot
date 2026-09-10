@@ -30,6 +30,7 @@ export interface MfmProfileInput {
 	readonly spheres: readonly MfmSphere[];
 	readonly specializations: readonly MfmSpecialization[];
 	readonly openTo: readonly (typeof MFM_OPEN_TO)[number][];
+	readonly about: string | null;
 }
 export type MfmDraft = Partial<MfmProfileInput>;
 export interface MfmProfileRecord extends MfmProfileInput {
@@ -85,8 +86,14 @@ export function validateMfmProfile(value: unknown): MfmProfileInput {
 		displayName: mfmText(input.displayName, 100),
 		profileType: mfmValue(input.profileType, MFM_PROFILE_TYPES),
 		locationText: mfmText(input.locationText, 200),
-		spheres, specializations, openTo: choices(input.openTo, MFM_OPEN_TO, 0),
+		spheres, specializations, openTo: choices(input.openTo, MFM_OPEN_TO, 1),
+		about: input.about === undefined || input.about === null ? null : mfmAbout(input.about),
 	};
+}
+function mfmAbout(value: unknown): string {
+	const text = mfmText(value, 500);
+	if (text.length < 10) throw new DomainValidationError("invalid MFM about");
+	return text;
 }
 function choices<T extends string>(value: unknown, allowed: readonly T[], minimum: 0 | 1): readonly T[] {
 	if (!Array.isArray(value) || value.length < minimum || value.length > 3 || new Set(value).size !== value.length) throw new DomainValidationError("select up to three distinct MFM choices");

@@ -10,7 +10,7 @@ import { NodeSqlDatabase } from "../../src/platform/database/node-sql-database.j
 import { exportStateTransferManifest, importStateTransferManifest, STATE_TRANSFER_AUDIT_TABLE } from "../../src/platform/database/state-transfer.js";
 
 const profileId = "17000000-0000-4000-8000-000000000001";
-const profileInput = { eventStatus: "participant" as const, displayName: "Saved person", profileType: "media" as const, locationText: "Yekaterinburg, Russia", spheres: ["media" as const], specializations: ["blogger" as const], openTo: ["joint_projects" as const] };
+const profileInput = { eventStatus: "participant" as const, displayName: "Saved person", profileType: "media" as const, locationText: "Yekaterinburg, Russia", spheres: ["media" as const], specializations: ["blogger" as const], openTo: ["joint_projects" as const], about: null };
 const contact = { kind: "telegram_group" as const, url: "https://t.me/public_group", username: "public_group", telegramChatId: "-10017", title: "Public group" };
 
 it("upgrades populated schema16 without rewriting data and transfers one preferred contact", async () => {
@@ -34,9 +34,9 @@ it("upgrades populated schema16 without rewriting data and transfers one preferr
 			openTo: await source.query("SELECT * FROM mfm_profile_open_to"),
 		};
 		const runner = new MigrationRunner(await MigrationSource.fromDirectory("migrations"));
-		expect((await runner.migrate(source)).applied).toEqual([17]);
-		expect(await source.query("SELECT * FROM mfm_profiles")).toEqual(before.profile);
-		expect(await source.query("SELECT * FROM mfm_profile_specializations")).toEqual(before.specializations);
+		expect((await runner.migrate(source)).applied).toEqual([17, 18]);
+		expect(await source.query("SELECT profile_id, event_status, profile_type, location_text, completed_at, updated_at, revision FROM mfm_profiles")).toEqual(before.profile);
+		expect(await source.query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'mfm_profile_specializations'")).toEqual([]);
 		expect(await source.query("SELECT * FROM mfm_profile_open_to")).toEqual(before.openTo);
 		expect(await source.query("SELECT * FROM mfm_profile_contacts")).toEqual([]);
 		await source.execute("INSERT INTO mfm_profile_contacts (profile_id, kind, url, username, telegram_chat_id, title, updated_at) VALUES (?, 'telegram_group', ?, 'public_group', '-10017', 'Public group', 3)", [profileId, contact.url]);
@@ -46,8 +46,8 @@ it("upgrades populated schema16 without rewriting data and transfers one preferr
 		await runner.migrate(target);
 		await target.execute(`CREATE TABLE ${STATE_TRANSFER_AUDIT_TABLE} (id INTEGER PRIMARY KEY CHECK (id = 1), digest TEXT NOT NULL, imported_at INTEGER NOT NULL)`);
 		const manifest = await exportStateTransferManifest(new NodeSqlDatabase(source));
-		expect(manifest.schemaVersion).toBe(17);
-		expect(manifest.tables).toHaveLength(26);
+		expect(manifest.schemaVersion).toBe(18);
+		expect(manifest.tables).toHaveLength(25);
 		await importStateTransferManifest(new NodeSqlDatabase(target), manifest);
 		expect((await exportStateTransferManifest(new NodeSqlDatabase(target))).digest).toBe(manifest.digest);
 		expect(await target.query("SELECT kind, url, username, telegram_chat_id, title FROM mfm_profile_contacts")).toEqual([{ kind: contact.kind, url: contact.url, username: contact.username, telegram_chat_id: contact.telegramChatId, title: contact.title }]);
@@ -70,7 +70,7 @@ it("persists, preserves and explicitly clears a preferred contact in the profile
 		const repository = new SqliteOnboardingRepository(database);
 		await repository.setUser("17", "en", "mfm");
 		await repository.saveProfile("17", profileInput, 2, contact);
-		expect(await repository.getProfile("17")).toMatchObject({ ...profileInput, contact });
+		expect(await repository.getProfile("17")).toMatchObject({ ...profileInput, specializations: [], contact });
 		await repository.saveProfile("17", { ...profileInput, displayName: "Changed" }, 3);
 		expect((await repository.getProfile("17"))?.contact).toEqual(contact);
 		await repository.saveProfile("17", profileInput, 4, null);
