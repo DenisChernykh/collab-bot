@@ -3,11 +3,17 @@ import { webCryptoCapabilities } from "../crypto/capabilities.js";
 import { CLOUDFLARE_MIGRATION_MANIFEST } from "./cloudflare-migration-manifest.js";
 import { stateTransferTableNames } from "./state-transfer.js";
 
-const RESET_AUDITS = { "mfm-2026-reset": "mfm_reset_audit", "mnet-2026-reset": "mnet_reset_audit", "mfo-2026-reset": "mfo_reset_audit" } as const;
+const RESET_AUDITS = {
+	"mfm-2026-reset": "mfm_reset_audit",
+	"mnet-2026-reset": "mnet_reset_audit",
+	"mfo-2026-reset": "mfo_reset_audit",
+	"mfo-2026-hotfix-reset": "mfo_hotfix_reset_audit",
+} as const;
 const RESET_PREREQUISITES: Readonly<Record<keyof typeof RESET_AUDITS, readonly (keyof typeof RESET_AUDITS)[]>> = {
 	"mfm-2026-reset": [],
 	"mnet-2026-reset": ["mfm-2026-reset"],
 	"mfo-2026-reset": ["mfm-2026-reset", "mnet-2026-reset"],
+	"mfo-2026-hotfix-reset": ["mfm-2026-reset", "mnet-2026-reset", "mfo-2026-reset"],
 };
 const AUDITS: readonly string[] = Object.values(RESET_AUDITS);
 const AUXILIARY = ["cf1_preflight_cache", "cf1_state_import_audit", "cf1_runtime_probe"] as const;
