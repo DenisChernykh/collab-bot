@@ -8,7 +8,9 @@ CF1 prepared the Cloudflare-compatible runtime, CF2 proved it on an isolated hos
 
 AP and MFM were released to the existing hosted staging and production bots on 2026-09-10, with MFM enabled. The first private `/start` creates one persistent base profile using the Telegram name, then new users choose RU/EN. With `MFM_FEATURE_ENABLED=true`, they choose classic or MFM. Classic retains its collaboration journey; MFM has a bilingual person/project profile and durable onboarding. Repeated starts preserve the profile and draft. The username stays private unless explicitly selected as a classic public platform.
 
-Migration 0014 adds automatic-profile compatibility; migration 0015 adds MFM preferences, profiles and draft relations without changing classic meanings. The current state-transfer schema is 15 (22 tables); schema-13/14 exports cannot be imported directly into it. On 2026-09-10, the separately authorized reset cleared all six project databases. The subsequent MFM release upgraded the hosted primary databases from schema13 to15 without another reset. See the [release record](docs/MFM_RELEASE_RUNBOOK.md) for deployed versions, verification and the schema-aware shutdown procedure; the [reset record](docs/MFM_RESET_RUNBOOK.md) retains its historical target evidence.
+Migration 0014 adds automatic-profile compatibility; migration 0015 adds MFM preferences, profiles and draft relations without changing classic meanings. On 2026-09-10, the separately authorized reset cleared all six project databases. The subsequent MFM release upgraded the hosted primary databases from schema13 to15 without another reset. See the [release record](docs/MFM_RELEASE_RUNBOOK.md) for deployed versions, verification and the schema-aware shutdown procedure; the [reset record](docs/MFM_RESET_RUNBOOK.md) retains its historical target evidence.
+
+The local MNET candidate adds private people search and consensual introductions in RU/EN. Migration 0016 preserves existing profiles and adds discovery consent, introduction requests and durable search/message sessions. Local state transfer now uses schema16 (25 tables); earlier-schema exports need an explicit compatible upgrade before import. The hosted release record remains schema15: MNET has not been deployed, and its local checks do not establish a live Telegram journey.
 
 ## MFM behavior and configuration
 
@@ -17,8 +19,9 @@ Migration 0014 adds automatic-profile compatibility; migration 0015 adds MFM pre
 - New users select language, then affiliation when enabled. No enters classic; Yes asks event status and starts MFM onboarding. Existing accounts migrate to classic without forced enrollment.
 - The base profile exists from the first private `/start`. MFM answers are saved after every choice in a no-expiry draft. Only the final required step saves the completed MFM extension and shared display name atomically. Editing leaves the saved profile intact until confirmation.
 - MFM requires a name, profile type, city/country, 1–3 of eight professional spheres, 1–3 of 42 related specializations and 1–3 intentions. Buttons handle categories; removed spheres prune incompatible specializations. `/start` resumes and `/language` changes RU/EN without clearing the draft.
-- Before completion, no MFM feature menu is available. Completed users can view/edit their profile. People search is future scope; indexed status/sphere/specialization relations are ready, and `open_to` never implies automatic exclusion.
-- Turning the flag off sends new users through language selection to classic. Completed MFM profiles remain editable with neutral labels; unfinished MFM drafts pause and resume when enabled again. Shutdown never deletes profile data.
+- Before completion, no MFM feature menu is available. Completed users can view/edit their profile. In the local MNET candidate, they also get Find people and Introductions (incoming/sent/accepted). Profiles are hidden from search until their owners opt in; status, sphere, specialization and `open_to` are optional filters.
+- A hidden user can browse and send a confirmed 10–500 character introduction message. Sending shares their profile with that recipient. The recipient accepts or declines; the sender can withdraw a pending request. One request per pair prevents duplicate or reverse introductions. Telegram contact appears only on the accepted pair's authorized request screen. Notifications use private bot DMs; MFM does not publish to a channel.
+- Turning the flag off sends new users through language selection to classic. Completed MFM profiles remain editable with neutral labels; unfinished MFM drafts pause and resume when enabled again. MNET disables search and new requests while retaining history, pending decisions/withdrawal and accepted contacts. Shutdown preserves profile data, requests and visibility consent.
 
 The classic creation, browse, own collaboration/application lists, decisions and contact-disclosure rules remain in their existing modules. MFM routing gates classic commands, deep links and callbacks, including repeated and group-chat deliveries. Classic UI remains Russian.
 
@@ -51,7 +54,7 @@ The repository contains no real credentials, raw production exports, PITR bookma
 
 ## Code organization
 
-The codebase is a feature-first modular monolith. Business behavior belongs to one of five vertical slices under `src/modules`: `profiles`, `collaborations`, `marketplace`, `applications`, or `moderation`. Each feature exposes its runtime and Telegram composition surface through its root `index.ts`. A narrow `application/index.ts` may expose application contracts to another feature; all other cross-feature internal imports are rejected by the dependency graph.
+The codebase is a feature-first modular monolith. Business behavior belongs to one of six vertical slices under `src/modules`: `profiles`, `connections`, `collaborations`, `marketplace`, `applications`, or `moderation`. Each feature exposes its runtime and Telegram composition surface through its root `index.ts`. A narrow `application/index.ts` may expose application contracts to another feature; all other cross-feature internal imports are rejected by the dependency graph.
 
 ```text
 src/

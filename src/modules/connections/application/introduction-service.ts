@@ -2,7 +2,7 @@ import type { Clock } from "../../../shared/application/ports/clock.js";
 import type { CryptoCapabilities } from "../../../shared/application/ports/crypto.js";
 import type { TransactionRunner } from "../../../shared/application/ports/transaction-runner.js";
 import type { OutboxDeliveryService } from "../../../shared/application/outbox/outbox-service.js";
-import type { ConnectionActor, ConnectionProof, ConnectionSession } from "./connection-model.js";
+import { isValidIntroductionMessage, type ConnectionActor, type ConnectionProof, type ConnectionSession } from "./connection-model.js";
 import type { IntroductionAction, IntroductionNotice, IntroductionRecord, IntroductionRepository, IntroductionView } from "./introduction-contracts.js";
 import { introductionNotification } from "./introduction-notification.js";
 
@@ -37,7 +37,7 @@ export class IntroductionService {
 					case "message": {
 						if (nav?.screen !== "compose") return this.render(actor, session);
 						const message = action.value.trim();
-						if (message.length < 10 || message.length > 500 || message.includes("\u0000")) return this.render(actor, session, "invalid");
+						if (!isValidIntroductionMessage(message)) return this.render(actor, session, "invalid");
 						next.introduction = { screen: "confirm", targetProfileId: nav.targetProfileId, message }; break;
 					}
 					case "edit_message": if (nav?.screen !== "confirm") return this.render(actor, session, "invalid"); next.introduction = { ...nav, screen: "compose" }; break;

@@ -24,6 +24,27 @@ async function draft(database: SqlDatabase, from = "1") {
 	return { api, view: await api.act(from, { kind: "message", value: "Hello, let's discuss a joint project." }, proof(await api.view(from))) };
 }
 
+it.each([{ message: "Привет!! 👋", characters: 10 }, { message: "👋".repeat(500), characters: 500 }])("persists a Unicode message of $characters SQL characters", async ({ message, characters }) => {
+	await withFreshMigratedDatabase({ prefix: "mnet-unicode-", clock: connectionClock }, async ({ boundary }) => {
+		await seed(boundary);
+		await connectionsFor(boundary).api.open("1", "search");
+		let api = setup(boundary);
+		await api.act("1", { kind: "begin" }, proof(await api.view("1")));
+		const compose = await api.view("1");
+		for (const invalid of ["Привет! 👋", "👋".repeat(501)]) {
+			expect(await api.act("1", { kind: "message", value: invalid }, proof(compose))).toMatchObject({ kind: "compose", notice: "invalid" });
+			expect(await api.view("1")).toEqual(compose);
+		}
+		const confirm = await api.act("1", { kind: "message", value: message }, proof(compose));
+		expect(confirm).toMatchObject({ kind: "confirm", message });
+		api = setup(boundary);
+		expect(await api.view("1")).toEqual(confirm);
+		await api.act("1", { kind: "confirm" }, proof(confirm));
+		expect(await boundary.query("SELECT message, length(message) AS characters FROM introduction_requests")).toEqual([{ message, characters }]);
+		expect(await boundary.query("SELECT * FROM outbox_deliveries")).toHaveLength(1);
+	});
+});
+
 it("persists confirmed drafts, commits one unordered request and localized DM, discloses only to the accepted active pair", async () => {
 	await withFreshMigratedDatabase({ prefix: "mnet-request-", clock: connectionClock }, async ({ boundary }) => {
 		await seed(boundary);

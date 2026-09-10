@@ -34,6 +34,7 @@ it.each(["ru", "en"] as const)("completes private introduction decisions and con
 		await message(1, "/start"); await choose(1, "🔎 Найти людей", "🔎 Find people");
 		await choose(1, "🤝 Познакомиться", "🤝 Introduce yourself");
 		await message(1, "short"); expect(String(last()?.text)).toContain("10–500");
+		await message(1, "Привет! 👋"); expect(String(last()?.text)).toContain("10–500");
 		await message(1, "Synthetic invitation to discuss a project");
 		expect(String(last()?.text)).toContain(t("после принятия", "after acceptance"));
 		await fixture.runtime.shutdown(); fixture = await createFakeBotRuntime({ databasePath, clock: connectionClock, mfmFeatureEnabled: true, fake: fixture.fake });

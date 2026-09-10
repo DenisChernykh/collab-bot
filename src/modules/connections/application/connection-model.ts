@@ -71,13 +71,19 @@ export function parseConnectionState(value: unknown): ConnectionState {
 		...(v.introduction === undefined ? {} : { introduction: parseIntroductionNavigation(v.introduction) }) };
 }
 
+export function isValidIntroductionMessage(message: string): boolean {
+	// SQLite length(TEXT) counts Unicode code points, rather than UTF-16 units.
+	const length = [...message].length;
+	return message.trim() === message && length >= 10 && length <= 500 && !message.includes("\u0000");
+}
+
 function parseIntroductionNavigation(value: unknown): IntroductionNavigation {
 	if (typeof value !== "object" || value === null) throw new Error("invalid introduction navigation");
 	const v = value as Record<string, unknown>;
 	if (v.screen === "list" && Number.isSafeInteger(v.offset) && (v.offset as number) >= 0) return { screen: "list", tab: mfmValue(v.tab, ["incoming", "sent", "accepted"]), offset: v.offset as number };
 	if (v.screen === "request" && typeof v.token === "string" && /^[A-Za-z0-9_-]{22}$/.test(v.token)) return { screen: "request", token: v.token };
 	if ((v.screen === "compose" || v.screen === "confirm") && typeof v.targetProfileId === "string" && /^[a-f0-9-]{36}$/.test(v.targetProfileId)) {
-		if (v.message !== undefined && (typeof v.message !== "string" || v.message.trim() !== v.message || v.message.length < 10 || v.message.length > 500 || v.message.includes("\u0000"))) throw new Error("invalid introduction draft");
+		if (v.message !== undefined && (typeof v.message !== "string" || !isValidIntroductionMessage(v.message))) throw new Error("invalid introduction draft");
 		if (v.screen === "confirm") { if (typeof v.message !== "string") throw new Error("missing introduction message"); return { screen: "confirm", targetProfileId: v.targetProfileId, message: v.message }; }
 		return { screen: "compose", targetProfileId: v.targetProfileId, ...(v.message === undefined ? {} : { message: v.message as string }) };
 	}
