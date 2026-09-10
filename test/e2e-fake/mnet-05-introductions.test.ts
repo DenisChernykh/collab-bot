@@ -30,8 +30,12 @@ it.each(["ru", "en"] as const)("completes private introduction decisions and con
 	};
 	try {
 		for (const id of [1, 2, 3, 4]) await seedConnectionPerson(fixture.runtime.boundary, id, { language });
+		await fixture.runtime.boundary.execute("INSERT INTO mfm_profile_contacts (profile_id, kind, url, username, telegram_chat_id, title, updated_at) VALUES (?, 'external', 'https://example.com/sender', NULL, NULL, NULL, 1)", [connectionProfileId(1)]);
+		await fixture.runtime.boundary.execute("INSERT INTO mfm_profile_contacts (profile_id, kind, url, username, telegram_chat_id, title, updated_at) VALUES (?, 'telegram_group', 'https://t.me/recipient_group', 'recipient_group', '-100200', 'Recipient group', 1)", [connectionProfileId(2)]);
 		await fixture.runtime.boundary.execute("INSERT INTO mfm_discovery_settings VALUES (?, 1, 1, 1)", [connectionProfileId(2)]);
 		await message(1, "/start"); await choose(1, "🔎 Найти людей", "🔎 Find people");
+		expect(String(last()?.text)).toContain(t("Для чего хотите познакомиться?", "Why would you like to connect?"));
+		await choose(1, "Любая цель", "Any purpose");
 		await choose(1, "🤝 Познакомиться", "🤝 Introduce yourself");
 		await message(1, "short"); expect(String(last()?.text)).toContain("10–500");
 		await message(1, "Привет! 👋"); expect(String(last()?.text)).toContain("10–500");
@@ -47,21 +51,22 @@ it.each(["ru", "en"] as const)("completes private introduction decisions and con
 		await deliver();
 		const notification = [...fixture.fake.calls].reverse().find(x => x.method === "sendMessage" && String(x.payload.chat_id) === "2");
 		expect(String(notification?.payload.text)).toContain(t("Новое знакомство", "New introduction"));
-		expect(JSON.stringify(notification?.payload)).not.toMatch(/private_person|tg:\/\/user/);
+		expect(JSON.stringify(notification?.payload)).not.toMatch(/private_person|tg:\/\/user|example\.com|recipient_group/);
 		await message(3, link); expect(String(last()?.text)).not.toContain("Synthetic invitation");
 		await message(2, link); expect(String(last()?.text)).toContain("Synthetic invitation");
-		expect(buttons().some(x => x.url?.startsWith("tg://"))).toBe(false);
+		expect(buttons().some(x => x.url === "https://example.com/sender")).toBe(false);
 		const accepted = await choose(2, "✅ Принять", "✅ Accept");
-		expect(buttons().some(x => x.url === "tg://user?id=1")).toBe(true);
+		expect(buttons().some(x => x.url === "https://example.com/sender")).toBe(true);
 		await fixture.runtime.bot.handleUpdate(accepted);
-		expect(buttons().some(x => x.url === "tg://user?id=1")).toBe(true);
-		await message(1, link); expect(buttons().some(x => x.url === "tg://user?id=2")).toBe(true);
+		expect(buttons().some(x => x.url === "https://example.com/sender")).toBe(true);
+		await message(1, link); expect(buttons().some(x => x.url === "https://t.me/recipient_group")).toBe(true);
 		await choose(1, "Мои знакомства", "My introductions");
 		await choose(1, "Принятые", "Accepted"); expect(String(last()?.text)).toContain("Synthetic 2");
 		expect(buttons().some(x => x.url?.startsWith("tg://"))).toBe(false);
-		await choose(1, "Открыть запрос", "Open introduction"); expect(buttons().some(x => x.url === "tg://user?id=2")).toBe(true);
+		await choose(1, "Открыть запрос", "Open introduction"); expect(buttons().some(x => x.url === "https://t.me/recipient_group")).toBe(true);
 		for (const [sender, decision, ru, en] of [[3, "rejected", "Отклонить", "Decline"], [4, "withdrawn", "Отозвать запрос", "Withdraw introduction"]] as const) {
 			await message(sender, "/start"); await choose(sender, "🔎 Найти людей", "🔎 Find people");
+			await choose(sender, "Любая цель", "Any purpose");
 			await choose(sender, "🤝 Познакомиться", "🤝 Introduce yourself"); await message(sender, "Another synthetic introduction message"); await choose(sender, "Отправить запрос", "Send introduction");
 			const [row] = await fixture.runtime.boundary.query<{ public_token: string }>("SELECT public_token FROM introduction_requests WHERE sender_profile_id = ?", [connectionProfileId(sender)]);
 			if (!row) throw new Error("missing decision request");

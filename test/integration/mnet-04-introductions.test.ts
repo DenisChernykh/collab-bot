@@ -48,6 +48,9 @@ it.each([{ message: "Привет!! 👋", characters: 10 }, { message: "👋".r
 it("persists confirmed drafts, commits one unordered request and localized DM, discloses only to the accepted active pair", async () => {
 	await withFreshMigratedDatabase({ prefix: "mnet-request-", clock: connectionClock }, async ({ boundary }) => {
 		await seed(boundary);
+		await boundary.execute("INSERT INTO mfm_profile_contacts (profile_id, kind, url, username, telegram_chat_id, title, updated_at) VALUES (?, 'external', 'https://example.com/sender', NULL, NULL, NULL, 1)", [connectionProfileId(1)]);
+		await boundary.execute("INSERT INTO mfm_profile_contacts (profile_id, kind, url, username, telegram_chat_id, title, updated_at) VALUES (?, 'telegram_group', 'https://t.me/recipient_group', 'recipient_group', '-100200', 'Recipient group', 1)", [connectionProfileId(2)]);
+		await boundary.execute("INSERT INTO mfm_profile_contacts (profile_id, kind, url, username, telegram_chat_id, title, updated_at) VALUES (?, 'telegram_channel', 'https://t.me/public_channel', 'public_channel', '-100300', 'Public channel', 1)", [connectionProfileId(3)]);
 		await boundary.execute("UPDATE mfm_discovery_settings SET visible = 0 WHERE profile_id = ?", [connectionProfileId(1)]);
 		const { api, view } = await draft(boundary);
 		expect(view).toMatchObject({ kind: "confirm" });
@@ -76,8 +79,10 @@ it("persists confirmed drafts, commits one unordered request and localized DM, d
 		expect(await boundary.query("SELECT status FROM introduction_requests")).toEqual([{ status: "pending" }]);
 		await boundary.execute("DROP TRIGGER fail_decision_dm");
 		const accepted = await setup(boundary, false).act("2", { kind: "decide", decision: "accepted", requestRevision: 1 }, proof(await api.view("2")));
-		expect(accepted).toMatchObject({ request: { status: "accepted" }, contactUrl: "https://t.me/private_person_1" });
+		expect(accepted).toMatchObject({ request: { status: "accepted" }, contactUrl: "https://example.com/sender" });
 		expect(await boundary.query("SELECT kind FROM outbox_deliveries")).toEqual([{ kind: "dm_send" }, { kind: "dm_send" }, { kind: "dm_send" }]);
+		expect(await api.openRequest("1", token)).toMatchObject({ contactUrl: "https://t.me/recipient_group" });
+		await boundary.execute("DELETE FROM mfm_profile_contacts WHERE profile_id = ?", [connectionProfileId(2)]);
 		await boundary.execute("UPDATE telegram_users SET username = NULL WHERE telegram_user_id = '2'");
 		expect(await api.openRequest("1", token)).toMatchObject({ contactUrl: "tg://user?id=2" });
 		expect(await api.act("1", { kind: "list", tab: "accepted" }, proof(await api.view("1")))).toMatchObject({ kind: "list", request: { status: "accepted" }, contactUrl: null });
@@ -86,6 +91,11 @@ it("persists confirmed drafts, commits one unordered request and localized DM, d
 		await boundary.execute("UPDATE telegram_users SET status = 'blocked', blocked_at = 2 WHERE telegram_user_id = '2'");
 		expect(await api.openRequest("1", token)).toMatchObject({ contactUrl: null, notice: "unavailable" });
 		expect(await api.openRequest("2", token)).toMatchObject({ kind: "unavailable" });
+		const channelToken = "C".repeat(22);
+		await boundary.execute("INSERT INTO introduction_requests VALUES ('30000000-0000-4000-8000-000000000001', ?, ?, ?, 'Synthetic channel introduction', 'pending', 1, 3, NULL)", [channelToken, connectionProfileId(1), connectionProfileId(3)]);
+		expect(await api.openRequest("1", channelToken)).toMatchObject({ request: { status: "pending" }, contactUrl: null });
+		await boundary.execute("UPDATE introduction_requests SET status = 'accepted', revision = 2, decided_at = 4 WHERE public_token = ?", [channelToken]);
+		expect(await api.openRequest("1", channelToken)).toMatchObject({ request: { status: "accepted" }, contactUrl: "https://t.me/public_channel" });
 	});
 });
 

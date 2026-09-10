@@ -6,6 +6,12 @@ import { encodeIntroductionCallback } from "./introduction-callback-codec.js";
 
 const FIELDS: Record<FilterField, Translation> = { eventStatus: ["Участие", "Participation"], sphere: ["Сфера", "Field"], specialization: ["Специализация", "Specialization"], openTo: ["К чему открыт", "Open to"] };
 const LABELS: Record<FilterField, Readonly<Record<string, Translation>>> = { eventStatus: EVENT_LABELS, sphere: SPHERE_LABELS, specialization: SPECIALIZATION_LABELS, openTo: OPEN_TO_LABELS };
+const PURPOSE: Translation = ["Для чего хотите познакомиться?", "Why would you like to connect?"];
+const PURPOSE_LABELS: Readonly<Record<string, Translation>> = {
+	joint_projects: ["🤝 Для совместного проекта", "🤝 For a joint project"],
+	professional_communication: ["💬 Для профессионального знакомства", "💬 For a professional introduction"],
+	city_and_events: ["🌆 Для прогулки / мероприятия", "🌆 For a walk / event"],
+};
 export function renderConnection(view: ConnectionView, introductions = false): { text: string; keyboard: InlineKeyboard } {
 	const keyboard = new InlineKeyboard();
 	if (view.kind === "unavailable") return { text: "Раздел недоступен. /start\nUnavailable. /start", keyboard };
@@ -22,18 +28,18 @@ export function renderConnection(view: ConnectionView, introductions = false): {
 			keyboard.text(t(["✏️ Изменить профиль", "✏️ Edit profile"]), "mfm:edit").row();
 			keyboard.text(t(["✨ Дополнить профиль", "✨ Improve profile"]), "mfm:improve").row();
 		}
-		if (view.festivalEnabled) button(["🔎 Найти людей", "🔎 Find people"], { kind: "open", screen: "search" });
+		if (view.festivalEnabled) button(["🔎 Найти людей", "🔎 Find people"], filters.openTo === undefined ? { kind: "choose_filter", field: "openTo" } : { kind: "open", screen: "search" });
 		if (introductions) keyboard.text(t(["🤝 Мои знакомства", "🤝 My introductions"]), encodeIntroductionCallback({ kind: "list", tab: "incoming" }, view.session)).row();
 		button(["👤 Мой профиль", "👤 My profile"], { kind: "open", screen: "profile" });
 	} else if (view.kind === "filter") {
 		const field = view.session.state.filterField ?? "eventStatus";
-		text = t(FIELDS[field]);
+		text = t(field === "openTo" ? PURPOSE : FIELDS[field]);
 		if (field === "specialization" && filters.sphere === undefined) text += "\n" + t(["Сначала выберите сферу.", "Choose a field first."]);
 		for (const value of filterChoices(field, filters)) {
-			const label = LABELS[field][value]!;
+			const label = (field === "openTo" ? PURPOSE_LABELS : LABELS[field])[value]!;
 			button(`${filters[field] === value ? "✅ " : ""}${t(label)}`, { kind: "set_filter", field, value });
 		}
-		button(["Любой вариант", "Any"], { kind: "set_filter", field, value: null });
+		button(field === "openTo" ? ["Любая цель", "Any purpose"] : ["Любой вариант", "Any"], { kind: "set_filter", field, value: null });
 	} else {
 		const chosen = FILTER_FIELDS.flatMap(field => filters[field] === undefined ? [] : [t(LABELS[field][filters[field]!]!)]);
 		text = t(["🔎 Найти людей", "🔎 Find people"]) + (chosen.length === 0 ? "" : `\n${chosen.join(" · ")}`);

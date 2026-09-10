@@ -82,7 +82,7 @@ it("runs RU/EN fast onboarding through both native pickers, external link and sk
 		const find = (fake.lastMessage()?.reply_markup?.inline_keyboard?.flat().find((button) => button.text === "Найти людей →") as { callback_data?: string } | undefined)?.callback_data;
 		if (find === undefined) throw new Error("ready CTA missing");
 		await ru.callback(find);
-		expect(String(fake.lastMessage()?.text)).toContain("Найти людей");
+		expect(String(fake.lastMessage()?.text)).toContain("Для чего хотите познакомиться?");
 
 		const en = actor(102, "en", "No Username");
 		await en.reachContact("science_education");

@@ -32,8 +32,11 @@ export function createConnectionTelegramFeature(service: ConnectionService, intr
 		async showReady(ctx: Context, userId: string): Promise<void> {
 			const view = await service.view(userId);
 			if (view.kind === "unavailable") { await show(ctx, view); return; }
+			const findAction = view.session.state.filters.openTo === undefined
+				? { kind: "choose_filter" as const, field: "openTo" as const }
+				: { kind: "open" as const, screen: "search" as const };
 			const keyboard = new InlineKeyboard()
-				.text(tr(FIND_PEOPLE, view.language), encodeConnectionCallback({ kind: "open", screen: "search" }, view.session)).row()
+				.text(tr(FIND_PEOPLE, view.language), encodeConnectionCallback(findAction, view.session)).row()
 				.text(tr(IMPROVE_PROFILE, view.language), "mfm:improve");
 			await ctx.reply(tr(READY, view.language), { reply_markup: keyboard });
 		},

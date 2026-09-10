@@ -31,6 +31,8 @@ it.each(["ru", "en"] as const)("offers consent and persistent discovery in the a
 			await choose(id, t("👁 Показывать в поиске", "👁 Show in search"));
 		}
 		await message(1, "/start"); await choose(1, t("🔎 Найти людей", "🔎 Find people"));
+		expect(String(fixture.fake.lastMessage()?.text)).toContain(t("Для чего хотите познакомиться?", "Why would you like to connect?"));
+		await choose(1, t("Любая цель", "Any purpose"));
 		expect(String(fixture.fake.lastMessage()?.text)).toContain("Synthetic 2");
 		expect(String(fixture.fake.lastMessage()?.text)).not.toContain("private_person");
 		await choose(1, t("Сфера", "Field")); await choose(1, t("💻 Цифровизация и IT", "💻 Digitalization and IT"));
@@ -38,7 +40,7 @@ it.each(["ru", "en"] as const)("offers consent and persistent discovery in the a
 		await fixture.runtime.shutdown(); fixture = await createFakeBotRuntime({ databasePath, mfmFeatureEnabled: true, clock: connectionClock, fake: fixture.fake });
 		await message(1, "/start");
 		expect(String(fixture.fake.lastMessage()?.text)).toContain("Synthetic 2");
-		await choose(1, t("К чему открыт", "Open to")); await choose(1, t("🤝 Совместные проекты", "🤝 Joint projects"));
+		await choose(1, t("К чему открыт", "Open to")); await choose(1, t("🤝 Для совместного проекта", "🤝 For a joint project"));
 		expect(String(fixture.fake.lastMessage()?.text)).toContain(t("Пока никого", "No people"));
 		await choose(1, t("Сбросить фильтры", "Reset filters"));
 		expect(String(fixture.fake.lastMessage()?.text)).toContain("Synthetic 2");
