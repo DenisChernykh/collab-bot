@@ -4,7 +4,7 @@ PRD MFM-F06 explicitly authorizes this operation for this project only. It super
 
 Targets: the existing `collaboration-bot-production` and `collaboration-bot-staging` Workers in account `643464cda99dd9fb036367674d42a62c`; their fixed `collaboration-bot-primary` objects; staging's fixed `collaboration-bot-cf2-03-rehearsal`; `.runtime/app.sqlite`, `.runtime/app.pre-s4-01-20260827T172913.sqlite`, and the project's retained CF3 `authoritative.sqlite` snapshot under the owner's CollaborationBot application-support directory. Verify the current binding/namespace/object IDs, deployed version and every real local path. Do not address arbitrary object names or other projects. Enumerate any further project SQLite files before execution.
 
-The reset preserves schema, migration checksums, indexes and triggers. Cloudflare’s internal `_cf_METADATA` table is recognized but its rows are never queried or deleted ([workerd source](https://github.com/cloudflare/workerd/blob/main/src/workerd/util/sqlite-metadata.h)); its presence is covered by an alarm-created local workerd regression. Unknown application tables still fail closed. It clears existing allowlisted product/service tables, including MFM data if present. It does not apply migration 15 to legacy live databases. A small `mfm_reset_audit` row retains only operation ID, target, counts, digests and time. An exact retry returns that result, even if new data later exists; a second operation ID is refused. This is a logical reset, not forensic erasure of Cloudflare PITR or private JSON evidence. Existing Telegram messages are outside scope.
+The reset preserves schema, migration checksums, indexes and triggers. Cloudflare’s internal `_cf_METADATA` table is recognized but its rows are never queried or deleted ([workerd source](https://github.com/cloudflare/workerd/blob/main/src/workerd/util/sqlite-metadata.h)); its presence is covered by an alarm-created local workerd regression. Unknown application tables still fail closed. It clears existing allowlisted product/service tables, including MFM data if present. It does not apply migrations to legacy live databases. A small `mfm_reset_audit` row retains only operation ID, target, counts, digests and time. An exact retry returns that result, even if new data later exists. The MNET follow-up below authorizes one distinct second operation with its own retained audit; arbitrary operation IDs remain refused. This is a logical reset, not forensic erasure of Cloudflare PITR or private JSON evidence. Existing Telegram messages are outside scope.
 
 ## Preflight and maintenance
 
@@ -61,3 +61,50 @@ Cloudflare namespace inventory confirmed exactly the two project namespaces and 
 Final maintenance versions were staging `7871165e-32ab-498b-9c78-811d1261e5e6` and production `d918840d-9c14-46fe-9573-d8abca032cf0`. After verification, staging was restored to version `59917d21-c09e-4239-8ef8-d97656df9d9f` (deployment `95a2eff0-2f1c-4157-af21-90c328f99e1b`) and production to version `7408355f-5fe3-4fcb-8cf4-d07181ed21e7` (deployment `039c2a7d-a3f7-4d62-a5ed-ca6cfc3a62a1`), both at 100%. Health returned `ok`, reset routes returned 404 and both active versions had no `RESET_*` bindings. Production's restored schema-13 canonical export has 17 tables, zero rows and digest `dfede19847301092c861e371e771318c0251fb13bc7d74853f90afdc40c998c5`; its alarm is null and pending Telegram updates are zero. Temporary local reset-token files were removed. The existing original credentials were not replaced.
 
 Operational deviations were resolved before deletion: Python used the system CA bundle and a standard HTTP User-Agent after Cloudflare 1010; staging was restored without data changes while the metadata-table guard was diagnosed. The authenticated diagnostics and exact `_cf_METADATA` exception were covered by failing then passing tests; no deletion allowlist expansion occurred. No MFM application release, webhook mutation, Telegram message delivery or Git push was performed.
+
+
+## MNET follow-up — separately authorized second reset
+
+The user confirmed clearing all six databases again and, after the MNET-06 handoff,
+asked to complete the reset and feature deployment on 2026-09-10. MNET-07 prepares
+the operator code; MNET-08 performs the reset, then the separately recorded release
+activates MNET. Keep these operations sequential and record each result.
+
+Only `mfm-2026-reset` and `mnet-2026-reset` are supported. The second requires the
+first audit to exist for the same exact target. It writes `mnet_reset_audit` without
+rewriting or deleting `mfm_reset_audit`. Both audit rows are excluded from product
+row counts and schema/data digests; inspection exposes their data-free results as
+`completedOperations`. Each operation's exact retry returns its own immutable result
+without deleting newer data. A changed digest for a completed operation is refused;
+third/arbitrary operation IDs and a missing/mismatched prior audit are refused.
+
+Reinspect the two existing namespaces, all three fixed hosted objects and the same
+three real local SQLite paths above. The last recorded hosted primaries are schema15;
+staging rehearsal and local snapshots retain their earlier schemas. The maintenance
+helper supports the verified migration prefixes 11–16 and never upgrades them. Do not
+infer current versions or counts from the earlier execution record.
+
+Follow the existing preflight/maintenance/apply/retry/restore procedure using
+`RESET_OPERATION_ID:mnet-2026-reset` and request `operationId: mnet-2026-reset`.
+Both operations credentials are now available in their owner-only handoffs, so reuse
+`OPERATIONS_TOKEN` rather than generating a new reset secret. Before maintenance,
+verify exact current version/binding and the production null alarm. Use the
+maintenance inspection for delivery/receipt aggregates before deletion; do not fetch
+full protected state exports. The staging alarm route is production-only in normal code. Preserve the existing Telegram secrets, webhook and vars. Keep at
+least 60 seconds of idle maintenance before applying. The protected maintenance
+webhook-state check must verify each bot/webhook and zero pending updates.
+
+Before deleting, compare the protected target against the freshly inventoried object
+ID and the first audit target; compare the inspection digest and require quiescence.
+After deleting, require zero product/service rows, unchanged schema/history and both
+audits; compare the old result exactly. Replay the identical request once and require
+the same second result. Restore the recorded normal version, verify health and absence
+of reset routes. The final maintenance inspection proves zero product rows; the
+subsequent normal release uses a protected summary without exporting private rows.
+
+Local SQLite remains stopped. Check the database and WAL/SHM holders, exact paths and
+original permissions. Preserve the earlier snapshot notice and write a separate MNET
+supersession notice after clearing the retained snapshot. Restore original permissions.
+No import, PITR restore, polling startup, Telegram test messages or Git push is part of
+the reset. Subsequent MNET feature deployment uses normal `src/worker.ts`, schema16,
+explicit `MFM_FEATURE_ENABLED:true` and the staging-first release verification.

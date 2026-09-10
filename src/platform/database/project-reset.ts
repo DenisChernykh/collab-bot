@@ -3,7 +3,8 @@ import { webCryptoCapabilities } from "../crypto/capabilities.js";
 import { CLOUDFLARE_MIGRATION_MANIFEST } from "./cloudflare-migration-manifest.js";
 import { stateTransferTableNames } from "./state-transfer.js";
 
-const AUDIT = "mfm_reset_audit";
+const RESET_AUDITS = { "mfm-2026-reset": "mfm_reset_audit", "mnet-2026-reset": "mnet_reset_audit" } as const;
+const AUDITS: readonly string[] = Object.values(RESET_AUDITS);
 const AUXILIARY = ["cf1_preflight_cache", "cf1_state_import_audit", "cf1_runtime_probe"] as const;
 const DELETE_GUARDS = ["product_events_append_only_delete", "operator_actions_append_only_delete"] as const;
 const TABLES: readonly string[] = [...stateTransferTableNames(), ...AUXILIARY];
@@ -16,6 +17,7 @@ export interface ResetRequest { readonly operationId: string; readonly target: s
 export interface ResetInspection {
 	readonly target: string; readonly digest: string; readonly schemaDigest: string; readonly schemaVersion: number;
 	readonly rowCount: number; readonly tables: readonly { readonly name: string; readonly count: number }[]; readonly quiescent: boolean;
+	readonly completedOperations: readonly ResetResult[];
 }
 export interface ResetResult {
 	readonly operationId: string; readonly target: string; readonly beforeDigest: string; readonly afterDigest: string;
@@ -28,7 +30,7 @@ export async function inspectProjectReset(database: SqlDatabase, target: string)
 		const schema = await database.query<{ type: string; name: string; sql: string | null }>("SELECT type, name, sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name");
 		const tableNames = schema.filter((row) => row.type === "table").map((row) => row.name);
 		// Cloudflare owns _cf_METADATA (alarm/PITR bookkeeping); never query or delete its rows.
-		const unknown = tableNames.filter((name) => name !== "__app_migrations" && name !== AUDIT && name !== "_cf_METADATA" && !TABLES.includes(name));
+		const unknown = tableNames.filter((name) => name !== "__app_migrations" && !AUDITS.includes(name) && name !== "_cf_METADATA" && !TABLES.includes(name));
 		if (unknown.length > 0) throw new UnreviewedResetTablesError(unknown);
 		const migrations = await database.query<{ id: number; filename: string; checksum: string }>("SELECT id, filename, checksum FROM __app_migrations ORDER BY id");
 		if (migrations.length < 11 || migrations.length > CLOUDFLARE_MIGRATION_MANIFEST.length || migrations.some((m, index) => {
@@ -46,25 +48,33 @@ export async function inspectProjectReset(database: SqlDatabase, target: string)
 		const pending = await database.query<{ count: number }>("SELECT count(*) AS count FROM outbox_deliveries WHERE status NOT IN ('sent', 'permanent_failed', 'cancelled')");
 		const receipts = await database.query<{ count: number }>("SELECT count(*) AS count FROM command_receipts WHERE status <> 'completed'");
 		if ((await database.query("PRAGMA foreign_key_check")).length !== 0) throw new Error("reset_integrity_failed");
-		const schemaDigest = hash(schema.filter((row) => row.name !== AUDIT && row.name !== `sqlite_autoindex_${AUDIT}_1`));
+		const schemaDigest = hash(schema.filter((row) => !AUDITS.includes(row.name)));
+		const completedOperations: ResetResult[] = [];
+		for (const audit of AUDITS) {
+			const result = await readResetResult(database, audit);
+			if (result !== undefined) completedOperations.push(result);
+		}
 		return { target, schemaDigest, schemaVersion: migrations.length, digest: hash({ schemaDigest, migrations, data }),
 			rowCount: data.reduce((sum, table) => sum + table.count, 0), tables: data.map(({ name, count }) => ({ name, count })),
-			quiescent: pending[0]?.count === 0 && receipts[0]?.count === 0 };
+			quiescent: pending[0]?.count === 0 && receipts[0]?.count === 0, completedOperations };
 	});
 }
 
 export async function resetProjectDatabase(database: SqlDatabase, actualTarget: string, request: ResetRequest): Promise<ResetResult> {
 	if (request.target !== actualTarget) throw new Error("reset_target_mismatch");
 	if (!/^[a-z0-9-]{8,80}$/u.test(request.operationId) || !/^[0-9a-f]{64}$/u.test(request.expectedDigest)) throw new Error("reset_invalid_request");
+	if (!Object.hasOwn(RESET_AUDITS, request.operationId)) throw new Error("reset_unsupported_operation");
+	const audit = RESET_AUDITS[request.operationId as keyof typeof RESET_AUDITS];
 	return database.withTransaction(async () => {
-		const auditExists = await database.query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?", [AUDIT]);
-		if (auditExists.length > 0) {
-			const rows = await database.query<{ result_json: string }>(`SELECT result_json FROM ${AUDIT} WHERE id = 1`);
-			if (rows[0]) {
-				const result = JSON.parse(rows[0].result_json) as ResetResult;
-				if (result.operationId !== request.operationId || result.target !== actualTarget || result.beforeDigest !== request.expectedDigest) throw new Error("reset_already_completed");
-				return result;
-			}
+		if (request.operationId === "mnet-2026-reset") {
+			const previous = await readResetResult(database, RESET_AUDITS["mfm-2026-reset"]);
+			if (previous === undefined || previous.operationId !== "mfm-2026-reset") throw new Error("reset_previous_operation_missing");
+			if (previous.target !== actualTarget) throw new Error("reset_target_mismatch");
+		}
+		const recorded = await readResetResult(database, audit);
+		if (recorded !== undefined) {
+			if (recorded.operationId !== request.operationId || recorded.target !== actualTarget || recorded.beforeDigest !== request.expectedDigest) throw new Error("reset_already_completed");
+			return recorded;
 		}
 		const before = await inspectProjectReset(database, actualTarget);
 		if (before.digest !== request.expectedDigest) throw new Error("reset_digest_mismatch");
@@ -78,8 +88,15 @@ export async function resetProjectDatabase(database: SqlDatabase, actualTarget: 
 		if (after.rowCount !== 0 || after.schemaDigest !== before.schemaDigest) throw new Error("reset_verification_failed");
 		const result: ResetResult = { operationId: request.operationId, target: actualTarget, beforeDigest: before.digest, afterDigest: after.digest,
 			removedRows: before.rowCount, schemaVersion: before.schemaVersion, completedAt: Date.now() };
-		await database.execute(`CREATE TABLE IF NOT EXISTS ${AUDIT} (id INTEGER PRIMARY KEY CHECK (id = 1), result_json TEXT NOT NULL CHECK (json_valid(result_json)))`);
-		await database.execute(`INSERT INTO ${AUDIT} (id, result_json) VALUES (1, ?)`, [JSON.stringify(result)]);
+		await database.execute(`CREATE TABLE IF NOT EXISTS ${audit} (id INTEGER PRIMARY KEY CHECK (id = 1), result_json TEXT NOT NULL CHECK (json_valid(result_json)))`);
+		await database.execute(`INSERT INTO ${audit} (id, result_json) VALUES (1, ?)`, [JSON.stringify(result)]);
 		return result;
 	});
+}
+
+async function readResetResult(database: SqlDatabase, audit: string): Promise<ResetResult | undefined> {
+	const exists = await database.query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?", [audit]);
+	if (exists.length === 0) return undefined;
+	const [row] = await database.query<{ result_json: string }>(`SELECT result_json FROM ${quote(audit)} WHERE id = 1`);
+	return row === undefined ? undefined : JSON.parse(row.result_json) as ResetResult;
 }

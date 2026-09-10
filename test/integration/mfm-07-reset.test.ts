@@ -23,7 +23,7 @@ it("requires the exact target and digest, clears data once and preserves the sch
 		await boundary.execute("INSERT INTO telegram_users (telegram_user_id, display_name, status, created_at, updated_at) VALUES ('2', 'After reset', 'active', 2, 2)");
 		expect(await resetProjectDatabase(boundary, "local:test", request)).toEqual(result);
 		expect((await inspectProjectReset(boundary, "local:test")).rowCount).toBe(1);
-		await expect(resetProjectDatabase(boundary, "local:test", { ...request, operationId: "second-reset" })).rejects.toThrow("reset_already_completed");
+		await expect(resetProjectDatabase(boundary, "local:test", { ...request, operationId: "second-reset" })).rejects.toThrow("reset_unsupported_operation");
 	});
 });
 
