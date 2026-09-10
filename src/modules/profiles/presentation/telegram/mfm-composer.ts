@@ -1,7 +1,7 @@
 import { InlineKeyboard, type Context } from "grammy";
 import type { OnboardingService, OnboardingView } from "../../application/onboarding-service.js";
 import { decodeMfmCallback } from "./mfm-callback-codec.js";
-import { renderOnboarding } from "./mfm-presentation.js";
+import { contactRequestIds, renderOnboarding } from "./mfm-presentation.js";
 import { COPY, NOTICES, tr } from "./mfm-copy.js";
 
 export interface MfmTelegramOptions {
@@ -10,6 +10,7 @@ export interface MfmTelegramOptions {
 	readonly renderClassic: (ctx: Context, pendingStart?: string) => Promise<void>;
 	readonly completed?: {
 		show(ctx: Context, userId: string, prefix?: string): Promise<void>;
+		showReady?(ctx: Context, userId: string): Promise<void>;
 		routeStart(ctx: Context, userId: string, parameter: string): Promise<boolean>;
 		routeText(ctx: Context, userId: string, text: string): Promise<void>;
 		routeCallback(ctx: Context, userId: string, data: string): Promise<boolean>;
@@ -20,11 +21,16 @@ export function createMfmTelegramFeature(options: MfmTelegramOptions) {
 	async function show(ctx: Context, view: OnboardingView, edit = false): Promise<void> {
 		if (view.kind === "classic") { await options.renderClassic(ctx, view.pendingStart); return; }
 		if (view.kind === "home" && options.completed !== undefined && ctx.from !== undefined) {
+			if (view.notice === "saved" && options.completed.showReady !== undefined) { await options.completed.showReady(ctx, String(ctx.from.id)); return; }
 			await options.completed.show(ctx, String(ctx.from.id), view.notice === undefined ? "" : `${tr(NOTICES[view.notice], view.language)}\n\n`); return;
 		}
 		const rendered = renderOnboarding(view);
-		if (edit && ctx.callbackQuery?.message !== undefined) await ctx.editMessageText(rendered.text, { reply_markup: rendered.keyboard });
+		if (edit && ctx.callbackQuery?.message !== undefined && rendered.keyboard instanceof InlineKeyboard) await ctx.editMessageText(rendered.text, { reply_markup: rendered.keyboard });
 		else await ctx.reply(rendered.text, { reply_markup: rendered.keyboard });
+	}
+	async function leaveContact(ctx: Context, view: OnboardingView, message: string): Promise<void> {
+		await ctx.reply(message, { reply_markup: { remove_keyboard: true } });
+		await show(ctx, view);
 	}
 	return {
 		show,
@@ -42,15 +48,60 @@ export function createMfmTelegramFeature(options: MfmTelegramOptions) {
 		async routeText(ctx: Context, userId: string, text: string): Promise<boolean> {
 			const command = text.trim().split(/\s+/, 1)[0]?.toLowerCase();
 			if (command === "/start") return false;
-			if (command === "/language") { await show(ctx, await service.language(userId)); return true; }
 			const view = await service.view(userId);
 			if (view.kind === "classic") return false;
+			if (command === "/language") {
+				const next = await service.language(userId);
+				if (view.kind === "step" && view.session.state.step === "contact") await leaveContact(ctx, next, tr(COPY.contactClosed, view.language));
+				else await show(ctx, next);
+				return true;
+			}
 			if (command === "/help") { await ctx.reply(tr(COPY.help, view.language) + options.helpContact); return true; }
 			if (view.kind === "home" && options.completed !== undefined) { await options.completed.routeText(ctx, userId, text); return true; }
+			if (view.kind === "step" && view.session.state.step === "contact") {
+				const value = text.trim();
+				const proof = { generation: view.session.state.generation, revision: view.session.revision };
+				if (value === tr(COPY.contactOther, view.language)) {
+					await ctx.reply(tr(COPY.contactPublicLink, view.language), { reply_markup: { remove_keyboard: true } });
+					return true;
+				}
+				let next: OnboardingView;
+				let acknowledgement = tr(COPY.contactSelected, view.language);
+				if (value === tr(COPY.contactTelegram, view.language)) next = await service.act(userId, { kind: "choice", value: "telegram_user" }, proof);
+				else if (value === tr(COPY.skip, view.language)) { next = await service.act(userId, { kind: "next" }, proof); acknowledgement = tr(COPY.contactSkipped, view.language); }
+				else if (value === tr(COPY.back, view.language)) { next = await service.act(userId, { kind: "back" }, proof); acknowledgement = tr(COPY.contactClosed, view.language); }
+				else if (value === tr(view.session.state.editing ? COPY.cancel : COPY.later, view.language) || command === "/cancel") { next = await service.cancel(userId); acknowledgement = tr(COPY.contactClosed, view.language); }
+				else next = await service.act(userId, { kind: "text", value }, proof);
+				if (next.kind !== "step" || next.session.state.step !== "contact") await leaveContact(ctx, next, acknowledgement);
+				else await show(ctx, next);
+				return true;
+			}
 			if (command === "/cancel") { await show(ctx, await service.cancel(userId)); return true; }
 			if (view.kind === "step" && !text.startsWith("/")) {
 				await show(ctx, await service.act(userId, { kind: "text", value: text }, { generation: view.session.state.generation, revision: view.session.revision }));
 			} else await show(ctx, view);
+			return true;
+		},
+		async routeMessage(ctx: Context, userId: string): Promise<boolean> {
+			const shared = ctx.message?.chat_shared;
+			if (shared === undefined) return false;
+			const view = await service.view(userId);
+			if (view.kind === "classic") return false;
+			if (view.kind !== "step" || view.session.state.step !== "contact") { await show(ctx, view); return true; }
+			const requestIds = contactRequestIds(view.session);
+			const kind = shared.request_id === requestIds.channel ? "telegram_channel" : shared.request_id === requestIds.group ? "telegram_group" : undefined;
+			if (kind === undefined) { await ctx.reply(tr(COPY.contactStale, view.language)); return true; }
+			const username = shared.username?.trim().replace(/^@+/u, "");
+			if (username === undefined || !/^[A-Za-z][A-Za-z0-9_]{4,31}$/u.test(username)) {
+				await ctx.reply(tr(COPY.contactPublicLink, view.language), { reply_markup: { remove_keyboard: true } });
+				return true;
+			}
+			const rawTitle = shared.title?.trim();
+			const title = rawTitle === undefined || rawTitle.length === 0 || rawTitle.length > 100 ? undefined : rawTitle;
+			const next = await service.selectContact(userId, { kind, url: `https://t.me/${username}`, username, telegramChatId: String(shared.chat_id), ...(title === undefined ? {} : { title }) }, { generation: view.session.state.generation, revision: view.session.revision });
+			const selected = title ?? `@${username}`;
+			if (next.kind === "home") await leaveContact(ctx, next, `${tr(COPY.contactSelected, view.language)}: ${selected}`);
+			else await show(ctx, next);
 			return true;
 		},
 		async routeCallback(ctx: Context, userId: string, data: string): Promise<boolean> {

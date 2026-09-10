@@ -156,6 +156,7 @@ export function registerTelegramRouter(bot: Bot, options: TelegramRouterOptions)
 		if (workCtx.chat?.type !== "private" || workCtx.from === undefined) return;
 		if (!(await ensureActor(workCtx, options))) return;
 		if (workCtx.message.text === undefined && options.onboardingService !== undefined && mfmFeature !== undefined) {
+			if (await mfmFeature.routeMessage(workCtx, String(workCtx.from.id))) return;
 			const view = await options.onboardingService.view(String(workCtx.from.id));
 			if (view.kind !== "classic") { await mfmFeature.show(workCtx, view); return; }
 		}

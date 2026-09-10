@@ -31,7 +31,7 @@ async function journey(databasePath: string) {
 		async restart(enabled: boolean) { await fixture.runtime.shutdown(); fixture = await createFakeBotRuntime({ databasePath, clock, fake: fixture.fake, mfmFeatureEnabled: enabled }); },
 		async fields() {
 			await text("/start"); await act({ kind: "language", value: "en" }); await act({ kind: "affiliation", value: "yes" });
-			await act({ kind: "choice", value: "citizen_program" }); await act({ kind: "next" }); await act({ kind: "keep" });
+			await act({ kind: "choice", value: "citizen_program" }); await act({ kind: "keep" });
 			await act({ kind: "choice", value: "project" }); await text("Astana, Kazakhstan");
 		},
 	};
@@ -56,14 +56,9 @@ it("restores drafts across restarts, rejects category text and enforces limits w
 	expect(String(j.fake().lastMessage()?.text)).toContain("Продолжим");
 	expect((await j.session())?.state.draft).toEqual(persisted?.state.draft);
 	await j.act({ kind: "next" });
+	expect((await j.session())?.state.step).toBe("contact");
 	await j.act({ kind: "next" });
-	expect((await j.session())?.state.step).toBe("specializations");
-	for (const value of ["blogger", "ai", "finance"]) await j.act({ kind: "choice", value });
-	await j.act({ kind: "choice", value: "data" });
-	expect((await j.session())?.state.draft.specializations).toEqual(["blogger", "ai", "finance"]);
-	await j.act({ kind: "next" }); await j.act({ kind: "next" });
-	expect((await j.session())?.state.step).toBe("open_to");
-	await j.act({ kind: "choice", value: "city_and_events" }); await j.act({ kind: "next" });
+	expect(await j.session()).toBeUndefined();
 	await j.restart(false); await j.text("/start");
 	expect(String(j.fake().lastMessage()?.text)).toContain("Мой профиль");
 	expect(String(j.fake().lastMessage()?.text)).not.toMatch(/МФМ|Горожане/);
@@ -98,11 +93,10 @@ it("defaults new users to language then classic when the feature is off", () => 
 
 it("rolls back the final profile, session and receipt before any Telegram reply and permits one retry", () => withJourney(async (j) => {
 	await j.fields(); await j.act({ kind: "choice", value: "digital_it" }); await j.act({ kind: "next" });
-	await j.act({ kind: "choice", value: "ai" }); await j.act({ kind: "next" }); await j.act({ kind: "choice", value: "joint_projects" });
 	const update = await j.event({ kind: "next" });
 	const before = await j.session();
 	const count = j.fake().calls.length;
-	await j.runtime().boundary.execute("CREATE TRIGGER mfm_final_failure BEFORE INSERT ON mfm_profile_open_to BEGIN SELECT RAISE(ABORT, 'injected final failure'); END");
+	await j.runtime().boundary.execute("CREATE TRIGGER mfm_final_failure BEFORE DELETE ON onboarding_sessions BEGIN SELECT RAISE(ABORT, 'injected final failure'); END");
 	await expect(j.runtime().bot.handleUpdate(update)).rejects.toThrow("injected final failure");
 	expect(await j.session()).toEqual(before);
 	expect(j.fake().calls).toHaveLength(count);
@@ -115,14 +109,13 @@ it("rolls back the final profile, session and receipt before any Telegram reply 
 
 it("keeps the completed profile visible until an edited draft is saved once with the feature disabled", () => withJourney(async (j) => {
 	await j.fields(); await j.act({ kind: "choice", value: "digital_it" }); await j.act({ kind: "next" });
-	await j.act({ kind: "choice", value: "ai" }); await j.act({ kind: "next" });
-	await j.act({ kind: "choice", value: "joint_projects" }); await j.act({ kind: "next" });
+	await j.act({ kind: "next" });
 	const repository = new SqliteOnboardingRepository(j.runtime().boundary);
 	const before = await repository.getProfile("42");
 	await j.restart(false);
 	await j.runtime().bot.handleUpdate({ update_id: 80_000, callback_query: callbackForUser(80_000, 42, "mfm:edit") });
 	await j.text("Updated project"); await j.act({ kind: "choice", value: "business" });
-	await j.text("Belgrade, Serbia"); await j.act({ kind: "next" }); await j.act({ kind: "next" });
+	await j.text("Belgrade, Serbia"); await j.act({ kind: "next" });
 	expect(await new SqliteOnboardingRepository(j.runtime().boundary).getProfile("42")).toEqual(before);
 	const save = await j.act({ kind: "next" }); await j.runtime().bot.handleUpdate(save);
 	expect(await new SqliteOnboardingRepository(j.runtime().boundary).getProfile("42")).toMatchObject({

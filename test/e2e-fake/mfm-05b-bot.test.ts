@@ -17,7 +17,7 @@ it.each(["ru", "en"] as const)("runs the real MFM router in %s and blocks every 
 		const call = [...fake.calls].reverse().find((x) => x.method === "sendMessage" || x.method === "editMessageText");
 		currentKeyboard = call?.payload.reply_markup as typeof currentKeyboard;
 	};
-	const text = async (value: string) => { await runtime.bot.handleUpdate({ update_id: ++update, message: privateMessageForUser(update, 123, value, undefined, "Lucas") }); refresh(); };
+	const text = async (value: string) => { const event = { update_id: ++update, message: privateMessageForUser(update, 123, value, undefined, "Lucas") }; await runtime.bot.handleUpdate(event); refresh(); return event; };
 	const callback = async (data: string) => { const event = { update_id: ++update, callback_query: callbackForUser(update, 123, data) }; await runtime.bot.handleUpdate(event); refresh(); return event; };
 	const choose = async (action: OnboardingAction) => {
 		const button = currentKeyboard?.inline_keyboard.flat().find((b) => b.callback_data !== undefined && JSON.stringify(decodeMfmCallback(b.callback_data)?.action) === JSON.stringify(action));
@@ -30,18 +30,14 @@ it.each(["ru", "en"] as const)("runs the real MFM router in %s and blocks every 
 		await choose({ kind: "language", value: language });
 		await choose({ kind: "affiliation", value: "yes" });
 		await choose({ kind: "choice", value: "participant" });
-		await choose({ kind: "next" });
 		await choose({ kind: "keep" });
 		await choose({ kind: "choice", value: "specialist" });
 		await choose({ kind: "city" });
 		await choose({ kind: "choice", value: "digital_it" });
 		expect(fake.calls.some((x) => x.method === "editMessageText")).toBe(true);
 		await choose({ kind: "next" });
-		await choose({ kind: "choice", value: "ai" });
-		await choose({ kind: "next" });
-		await choose({ kind: "choice", value: "joint_projects" });
-		const saved = await choose({ kind: "next" });
-		expect(String(fake.lastMessage()?.text)).toContain(language === "ru" ? "Профиль сохранён" : "Profile saved");
+		const saved = await text(language === "ru" ? "Пропустить" : "Skip");
+		expect(String(fake.lastMessage()?.text)).toContain(language === "ru" ? "Профиль готов" : "Profile ready");
 		await runtime.bot.handleUpdate(saved);
 		for (const command of ["/create", "/browse", "/my", "/applications", "/start c_fake", "/start a_fake"]) await text(command);
 		for (const data of ["collaboration:start", "browse:start", "application:own", "menu:home", "profile:create", "cb_old_token"]) await callback(data);

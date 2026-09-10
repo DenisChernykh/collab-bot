@@ -1,12 +1,14 @@
-import { InlineKeyboard } from "grammy";
+import { InlineKeyboard, Keyboard } from "grammy";
 import type { OnboardingAction, OnboardingView } from "../../application/onboarding-service.js";
+import type { OnboardingSession } from "../../application/ports/onboarding-repository.js";
 import { MFM_EVENT_STATUSES, MFM_PROFILE_TYPES, MFM_SPHERES, type Language, type MfmProfileInput } from "../../domain/mfm-profile.js";
 import { COPY, EVENT_LABELS, TYPE_LABELS, SPHERE_LABELS, SPECIALIZATION_LABELS, OPEN_TO_LABELS, NOTICES, tr, type Translation } from "./mfm-copy.js";
 import { encodeMfmCallback } from "./mfm-callback-codec.js";
 
-export function renderOnboarding(view: Exclude<OnboardingView, { kind: "classic" }>): { text: string; keyboard: InlineKeyboard };
-export function renderOnboarding(view: OnboardingView): { text: string; keyboard: InlineKeyboard };
-export function renderOnboarding(view: OnboardingView): { text: string; keyboard: InlineKeyboard } {
+type OnboardingKeyboard = InlineKeyboard | Keyboard;
+export function renderOnboarding(view: Exclude<OnboardingView, { kind: "classic" }>): { text: string; keyboard: OnboardingKeyboard };
+export function renderOnboarding(view: OnboardingView): { text: string; keyboard: OnboardingKeyboard };
+export function renderOnboarding(view: OnboardingView): { text: string; keyboard: OnboardingKeyboard } {
 	const language = view.language;
 	const t = (value: Translation) => tr(value, language);
 	const keyboard = new InlineKeyboard();
@@ -17,6 +19,17 @@ export function renderOnboarding(view: OnboardingView): { text: string; keyboard
 	if (view.kind !== "step") return { text: prefix + t(COPY[view.kind]), keyboard };
 	const { session } = view;
 	const { step, draft, editing } = session.state;
+	if (step === "contact") {
+		const requestIds = contactRequestIds(session);
+		const contactKeyboard = new Keyboard()
+			.text(t(COPY.contactTelegram)).row()
+			.requestChat(t(COPY.contactChannel), requestIds.channel, { chat_is_channel: true, request_title: true, request_username: true }).row()
+			.requestChat(t(COPY.contactGroup), requestIds.group, { chat_is_channel: false, request_title: true, request_username: true }).row()
+			.text(t(COPY.contactOther)).text(t(COPY.skip)).row()
+			.text(t(COPY.back)).text(t(editing ? COPY.cancel : COPY.later))
+			.resized().oneTime();
+		return { text: prefix + t(COPY.contact), keyboard: contactKeyboard };
+	}
 	let text: string = t(COPY[step]);
 	const button = (label: string, action: OnboardingAction) => keyboard.text(label, encodeMfmCallback(action, session)).row();
 	const choice = (value: string, label: Translation, selected = false) => button(`${selected ? "✅ " : ""}${t(label)}`, { kind: "choice", value });
@@ -39,11 +52,9 @@ export function renderOnboarding(view: OnboardingView): { text: string; keyboard
 			button(t(COPY.city), { kind: "city" });
 			break;
 		case "spheres":
-			text += `\n\n${t(COPY.selected)}: ${draft.spheres?.length ?? 0}/3`;
+			text += `\n\n${t(COPY.selected)}: ${draft.spheres?.length ?? 0} ${t(COPY.ofThree)}`;
 			for (const key of MFM_SPHERES) choice(key, SPHERE_LABELS[key], draft.spheres?.includes(key));
-			button(t(COPY.done), { kind: "next" });
-			break;
-		case "contact":
+			button(t(COPY.continue), { kind: "next" });
 			break;
 	}
 	if (step !== "language" && step !== "affiliation") {
@@ -51,6 +62,14 @@ export function renderOnboarding(view: OnboardingView): { text: string; keyboard
 		button(t(editing ? COPY.cancel : COPY.later), { kind: "cancel" });
 	}
 	return { text: prefix + text, keyboard };
+}
+export function contactRequestIds(session: OnboardingSession): { readonly channel: number; readonly group: number } {
+	const revision = session.revision >>> 0;
+	const normalize = (value: number) => ((value >>> 0) % 2_147_483_646) + 1;
+	const channel = normalize(parseInt(session.state.generation.slice(0, 8), 16) ^ revision);
+	let group = normalize(parseInt(session.state.generation.slice(8), 16) ^ Math.imul(revision || 1, 0x45d9f3b));
+	if (group === channel) group = group === 2_147_483_647 ? 1 : group + 1;
+	return { channel, group };
 }
 function ownProfile(profile: MfmProfileInput, language: Language, festivalEnabled: boolean): string {
 	return `${tr(COPY.home, language)}\n\n${renderMfmProfile(profile, language, festivalEnabled)}`;
