@@ -18,6 +18,10 @@ export const MFM_SPHERES = Object.keys(MFM_SPECIALIZATIONS) as MfmSphere[];
 export type MfmSpecialization = (typeof MFM_SPECIALIZATIONS)[MfmSphere][number];
 export type Language = "ru" | "en";
 export type Experience = "undecided" | "classic" | "mfm";
+export type MfmContact =
+	| { readonly kind: "telegram_user" }
+	| { readonly kind: "telegram_channel" | "telegram_group"; readonly url: string; readonly username: string; readonly telegramChatId: string; readonly title?: string }
+	| { readonly kind: "external"; readonly url: string };
 export interface MfmProfileInput {
 	readonly eventStatus: (typeof MFM_EVENT_STATUSES)[number];
 	readonly displayName: string;
@@ -30,9 +34,32 @@ export interface MfmProfileInput {
 export type MfmDraft = Partial<MfmProfileInput>;
 export interface MfmProfileRecord extends MfmProfileInput {
 	readonly profileId: string;
+	readonly contact: MfmContact | null;
 	readonly completedAt: number;
 	readonly updatedAt: number;
 	readonly revision: number;
+}
+export function validateMfmContact(value: unknown): MfmContact {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) throw new DomainValidationError("invalid MFM contact");
+	const input = value as Record<string, unknown>;
+	const kind = mfmValue(input.kind, ["telegram_user", "telegram_channel", "telegram_group", "external"]);
+	if (kind === "telegram_user") {
+		if (Object.keys(input).some((key) => key !== "kind")) throw new DomainValidationError("invalid Telegram user contact");
+		return { kind };
+	}
+	const url = canonicalHttpsUrl(input.url);
+	if (kind === "external") {
+		if (Object.keys(input).some((key) => key !== "kind" && key !== "url")) throw new DomainValidationError("invalid external contact");
+		return { kind, url };
+	}
+	const username = typeof input.username === "string" ? input.username.trim().replace(/^@+/u, "") : "";
+	if (!/^[A-Za-z][A-Za-z0-9_]{4,31}$/u.test(username)) throw new DomainValidationError("invalid Telegram contact username");
+	if (url !== `https://t.me/${username}`) throw new DomainValidationError("invalid Telegram contact URL");
+	const telegramChatId = typeof input.telegramChatId === "string" ? input.telegramChatId.trim() : "";
+	if (!/^-[0-9]{1,20}$/u.test(telegramChatId)) throw new DomainValidationError("invalid Telegram contact chat ID");
+	const title = input.title === undefined ? undefined : mfmText(input.title, 100);
+	if (Object.keys(input).some((key) => !["kind", "url", "username", "telegramChatId", "title"].includes(key))) throw new DomainValidationError("invalid Telegram contact");
+	return { kind, url, username, telegramChatId, ...(title === undefined ? {} : { title }) };
 }
 export function mfmValue<const T extends string>(value: unknown, allowed: readonly T[]): T {
 	if (typeof value !== "string" || !allowed.includes(value as T)) throw new DomainValidationError("invalid MFM choice");
@@ -64,4 +91,12 @@ export function validateMfmProfile(value: unknown): MfmProfileInput {
 function choices<T extends string>(value: unknown, allowed: readonly T[]): readonly T[] {
 	if (!Array.isArray(value) || value.length < 1 || value.length > 3 || new Set(value).size !== value.length) throw new DomainValidationError("select one to three distinct MFM choices");
 	return value.map((key: unknown) => mfmValue(key, allowed));
+}
+
+function canonicalHttpsUrl(value: unknown): string {
+	if (typeof value !== "string" || value.includes("\u0000") || value.trim() !== value || value.length > 2_048) throw new DomainValidationError("invalid contact URL");
+	let parsed: URL;
+	try { parsed = new URL(value); } catch { throw new DomainValidationError("invalid contact URL"); }
+	if (parsed.protocol !== "https:" || parsed.username !== "" || parsed.password !== "") throw new DomainValidationError("invalid contact URL");
+	return parsed.toString() === `${value}/` && parsed.pathname === "/" ? value : parsed.toString();
 }

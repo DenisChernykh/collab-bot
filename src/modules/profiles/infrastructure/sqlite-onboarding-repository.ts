@@ -1,6 +1,6 @@
 import type { SqlDatabase } from "../../../shared/application/ports/sql-database.js";
 import { resolveSqlDatabase, type SqlDatabaseInput } from "../../../platform/database/node-sql-database.js";
-import { MFM_EVENT_STATUSES, MFM_OPEN_TO, MFM_PROFILE_TYPES, MFM_SPECIALIZATIONS, MFM_SPHERES, mfmText, mfmValue, specializationSphere, validateMfmProfile, type MfmDraft, type MfmProfileInput, type MfmProfileRecord } from "../domain/mfm-profile.js";
+import { MFM_EVENT_STATUSES, MFM_OPEN_TO, MFM_PROFILE_TYPES, MFM_SPECIALIZATIONS, MFM_SPHERES, mfmText, mfmValue, specializationSphere, validateMfmContact, validateMfmProfile, type MfmContact, type MfmDraft, type MfmProfileInput, type MfmProfileRecord } from "../domain/mfm-profile.js";
 import { ONBOARDING_STEPS, type ExperienceUser, type OnboardingRepository, type OnboardingSession, type OnboardingState } from "../application/ports/onboarding-repository.js";
 
 export class SqliteOnboardingRepository implements OnboardingRepository {
@@ -37,10 +37,15 @@ export class SqliteOnboardingRepository implements OnboardingRepository {
 		const spheres = await this.database.query<{ sphere: string }>("SELECT sphere FROM mfm_profile_spheres WHERE profile_id = ? ORDER BY rowid", [row.profile_id]);
 		const specializations = await this.database.query<{ specialization: string }>("SELECT specialization FROM mfm_profile_specializations WHERE profile_id = ? ORDER BY rowid", [row.profile_id]);
 		const openTo = await this.database.query<{ intent: string }>("SELECT intent FROM mfm_profile_open_to WHERE profile_id = ? ORDER BY rowid", [row.profile_id]);
-		return { ...validateMfmProfile({ eventStatus: row.event_status, displayName: row.display_name, profileType: row.profile_type, locationText: row.location_text, spheres: spheres.map((x) => x.sphere), specializations: specializations.map((x) => x.specialization), openTo: openTo.map((x) => x.intent) }), profileId: row.profile_id, completedAt: row.completed_at, updatedAt: row.updated_at, revision: row.revision };
+		const [contactRow] = await this.database.query<{ kind: string; url: string | null; username: string | null; telegram_chat_id: string | null; title: string | null }>("SELECT kind, url, username, telegram_chat_id, title FROM mfm_profile_contacts WHERE profile_id = ?", [row.profile_id]);
+		const contact = contactRow === undefined ? null : validateMfmContact(contactRow.kind === "telegram_user" ? { kind: contactRow.kind }
+			: contactRow.kind === "external" ? { kind: contactRow.kind, url: contactRow.url }
+				: { kind: contactRow.kind, url: contactRow.url, username: contactRow.username, telegramChatId: contactRow.telegram_chat_id, ...(contactRow.title === null ? {} : { title: contactRow.title }) });
+		return { ...validateMfmProfile({ eventStatus: row.event_status, displayName: row.display_name, profileType: row.profile_type, locationText: row.location_text, spheres: spheres.map((x) => x.sphere), specializations: specializations.map((x) => x.specialization), openTo: openTo.map((x) => x.intent) }), profileId: row.profile_id, contact, completedAt: row.completed_at, updatedAt: row.updated_at, revision: row.revision };
 	}
-	async saveProfile(userId: string, input: MfmProfileInput, now: number): Promise<MfmProfileRecord> {
+	async saveProfile(userId: string, input: MfmProfileInput, now: number, contact?: MfmContact | null): Promise<MfmProfileRecord> {
 		const checked = validateMfmProfile(input);
+		const checkedContact = contact === undefined || contact === null ? contact : validateMfmContact(contact);
 		return this.database.withTransaction(async () => {
 			const user = await this.getUser(userId);
 			if (user?.status !== "active" || user.experience !== "mfm") throw new Error("MFM user unavailable");
@@ -53,6 +58,13 @@ export class SqliteOnboardingRepository implements OnboardingRepository {
 			for (const sphere of checked.spheres) await this.database.execute("INSERT INTO mfm_profile_spheres VALUES (?, ?)", [base.id, sphere]);
 			for (const key of checked.specializations) await this.database.execute("INSERT INTO mfm_profile_specializations VALUES (?, ?, ?)", [base.id, specializationSphere(key), key]);
 			for (const key of checked.openTo) await this.database.execute("INSERT INTO mfm_profile_open_to VALUES (?, ?)", [base.id, key]);
+			if (checkedContact !== undefined) {
+				await this.database.execute("DELETE FROM mfm_profile_contacts WHERE profile_id = ?", [base.id]);
+				if (checkedContact !== null) await this.database.execute(
+					"INSERT INTO mfm_profile_contacts (profile_id, kind, url, username, telegram_chat_id, title, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+					[base.id, checkedContact.kind, "url" in checkedContact ? checkedContact.url : null, "username" in checkedContact ? checkedContact.username : null, "telegramChatId" in checkedContact ? checkedContact.telegramChatId : null, "title" in checkedContact ? checkedContact.title ?? null : null, now],
+				);
+			}
 			const saved = await this.getProfile(userId);
 			if (saved === undefined) throw new Error("MFM profile unavailable");
 			return saved;

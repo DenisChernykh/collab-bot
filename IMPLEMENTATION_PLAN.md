@@ -51,7 +51,7 @@
 | CF3 — Production cutover | `completed` | 4 | Данные перенесены, production webhook включён, hosted journey подтверждён и operations handoff закрыт с явным recovery boundary |
 | MFMR — MFM hosted release | `completed` | 1 | Authorized staging-first MFM release on the existing production bot |
 | MNET — MFM discovery and introductions | `completed` | 12 | Private profile discovery, introduction requests, authorized reset and hosted release |
-| MFO — Fast MFM onboarding | `in_progress` | 8 | Short RU/EN registration, optional accepted-only contact, staging-first release and clean hosted primaries |
+| MFO — Fast MFM onboarding | `in_progress` | 9 | Short RU/EN registration, optional accepted-only contact, staging-first release and clean hosted primaries |
 
 ```text
 P0-01 → P0-02
@@ -2184,8 +2184,9 @@ Shared unit contract: read AGENTS.md, PRD §24/§23/§22, TD fast-onboarding con
 | Unit | Status | Dependencies | Scope and observable result |
 |---|---|---|---|
 | MFO-00 | completed | MNET-09 | Approved product/technical contract and executable cards |
-| MFO-01 | pending | MFO-00 | Additive schema17 contact persistence and preserving transfer |
-| MFO-02 | pending | MFO-01 | Short durable onboarding transitions and legacy-session compatibility |
+| MFO-01A | completed | MFO-00 | Additive schema17 contact persistence and preserving local transfer |
+| MFO-01B | pending | MFO-01A | Synchronize workerd schema/transfer expectations with schema17 |
+| MFO-02 | pending | MFO-01B | Short durable onboarding transitions and legacy-session compatibility |
 | MFO-03 | pending | MFO-02 | RU/EN Telegram screens, native contact pickers and ready CTA |
 | MFO-04 | pending | MFO-03 | Optional enrichment, search-purpose entry and accepted-contact preference |
 | MFO-05 | pending | MFO-04 | Workerd/recovery gates, independent review and release documentation |
@@ -2199,11 +2200,17 @@ All cards include the shared contract's Read first, Do not touch, Invariants and
 - **Verification:** reconcile the supplied specification/user decisions with current MFM/MNET contracts; final diff and `git diff --check`.
 - **Exit:** no unresolved product conflict; one local commit and clean tree.
 
-### MFO-01 — Add preserving preferred-contact schema
-- **Scope:** migration17, MFM contact domain/repository, state-transfer/Cloudflare manifests and focused populated upgrade/roundtrip tests.
+### MFO-01A — Add preserving preferred-contact schema
+- **Scope:** migration17, MFM contact domain/repository, state-transfer/Cloudflare manifest and focused populated local upgrade/roundtrip tests.
 - **Tests first:** schema16 rows and optional arrays survive; zero/one constrained contact; invalid kinds/URLs fail; schema17 transfer and FK rollback preserve all existing IDs/data.
-- **Verification:** focused unit/integration/Cloudflare schema tests, `pnpm check`, db/manifest/type gates and diff review.
-- **Exit:** schema17 is additive and no live database changes.
+- **Verification:** focused unit/integration tests, `pnpm check`, db/manifest/type gates and diff review.
+- **Exit:** schema17 is additive in Node/local transfer with no live database changes.
+
+### MFO-01B — Synchronize workerd schema expectations
+- **Scope:** only affected Cloudflare migration-count/transfer-count assertions plus a contact roundtrip assertion; no runtime or migration changes.
+- **Tests first:** workerd boots schema17 and transfers all 26 tables including a preferred contact.
+- **Verification:** focused and full workerd suites, Cloudflare typecheck/manifest and diff review.
+- **Exit:** existing Cloudflare gates describe and prove the additive schema17 contract.
 
 ### MFO-02 — Shorten the durable application flow
 - **Scope:** onboarding state/service/repository parsing and focused unit/integration tests; no Telegram rendering.
@@ -2242,3 +2249,5 @@ All cards include the shared contract's Read first, Do not touch, Invariants and
 - **Stop:** any identity/target/schema drift, pending/error webhook, non-quiescent delivery, unknown table, failed staging gate or private-data/credential exposure.
 
 - **MFO-00 evidence:** Commit SHA: `SELF`. Clean preflight main at unique MNET-09 `ba35da6`; read-only origin/main `c4c5bfbc5f9696b63e0acf89182990017c2237fb`; Node24.18.0/pnpm11.15.1 satisfy package.json. Reconciled the supplied short-onboarding specification with PRD §22/§23, current FSM/profile/contact/search implementation and the user's explicit decisions: MFM only; event status/location retained; optional accepted-only contact; two native chat pickers; current staging/production primaries cleared after their releases while rehearsal/local remain untouched. Telegram Bot API/grammY 1.45.1 requires boolean `chat_is_channel`, so one native picker cannot cover both chat classes. PRD §24 and TD now supersede the conflicting mandatory specialization/open_to policy and define schema17, legacy preservation, search-purpose and the third exact reset. Changed only docs/PRD.md, docs/TECHNICAL_DESIGN.md and IMPLEMENTATION_PLAN.md; `git diff --check` PASS and final diff reviewed. No runtime, dependency, live, Telegram or Git-remote mutation.
+
+- **MFO-01A evidence:** Commit SHA: `SELF`. Clean preflight main at unique MFO-00 `9e2d3de`; origin/main rechecked `c4c5bfbc5f9696b63e0acf89182990017c2237fb`; compatible Node/pnpm unchanged. Test-first RED showed missing migration17/contact validator/persistence and old schema/count expectations. GREEN adds one constrained optional `mfm_profile_contacts` row, strict HTTPS/Telegram validation, transactional preserve/replace/clear semantics, schema17/26-table state transfer and generated Cloudflare manifest. Populated schema16 profile/specialization/open_to rows remain byte-equivalent through migration and contact transfer roundtrip/FKs pass; an injected contact insert failure rolls back shared name/profile/contact. Focused 13 tests PASS; `pnpm check` PASS (110 unit/118 integration/47 runtime plus lint/architecture/typecheck/build); db:verify, Cloudflare typecheck/manifest and diff-check PASS. Eleven source/test/migration files plus this plan, no dependency/historical migration/live changes.

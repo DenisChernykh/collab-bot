@@ -1,4 +1,4 @@
-import type { Experience, Language, MfmDraft, MfmProfileInput, MfmProfileRecord } from "../../domain/mfm-profile.js";
+import type { Experience, Language, MfmContact, MfmDraft, MfmProfileInput, MfmProfileRecord } from "../../domain/mfm-profile.js";
 export const ONBOARDING_STEPS = ["language", "affiliation", "event_status", "intro", "display_name", "profile_type", "location", "spheres", "specializations", "open_to"] as const;
 export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
 export interface OnboardingState {
@@ -28,5 +28,5 @@ export interface OnboardingRepository {
 	saveSession(userId: string, state: OnboardingState, now: number): Promise<OnboardingSession>;
 	deleteSession(userId: string): Promise<void>;
 	getProfile(userId: string): Promise<MfmProfileRecord | undefined>;
-	saveProfile(userId: string, input: MfmProfileInput, now: number): Promise<MfmProfileRecord>;
+	saveProfile(userId: string, input: MfmProfileInput, now: number, contact?: MfmContact | null): Promise<MfmProfileRecord>;
 }
