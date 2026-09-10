@@ -1,6 +1,6 @@
 # CF2 hosted staging operations runbook
 
-> 2026-09-10 update: the authorized database reset completed, followed by the separately authorized MFM release. The hosted primary now uses schema15 (22 transfer tables), with MFM enabled. Historical versions, schema13 expectations, row counts and recovery snapshots below are timestamped history. Use the [MFM release record](MFM_RELEASE_RUNBOOK.md) for current versions, exact deployment vars, verification limits and compatible shutdown; the [reset record](MFM_RESET_RUNBOOK.md) retains reset evidence.
+> 2026-09-10 update: the separately authorized MNET reset and staging-first release completed. Hosted primaries now use schema16 (25 transfer tables), with MFM discovery/introductions enabled. Historical versions, schema13/15 expectations, row counts and recovery snapshots below are timestamped history. Use the [MNET release record](MNET_RELEASE_RUNBOOK.md) for current versions, protected summary checks and compatible shutdown; the [reset record](MFM_RESET_RUNBOOK.md) retains both reset operations.
 
 CF2 proves one hosted **staging** candidate on a confirmed Cloudflare Free
 account. It does not authorize or establish a production deployment, a

@@ -1,11 +1,13 @@
 # MFM hosted release — 2026-09-10
 
+> Historical MFMR-01 record. The later [MNET release](MNET_RELEASE_RUNBOOK.md) supersedes these active versions, schema15 checks and shutdown instructions; current hosted primaries are schema16.
+
 User authorization: «Задеплой». MFMR-01 releases the immutable application candidate
 `d192080d0a678f0341ba6149facb10a38760330a` to the existing staging and production
 Workers, with `MFM_FEATURE_ENABLED=true`. The release changes no application code,
 Telegram bot identity, webhook configuration, DO namespace, billing or Git remote.
 
-## Verified active deployments
+## Recorded MFMR-01 deployments
 
 | Environment | Worker version (100%) | Deployment | Activated (UTC) |
 |---|---|---|---|
