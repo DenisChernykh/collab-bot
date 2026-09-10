@@ -17,7 +17,7 @@ it("runs the composed MFM journey atomically in workerd and transfers profiles, 
 	// Drain the response so it cannot keep the object alive during eviction.
 	const schema = await stub.fetch("https://local/__cf1/schema");
 	expect(schema.status).toBe(200);
-	expect(await schema.json()).toMatchObject({ migrationCount: 16, integrity: "ok" });
+	expect(await schema.json()).toMatchObject({ migrationCount: 17, integrity: "ok" });
 	await runInDurableObject(stub, async (_instance, state) => {
 		const database = new CloudflareSqlDatabase(state.storage);
 		const repository = new SqliteOnboardingRepository(database);
@@ -69,7 +69,7 @@ it("runs the composed MFM journey atomically in workerd and transfers profiles, 
 	await evictDurableObject(stub);
 	const manifest = await runInDurableObject(stub, (_instance, state) => exportStateTransferManifest(new CloudflareSqlDatabase(state.storage)));
 	const target = env.COLLABORATION_STATE.get(env.COLLABORATION_STATE.idFromName("mfm-06-transfer"));
-	expect(await (await target.fetch("https://local/__cf1/schema")).json()).toMatchObject({ migrationCount: 16, integrity: "ok" });
+	expect(await (await target.fetch("https://local/__cf1/schema")).json()).toMatchObject({ migrationCount: 17, integrity: "ok" });
 	await runInDurableObject(target, async (_instance, state) => {
 		const database = new CloudflareSqlDatabase(state.storage);
 		await importStateTransferManifest(database, manifest);
