@@ -50,7 +50,7 @@
 | AP — Automatic Telegram profile | `completed` | 3 | Профиль создаётся при /start, доступные данные берутся из Telegram, участие требует дозаполнения |
 | CF3 — Production cutover | `completed` | 4 | Данные перенесены, production webhook включён, hosted journey подтверждён и operations handoff закрыт с явным recovery boundary |
 | MFMR — MFM hosted release | `completed` | 1 | Authorized staging-first MFM release on the existing production bot |
-| MNET — MFM discovery and introductions | `in_progress` | 11 | Private profile discovery, introduction requests, authorized reset and hosted release |
+| MNET — MFM discovery and introductions | `in_progress` | 12 | Private profile discovery, introduction requests, authorized reset and hosted release |
 
 ```text
 P0-01 → P0-02
@@ -2066,7 +2066,8 @@ Shared unit contract: read AGENTS.md, PRD §23/§22, TD MFM discovery contract, 
 | MNET-05 | completed | MNET-04 | Full RU/EN introduction journey, notifications and deep links |
 | MNET-06 | completed | MNET-05 | Recovery/workerd gates, independent critical review and docs |
 | MNET-07 | completed | MNET-06 | Rehearse a separately authorized second reset without losing prior audit |
-| MNET-08 | pending | MNET-07 | Execute clarified exact reset, restore runtime, close evidence |
+| MNET-07A | completed | MNET-07 | Verify release using protected counts and hashes without private rows |
+| MNET-08 | pending | MNET-07A | Execute clarified exact reset, restore runtime, close evidence |
 | MNET-09 | pending | MNET-08 | Deploy the verified MNET candidate to staging, then production |
 
 All cards include the shared contract's Read first, Do not touch, Invariants and Stop conditions above.
@@ -2123,6 +2124,14 @@ All cards include the shared contract's Read first, Do not touch, Invariants and
 - **Exit:** reset safe and reviewable for confirmed scope; no live deletion yet.
 - **Stop:** unexpected project target or ownership ambiguity; never delete another project.
 
+### MNET-07A — Inspect release state without exporting private rows
+- **Read first:** shared contract, MNET-07 evidence, normal Worker operations authorization/state transfer, migration verification and focused Cloudflare operations tests.
+- **Scope:** one protected read-only summary route on the existing Worker and a focused workerd regression; no new credentials, storage, imports, reset coupling or delivery. This is a concrete safer release check after automatic approval review rejected downloading full state exports.
+- **Tests first:** unauthorized and wrong-method requests; populated synthetic state returns only explicit schema/count/digest metadata, matches canonical hashes, preserves rows/alarm and detects non-quiescent receipts.
+- **Verification:** focused workerd test, applicable aggregate gates, final diff and independent critical review of this new privacy-sensitive delta.
+- **Exit:** release can verify schema16/25 tables, counts, hashes and quiescence without private data leaving Cloudflare; one local commit and clean tree.
+- **Stop:** contact/row disclosure, side effects, weakened operations authentication or changes to existing export/import semantics.
+
 ### MNET-08 — Execute the exact authorized reset and finish
 - **Scope:** only confirmed reset targets; preflight versions/counts/digests/quiescence, bounded maintenance, one deletion per target, exact retry verification, same-runtime restoration and final handoff.
 - **Verification:** before/after authorized tables, retained schema/audit, zero effects/active maintenance endpoints after restoration, final diff and exact-secret scan.
@@ -2133,7 +2142,7 @@ All cards include the shared contract's Read first, Do not touch, Invariants and
 - **Read first:** shared contract, MNET-06/07/08 evidence, `docs/MFM_RELEASE_RUNBOOK.md`, `docs/CF3_PRODUCTION_RUNBOOK.md`, current `wrangler.jsonc` and package.json.
 - **Scope:** existing staging and production Workers only, staging first; normal `src/worker.ts`, preserving schema15→16 migration, explicit MFM feature flag and existing four secrets/DO bindings. README/TD/release/plan evidence reconciliation.
 - **Do not touch / Invariants:** no new resources, billing, namespace, bot identity, webhook, secret rotation, imports/restores, local polling or Git push. Release must not expose reset routes or retain reset bindings.
-- **Verification:** immutable committed code candidate, current passing local gates, dry-run bundle, exact live preflight, protected schema16 export/25 tables and recomputed digests, no loss of existing rows, readiness/identity/showcase, health, private-export authentication, alarm/quiescence, unchanged webhook where credentials are available. No test messages.
+- **Verification:** immutable committed code candidate, current passing local gates, dry-run bundle, exact live preflight, protected schema16 summary/25 tables and canonical digests, no loss of existing rows, readiness/identity/showcase, health, private-export authentication, alarm/quiescence, unchanged webhook where credentials are available. No test messages.
 - **Exit:** both environments verified at one100% version each; final evidence and one local Task-ID commit; clean tree. Shutdown uses schema16-compatible code, never schema15 rollback after migration16.
 - **Stop:** staging failure before production, target/version/schema drift, non-quiescent or ambiguous delivery, credential or contact exposure, unproven migration preservation.
 
@@ -2158,3 +2167,5 @@ All cards include the shared contract's Read first, Do not touch, Invariants and
 - **MNET-06 changed files:** `IMPLEMENTATION_PLAN.md`, `README.md`, `docs/TECHNICAL_DESIGN.md`, `src/modules/connections/application/connection-model.ts`, `src/modules/connections/application/introduction-service.ts`, `test/cloudflare/mfm-06-onboarding.test.ts`, `test/cloudflare/mnet-06-connections.test.ts`, `test/e2e-fake/mnet-05-introductions.test.ts`, `test/e2e-fake/mnet-06-privacy.test.ts`, `test/integration/mnet-04-introductions.test.ts` (seven source/test files). Final stage-wide secret-pattern scan covers54 changed/new files with no Telegram-token/private-key pattern matches; synthetic identities only in new tests.
 
 - **MNET-07 completion evidence:** Commit SHA: `SELF`. Preflight main at unique MNET-06 `84b7227b45738a963eb08d06ce2ece4389ee92d0`; read-only origin/main `c4c5bfbc5f9696b63e0acf89182990017c2237fb`; Node v24.18.0/pnpm11.15.1. A focused failing second-operation regression preceded implementation. The operator now permits exactly the original MFM and separately authorized MNET operation, requires the original audit for the exact target, preserves both audit results, and makes either exact retry harmless to newer rows. Node/workerd tests cover changed digest/target, missing audit, active alarm, non-quiescent delivery, injected rollback and schema16. Independent review `mnet_final_review` PASS, including synthetic schemas11/13/15/16, later migration16 and transfer25. Focused reset integration PASS7/workerd PASS3; `pnpm check` PASS99 unit/116 integration/47 runtime; fake PASS48; full workerd PASS40; Cloudflare typecheck/manifest and db:verify PASS. Total350 automated tests, no dependencies or historical migrations changed. Staging maintenance dry-run PASS; final diff/secret checks PASS. Automatic approval review rejected full protected export retrieval; removed that operation from the helper and use remote aggregate inspection instead. Exact namespace/local inventory and maintenance quiescence remain mandatory before deletion in08. No live mutation occurred in07. Changed files: src/platform/database/project-reset.ts, test/integration/mfm-07-reset.test.ts, test/integration/mnet-07-reset.test.ts, test/cloudflare/mnet-07-reset.test.ts, docs/MFM_RESET_RUNBOOK.md, IMPLEMENTATION_PLAN.md.
+
+- **MNET-07A completion evidence:** Commit SHA: `SELF`. Clean preflight main at unique MNET-07 `1489cbf527d893df6f2372c9c15f9b46b6d9cc16`, origin/main unchanged `c4c5bfbc5f9696b63e0acf89182990017c2237fb`, Node24.18.0/pnpm11.15.1. Test-first RED was absent route404 versus expected401. Added only an authenticated fixed-primary GET summary: current migration/FK verification, atomic canonical counts/digests and quiescence, existing alarm time, explicit metadata allowlist and generic no-store errors. Synthetic populated workerd test proves exact hash parity, no rows/columns/contacts/token, unchanged data/alarm, wrong-method refusal, non-quiescent receipt detection and invalid migration failure. Focused PASS1; `pnpm check` PASS99 unit/116 integration/47 runtime; fake PASS48; full workerd PASS41; Cloudflare typecheck PASS. Total351 tests. Independent delta review `mnet_final_review` PASS; normal initialization still applies authorized migrations, so this endpoint is not claimed as a migration-free old-code preflight. Both maintenance dry-runs PASS, bundle contains no application/migration/delivery composition. Fresh inventory confirmed the exact two namespaces/three objects and three stopped SQLite files at schemas13/11/13, zero local rows, integrity/FKs valid. Immutable read mode was used only after proving zero holders and no WAL payload for the protected snapshot. Final diff/diff-check/secret-pattern inspection PASS. Changed files: src/worker.ts, test/cloudflare/mnet-07a-summary.test.ts, docs/TECHNICAL_DESIGN.md, IMPLEMENTATION_PLAN.md. No live mutation.

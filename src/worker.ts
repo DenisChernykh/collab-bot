@@ -118,6 +118,23 @@ export class CollaborationBotState implements DurableObject {
 
 	async fetch(request: Request): Promise<Response> {
 		const pathname = new URL(request.url).pathname;
+		if (pathname === "/__cf1/state/summary") {
+			if (request.method !== "GET") return json({ error: "method_not_allowed" }, 405);
+			await this.ready;
+			try {
+				const summary = await this.database.withTransaction(async () => {
+					await this.migrations.verify();
+					const manifest = await exportStateTransferManifest(this.database);
+					const pending = await this.database.query<{ count: number }>("SELECT count(*) AS count FROM outbox_deliveries WHERE status NOT IN ('sent', 'permanent_failed', 'cancelled')");
+					const receipts = await this.database.query<{ count: number }>("SELECT count(*) AS count FROM command_receipts WHERE status <> 'completed'");
+					return { schemaVersion: manifest.schemaVersion, tableCount: manifest.tables.length,
+						rowCount: manifest.tables.reduce((sum, table) => sum + table.rowCount, 0), digest: manifest.digest,
+						tables: manifest.tables.map(({ name, rowCount, digest }) => ({ name, rowCount, digest })),
+						quiescent: pending[0]?.count === 0 && receipts[0]?.count === 0 };
+				});
+				return json({ ...summary, alarmScheduledAt: await this.state.storage.getAlarm() });
+			} catch { return json({ error: "state_summary_unavailable" }, 500); }
+		}
 		if (request.method === "GET" && pathname === "/__cf1/ready") {
 			await this.ready;
 			try {
@@ -442,7 +459,7 @@ export default {
 			return new Response(response.body, { status: response.status, headers: response.headers });
 		}
 
-		if (url.pathname === "/ops/ready" || url.pathname === "/ops/state/export" || url.pathname === "/ops/state/import" || url.pathname === "/ops/pitr/bookmark" || url.pathname === "/ops/alarm") {
+		if (url.pathname === "/ops/ready" || url.pathname === "/ops/state/summary" || url.pathname === "/ops/state/export" || url.pathname === "/ops/state/import" || url.pathname === "/ops/pitr/bookmark" || url.pathname === "/ops/alarm") {
 			const runtimeEnvironment = environment as CloudflareEnvironment;
 			if (!isOperationsRequestAuthorized(request, runtimeEnvironment.OPERATIONS_TOKEN)) return json({ error: "unauthorized" }, 401);
 			if (url.pathname === "/ops/pitr/bookmark" && runtimeEnvironment.DEPLOYMENT_ENVIRONMENT !== "production") return json({ error: "pitr_unavailable" }, 403);
