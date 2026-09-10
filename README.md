@@ -6,7 +6,21 @@ P0 and S0–S4 are complete, including the separately authorized real S4 journey
 
 CF1 prepared the Cloudflare-compatible runtime, CF2 proved it on an isolated hosted staging Worker, and CF3 completed the bounded production freeze/import/webhook cutover plus a named two-account hosted journey. Production now runs as one workers.dev Worker and one SQLite-backed Durable Object on the confirmed Cloudflare Free plan. This is deployment evidence, not an SLA, 24/7 guarantee, unlimited-capacity claim or automatic recovery promise.
 
-AP adds automatic profiles locally: the first private `/start` creates a persistent profile with the Telegram name, including card deep links. The user can browse immediately and complete the missing type/platform before participating. Repeated starts preserve the profile and user edits; the username stays private unless explicitly selected as a public platform. Migration 0014 preserves existing records and uses state-transfer schema version 14. This change has not been deployed; schema-13 exports remain historical artifacts and cannot be imported directly into schema 14.
+AP and MFM are implemented and verified locally. The first private `/start` creates one persistent base profile using the Telegram name, then new users choose RU/EN. With `MFM_FEATURE_ENABLED=true`, they choose classic or MFM. Classic retains its collaboration journey; MFM has a bilingual person/project profile and durable onboarding. Repeated starts preserve the profile and draft. The username stays private unless explicitly selected as a classic public platform.
+
+Migration 0014 adds automatic-profile compatibility; migration 0015 adds MFM preferences, profiles and draft relations without changing classic meanings. The current state-transfer schema is 15 (22 tables); schema-13/14 exports cannot be imported directly into it. Neither AP nor MFM has been released to the hosted bot. On 2026-09-10, the separately authorized reset cleared all six project databases and restored the exact previous production/staging runtime versions. Hosted schema remains 13. See the [MFM reset record](docs/MFM_RESET_RUNBOOK.md) for exact targets and verification.
+
+## MFM behavior and configuration
+
+`MFM_FEATURE_ENABLED` defaults to `false` in Node and Cloudflare and accepts only `true` or `false`. Enable it through the private Node environment file or the appropriate Worker vars when the MFM release is separately authorized; no second bot, user database or application is needed.
+
+- New users select language, then affiliation when enabled. No enters classic; Yes asks event status and starts MFM onboarding. Existing accounts migrate to classic without forced enrollment.
+- The base profile exists from the first private `/start`. MFM answers are saved after every choice in a no-expiry draft. Only the final required step saves the completed MFM extension and shared display name atomically. Editing leaves the saved profile intact until confirmation.
+- MFM requires a name, profile type, city/country, 1–3 of eight professional spheres, 1–3 of 42 related specializations and 1–3 intentions. Buttons handle categories; removed spheres prune incompatible specializations. `/start` resumes and `/language` changes RU/EN without clearing the draft.
+- Before completion, no MFM feature menu is available. Completed users can view/edit their profile. People search is future scope; indexed status/sphere/specialization relations are ready, and `open_to` never implies automatic exclusion.
+- Turning the flag off sends new users through language selection to classic. Completed MFM profiles remain editable with neutral labels; unfinished MFM drafts pause and resume when enabled again. Shutdown never deletes profile data.
+
+The classic creation, browse, own collaboration/application lists, decisions and contact-disclosure rules remain in their existing modules. MFM routing gates classic commands, deep links and callbacks, including repeated and group-chat deliveries. Classic UI remains Russian.
 
 ## Sources of truth
 

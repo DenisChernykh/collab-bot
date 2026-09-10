@@ -1,5 +1,7 @@
 # CF3 production operations runbook
 
+> 2026-09-10 update: PRD MFM-F06 separately authorized the project database reset, now completed. The existing hosted code version was restored afterward; historical row counts, freeze checksums and pre-reset recovery claims below are timestamped history. Use the [MFM reset record](MFM_RESET_RUNBOOK.md) for current data state. MFM application release remains separate.
+
 This runbook describes the deployed Cloudflare production topology and its
 safe operating boundary. It does not authorize a deploy, rollback, state
 import, webhook change, `/ops/ready`, billing change, resource deletion, bot

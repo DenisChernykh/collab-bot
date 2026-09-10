@@ -2,9 +2,9 @@
 
 - Статус документа: `Approved execution registry`
 - Версия: `1.2`
-- Дата: `2026-09-09`
+- Дата: `2026-09-10`
 - Цель: сохранить работающий Telegram-цикл и перенести его на бесплатный Cloudflare runtime без ослабления durable/transactional гарантий
-- Ограничение: один stage за пользовательскую авторизацию, один локальный commit на unit; push/PR/deploy и внешние mutations только в явно разрешённых cards CF2/CF3
+- Ограничение: один stage за пользовательскую авторизацию, один локальный commit на unit; push/PR/deploy и внешние mutations только в явно разрешённых cards CF2/CF3 и MFM-08
 
 ## 1. Источники и граница
 
@@ -46,7 +46,7 @@
 | R3 — Honest top-level ownership | `completed` | 14 | Корень `src` отражает реальные owners: modules, shared kernel, platform adapters и runtime composition |
 | CF1 — Cloudflare-compatible local runtime | `completed` | 15 | Тот же бот проходит workerd/SQLite Durable Object gates локально; production polling остаётся доступным для rollback |
 | CF2 — Free Cloudflare staging | `completed` | 4 | Отдельный staging Worker и dev-бот проходят hosted webhook/alarm smoke без production traffic |
-| MFM — Bilingual event profiles | `in_progress` | 11 | One bot with classic and MFM profiles; authorized project DB reset |
+| MFM — Bilingual event profiles | `completed` | 11 | One bot with classic and MFM profiles; authorized project DB reset |
 | AP — Automatic Telegram profile | `completed` | 3 | Профиль создаётся при /start, доступные данные берутся из Telegram, участие требует дозаполнения |
 | CF3 — Production cutover | `completed` | 4 | Данные перенесены, production webhook включён, hosted journey подтверждён и operations handoff закрыт с явным recovery boundary |
 
@@ -2012,7 +2012,7 @@ Shared unit contract: read AGENTS.md, PRD §22, TD MFM contract, this complete s
 
 ### MFM-09 — Close MFM evidence and handoff
 
-- **Status:** `pending`
+- **Status:** `completed`
 - **Dependencies:** MFM-08 completed.
 - **Read first:** shared MFM unit contract above; predecessor evidence; complete relevant source/test contracts.
 - **Scope:** Final documentation, clean tree and unit ledger; distinguish local implementation/reset from MFM live activation.
@@ -2020,3 +2020,5 @@ Shared unit contract: read AGENTS.md, PRD §22, TD MFM contract, this complete s
 - **Tests first:** demonstrate the scope's missing behavior before runtime implementation; documentation units use diff review.
 - **Verification:** git diff --check; verify all Task-IDs and completed checks; git diff --check.
 - **Exit criteria:** acceptance proved; evidence and one local commit; clean tree.
+
+- **Evidence:** Commit SHA: `SELF`. Preflight clean main at MFM-08 af31b4db7b6bd92ea8448836cf0ecb2fb51307e9; origin/main unchanged c4c5bfbc5f9696b63e0acf89182990017c2237fb; Node v24.18.0 and pnpm11.15.1 confirmed. Documentation-only closure: README explains first-start base profile, separate durable MFM draft/completion, classic preservation, RU/EN, feature shutdown and schema15 transfer boundary. Both hosted runbooks mark historic data/recovery snapshots superseded by the authorized reset; TD records operator-only implementation and retained Cloudflare metadata. All ten predecessor Task-IDs unique, completed in dependency order, and their gates reviewed. Final runtime evidence remains pnpm check PASS (98 unit,104 integration,47 runtime), fake journeys43 PASS, workerd38 PASS, Cloudflare types/typecheck/manifest and db:verify PASS; no unchanged suites rerun for prose edits. Independent critical review and its tested group-replay correction are recorded in MFM-07; real hosted metadata correction and six successful resets are recorded in MFM-08. Final documentation diff and git diff --check PASS. Stage complete: eleven local Task-ID commits; no MFM live activation or Git push. Prior hosted versions remain active with reset routes disabled and zero production product rows verified after restoration. Changed files: IMPLEMENTATION_PLAN.md, README.md, docs/CF2_STAGING_RUNBOOK.md, docs/CF3_PRODUCTION_RUNBOOK.md, docs/TECHNICAL_DESIGN.md.
