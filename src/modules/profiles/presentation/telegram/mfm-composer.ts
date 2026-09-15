@@ -1,4 +1,4 @@
-import { replyWithProfilePhoto } from "./profile-photo-reply.js";
+import { replyWithProfilePhoto, type ProfilePhotoFallback } from "./profile-photo-reply.js";
 import type { ProfilePhotoReader } from "../../application/ports/profile-photo-reader.js";
 import { InlineKeyboard, type Context } from "grammy";
 import type { OnboardingService, OnboardingView } from "../../application/onboarding-service.js";
@@ -29,8 +29,14 @@ export function createMfmTelegramFeature(options: MfmTelegramOptions) {
 			await options.completed.show(ctx, String(ctx.from.id), view.notice === undefined ? "" : `${tr(NOTICES[view.notice], view.language)}\n\n`); return;
 		}
 		const rendered = renderOnboarding(view);
+		let fallback: ProfilePhotoFallback | undefined;
+		if (view.kind === "step" && view.session.state.step === "photo" && view.session.state.photoCandidate !== undefined) {
+			const state = { ...view.session.state }; delete state.photoCandidate;
+			const recovery = renderOnboarding({ ...view, notice: "photo_preview_unavailable", session: { ...view.session, state } });
+			fallback = { text: recovery.text, options: { reply_markup: recovery.keyboard } };
+		}
 		if (edit && ctx.callbackQuery?.message !== undefined && rendered.keyboard instanceof InlineKeyboard) await ctx.editMessageText(rendered.text, { reply_markup: rendered.keyboard });
-		else await replyWithProfilePhoto(ctx, rendered.text, view.kind === "step" && view.session.state.step === "photo" ? view.session.state.photoCandidate ?? view.session.state.draft.photo : view.kind === "home" ? view.profile.photo : null, { reply_markup: rendered.keyboard });
+		else await replyWithProfilePhoto(ctx, rendered.text, view.kind === "step" && view.session.state.step === "photo" ? view.session.state.photoCandidate ?? view.session.state.draft.photo : view.kind === "home" ? view.profile.photo : null, { reply_markup: rendered.keyboard }, fallback);
 	}
 	async function leaveContact(ctx: Context, view: OnboardingView, message: string): Promise<void> {
 		await ctx.reply(message, { reply_markup: { remove_keyboard: true } });

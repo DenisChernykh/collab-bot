@@ -23,11 +23,14 @@ it("keeps long text and navigation complete and refuses another bot's file refer
  await replyWithProfilePhoto(ctx, "short", photo, options);
  expect(replyWithPhoto).toHaveBeenCalledWith("saved_photo", { caption: "short", ...options }); expect(reply).not.toHaveBeenCalled();
  const long = "a".repeat(1025); await replyWithProfilePhoto(ctx, long, photo, options);
- expect(replyWithPhoto).toHaveBeenLastCalledWith("saved_photo"); expect(reply).toHaveBeenLastCalledWith(long, options);
+ expect(replyWithPhoto).toHaveBeenLastCalledWith("saved_photo", undefined); expect(reply).toHaveBeenLastCalledWith(long, options);
  replyWithPhoto.mockClear(); await replyWithProfilePhoto(ctx, "other bot", { ...photo, botId: "999" }, options);
  expect(replyWithPhoto).not.toHaveBeenCalled(); expect(reply).toHaveBeenLastCalledWith("other bot", options);
  replyWithPhoto.mockRejectedValue(new Error("missing photo")); await replyWithProfilePhoto(ctx, "fallback", photo, options);
  expect(reply).toHaveBeenLastCalledWith("fallback", options);
+ const recovery = { text: "Choose another photo", options: { reply_markup: new InlineKeyboard().text("Retry", "retry") } };
+ await replyWithProfilePhoto(ctx, "Confirm unseen photo", photo, options, recovery);
+ expect(reply).toHaveBeenLastCalledWith(recovery.text, recovery.options);
 });
 
 it("attaches photos only to authorized introduction screens that render the person's profile", () => {

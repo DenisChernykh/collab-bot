@@ -46,6 +46,7 @@ export const COPY = {
 	help: ["«Давай вместе» — короткий профиль для знакомства и профессионального общения.\n/start — профиль или продолжение анкеты\n/language — язык\n/profile — профиль\n\nПоддержка: ", "«Давай вместе» — a short profile for meeting people and professional conversations.\n/start — profile or continue setup\n/language — language\n/profile — profile\n\nSupport: "],
 } as const satisfies Record<string, Translation>;
 export const NOTICES: Record<OnboardingNotice, Translation> = {
+	photo_preview_unavailable: ["Не удалось показать фото. Выберите другое, попробуйте снова или пропустите шаг.", "Could not display the photo. Choose another, try again or skip this step."],
 	photo_saved: ["Фото профиля обновлено ✅", "Profile photo updated ✅"],
 	photo_unavailable: ["Не удалось получить фото из Telegram. Загрузите фото, попробуйте ещё раз или пропустите шаг.", "Could not get a Telegram photo. Upload one, try again or skip this step."],
 	photo_invalid: ["Отправьте одно изображение как фото, без альбома. Документы и видео не подходят.", "Send one image as a photo, without an album. Documents and videos are not supported."],

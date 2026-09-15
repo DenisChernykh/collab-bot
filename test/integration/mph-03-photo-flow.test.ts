@@ -28,6 +28,10 @@ it("confirms photos only explicitly, fences late results and supports isolated e
   expect(await repo.getProfile("1")).toBeUndefined();
   service = create(); expect(await service.view("1")).toMatchObject({ session: { state: { photoCandidate: photo } } });
   expect(await service.selectPhoto("1", { ...photo, fileId: "late" }, old)).toMatchObject({ notice: "stale" });
+  await service.language("1"); await act({ kind: "language", value: "en" });
+  expect(await service.view("1")).toMatchObject({ language: "en", session: { state: { step: "photo", photoCandidate: photo } } });
+  await act({ kind: "back" }); expect(await service.view("1")).toMatchObject({ session: { state: { step: "contact" } } });
+  await act({ kind: "next" });
   await act({ kind: "photo_confirm" });
   expect(await repo.getProfile("1")).toBeUndefined();
   expect(await act({ kind: "next" })).toMatchObject({ kind: "home", profile: { photo } });

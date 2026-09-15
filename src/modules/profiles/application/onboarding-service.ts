@@ -6,7 +6,7 @@ import { MFM_EVENT_STATUSES, MFM_OPEN_TO, MFM_PROFILE_TYPES, MFM_SPHERES, mfmAbo
 import type { ExperienceUser, OnboardingRepository, OnboardingSession, OnboardingState, OnboardingStep } from "./ports/onboarding-repository.js";
 import type { ProfileService } from "./profile-service.js";
 
-export type OnboardingNotice = "stale" | "invalid" | "limit" | "required" | "saved" | "photo_saved" | "photo_unavailable" | "photo_invalid" | "paused";
+export type OnboardingNotice = "stale" | "invalid" | "limit" | "required" | "saved" | "photo_saved" | "photo_unavailable" | "photo_preview_unavailable" | "photo_invalid" | "paused";
 type ViewContext = { readonly language: Language; readonly festivalEnabled: boolean; readonly notice?: OnboardingNotice };
 export type OnboardingView = ViewContext & (
 	| { readonly kind: "classic"; readonly pendingStart?: string }

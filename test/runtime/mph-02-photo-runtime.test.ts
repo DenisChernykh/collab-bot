@@ -1,3 +1,4 @@
+import { SystemProviderDeadline } from "../../src/platform/time/provider-deadline.js";
 import { expect, it, vi } from "vitest";
 import { Bot, Context } from "grammy";
 import { ReplyCollector } from "../../src/runtime/telegram/telegram-router.js";
@@ -31,4 +32,18 @@ it("reads only the first accessible photo, largest size, and fails softly", asyn
  expect(get).toHaveBeenCalledWith(1, { offset: 0, limit: 1 }, expect.any(AbortSignal));
  get.mockResolvedValue({ total_count: 0, photos: [] }); expect(await reader.read("1", "123")).toBeNull();
  get.mockRejectedValue(new Error("timeout")); expect(await reader.read("1", "123")).toBeNull();
+});
+
+it("aborts a hanging photo lookup at the provider deadline without retrying", async () => {
+ vi.useFakeTimers();
+ try {
+  const bot = new Bot("123:synthetic", { botInfo }); let aborted = false;
+  const get = vi.spyOn(bot.api, "getUserProfilePhotos").mockImplementation(async (_user, _options, signal) => {
+   signal?.addEventListener("abort", () => { aborted = true; });
+   return new Promise<never>(() => {});
+  });
+  const pending = new GrammyProfilePhotoReader(bot, new SystemProviderDeadline()).read("1", "123");
+  await vi.advanceTimersByTimeAsync(15_000);
+  expect(await pending).toBeNull(); expect(aborted).toBe(true); expect(get).toHaveBeenCalledTimes(1);
+ } finally { vi.useRealTimers(); }
 });

@@ -13,7 +13,7 @@ import { FakeClock } from "../support/fake-clock.js";
 it.each(["ru", "en"] as const)("runs confirmed upload/import/skip and isolated photo edits in %s", async language => {
  const directory = await mkdtemp(join(tmpdir(), "mph-bot-"));
  const { runtime, fake } = await createFakeBotRuntime({ databasePath: join(directory, "app.sqlite"), mfmFeatureEnabled: true, clock: new FakeClock(1_700_000_000_000) });
- const repo = new SqliteOnboardingRepository(runtime.boundary); let sequence = 10000; let lookups = 0; let empty = false;
+ const repo = new SqliteOnboardingRepository(runtime.boundary); let sequence = 10000; let lookups = 0; let empty = false; let failPhoto = false;
  const latest = () => [...fake.calls].reverse().find(c => c.method === "sendMessage" || c.method === "sendPhoto");
  const text = async (value: string) => runtime.bot.handleUpdate({ update_id: ++sequence, message: privateMessageForUser(sequence, 101, value) });
  const callback = async (data: string) => { const update = { update_id: ++sequence, callback_query: callbackForUser(sequence, 101, data) }; await runtime.bot.handleUpdate(update); return update; };
@@ -21,6 +21,7 @@ it.each(["ru", "en"] as const)("runs confirmed upload/import/skip and isolated p
  const photo = (album = false): Update => ({ update_id: ++sequence, message: { ...privateMessageForUser(sequence, 101), photo: [{ file_id: "upload_small", file_unique_id: "s", width: 30, height: 30 }, { file_id: "upload_large", file_unique_id: "l", width: 640, height: 640 }], ...(album ? { media_group_id: "album" } : {}) } });
  try {
   runtime.bot.api.config.use(async (previous, method, payload, signal) => {
+   if (method === "sendPhoto" && failPhoto) return { ok: false, error_code: 400, description: "synthetic photo unavailable" } as never;
    if (method !== "getUserProfilePhotos") return previous(method, payload, signal);
    lookups++;
    expect(await runtime.boundary.query("SELECT command_id FROM command_receipts WHERE status = 'in_progress'")).toEqual([]);
@@ -39,7 +40,10 @@ it.each(["ru", "en"] as const)("runs confirmed upload/import/skip and isolated p
   expect(latest()?.method).toBe("sendPhoto"); expect(latest()?.payload.photo).toBe("upload_large");
   expect(await repo.getProfile("101")).toBeUndefined();
   const calls = fake.calls.length; await runtime.bot.handleUpdate(upload); expect(fake.calls).toHaveLength(calls);
-  await choose({ kind: "photo_other" }); await choose({ kind: "photo_telegram" });
+  await choose({ kind: "photo_other" }); const successImport = await choose({ kind: "photo_telegram" });
+  const photoCount = fake.calls.filter(call => call.method === "sendPhoto").length;
+  await runtime.bot.handleUpdate(successImport);
+  expect(fake.calls.filter(call => call.method === "sendPhoto")).toHaveLength(photoCount);
   expect(lookups).toBe(1); expect((await repo.getSession("101"))?.state.photoCandidate).toEqual({ fileId: "imported", botId: "777" });
   await choose({ kind: "photo_confirm" }); expect((await repo.getSession("101"))?.state.step).toBe("about");
   await choose({ kind: "next" }); expect((await repo.getProfile("101"))?.photo).toEqual({ fileId: "imported", botId: "777" });
@@ -50,5 +54,13 @@ it.each(["ru", "en"] as const)("runs confirmed upload/import/skip and isolated p
   await runtime.bot.handleUpdate(imported); expect(lookups).toBe(2);
   await choose({ kind: "next" }); expect((await repo.getProfile("101"))?.photo?.fileId).toBe("imported");
   await callback("mfm:photo"); await choose({ kind: "clear" }); expect((await repo.getProfile("101"))?.photo).toBeNull();
- } finally { await runtime.stop(); await rm(directory, { recursive: true, force: true }); }
+  await callback("mfm:photo"); empty = false; failPhoto = true;
+  const failedImport = await choose({ kind: "photo_telegram" });
+  const confirmCode = encodeMfmCallback({ kind: "photo_confirm" }, (await repo.getSession("101"))!);
+  expect(JSON.stringify(latest()?.payload.reply_markup)).not.toContain(confirmCode);
+  expect(String(latest()?.payload.text)).toContain(language === "ru" ? "Не удалось показать фото" : "Could not display the photo");
+  expect((await repo.getProfile("101"))?.photo).toBeNull();
+  await runtime.bot.handleUpdate(failedImport);
+  expect(JSON.stringify(latest()?.payload.reply_markup)).not.toContain(confirmCode);
+ } finally { await runtime.shutdown(); await rm(directory, { recursive: true, force: true }); }
 });

@@ -36,6 +36,9 @@ import {
 	topicLabel,
 	type ProfileAudiencePlan,
 	type ProfilePhotoReader,
+	type ProfilePhotoFallback,
+	PROFILE_PHOTO_REPLY,
+	type ProfilePhotoReplyContext,
 	type ProfileAudienceService,
 	type ProfileDraft,
 	type ProfileRecord,
@@ -243,7 +246,7 @@ export function registerTelegramRouter(bot: Bot, options: TelegramRouterOptions)
 			if (options.onboardingService !== undefined && mfmFeature !== undefined && ctx.from !== undefined) {
 				if (ctx.callbackQuery?.message?.chat.type !== "private") { await ctx.answerCallbackQuery(); return; }
 				const view = await options.onboardingService.view(String(ctx.from.id));
-				if (view.kind !== "classic") { await ctx.answerCallbackQuery(); await mfmFeature.show(ctx, view); return; }
+				if (view.kind !== "classic") { await ctx.answerCallbackQuery(); const replay = new ReplyCollector(); await mfmFeature.show(replay.context(ctx), view); await replay.dispatchReplies(ctx, false); return; }
 			}
 			if (data !== undefined) await applicationsFeature.handleOpaqueCallback(ctx, data);
 		},
@@ -266,14 +269,14 @@ type CollectedContext = Context & { readonly [REPLY_COLLECTOR]?: ReplyCollector 
 
 export class ReplyCollector {
 	afterCommit: (() => Promise<void>) | undefined;
-	private readonly orderedReplies: ({ kind: "text"; index: number } | { kind: "photo"; fileId: string; options?: Parameters<Context["replyWithPhoto"]>[1] })[] = [];
+	private readonly orderedReplies: ({ kind: "text"; index: number } | { kind: "photo"; fileId: string; options?: Parameters<Context["replyWithPhoto"]>[1]; fallback?: ProfilePhotoFallback })[] = [];
 	readonly replies: ReplyAction[] = [];
 	readonly edits: { readonly text: string; readonly options?: EditOptions }[] = [];
 	readonly answers: AnswerOptions[] = [];
 	private audienceAction: ProfileAudienceAction | undefined;
 
 	context(ctx: Context): Context {
-		const proxy = Object.create(ctx) as Context;
+		const proxy = Object.create(ctx) as Context & { [PROFILE_PHOTO_REPLY]: NonNullable<ProfilePhotoReplyContext[typeof PROFILE_PHOTO_REPLY]> };
 		Object.defineProperty(proxy, REPLY_COLLECTOR, { value: this });
 		proxy.reply = async (text: string, options?: ReplyOptions) => {
 			this.orderedReplies.push({ kind: "text", index: this.replies.length });
@@ -281,9 +284,13 @@ export class ReplyCollector {
 			else this.replies.push({ text, options });
 			return undefined as never;
 		};
+		proxy[PROFILE_PHOTO_REPLY] = async (fileId, options, fallback) => {
+			if (!/^[A-Za-z0-9_-]{1,1024}$/.test(fileId)) throw new Error("buffered photos require a file reference");
+			this.orderedReplies.push({ kind: "photo", fileId, ...(options === undefined ? {} : { options }), ...(fallback === undefined ? {} : { fallback }) });
+		};
 		proxy.replyWithPhoto = async (photo, options) => {
-			if (typeof photo !== "string" || !/^[A-Za-z0-9_-]{1,1024}$/.test(photo)) throw new Error("buffered photos require a file reference");
-			this.orderedReplies.push({ kind: "photo", fileId: photo, ...(options === undefined ? {} : { options }) });
+			if (typeof photo !== "string") throw new Error("buffered photos require a file reference");
+			await proxy[PROFILE_PHOTO_REPLY](photo, options);
 			return undefined as never;
 		};
 		proxy.editMessageText = async (text: string, options?: EditOptions) => {
@@ -299,18 +306,19 @@ export class ReplyCollector {
 	}
 
 	get hasReplies(): boolean { return this.orderedReplies.length > 0; }
-	async dispatchReplies(ctx: Context): Promise<void> {
+	async dispatchReplies(ctx: Context, includePhotos = true): Promise<void> {
 		for (const action of this.orderedReplies) {
 			if (action.kind === "text") {
 				const reply = this.replies[action.index]!;
 				if (reply.options === undefined) await ctx.reply(reply.text);
 				else await ctx.reply(reply.text, reply.options);
 			} else {
-				try { await ctx.replyWithPhoto(action.fileId, action.options); }
-				catch {
-					const caption = action.options?.caption;
-					if (caption) await ctx.reply(caption, action.options?.reply_markup === undefined ? undefined : { reply_markup: action.options.reply_markup });
+				if (includePhotos) {
+					try { await ctx.replyWithPhoto(action.fileId, action.options); continue; }
+					catch { /* Never retry ambiguous media; keep the text/recovery controls usable. */ }
 				}
+				if (action.fallback !== undefined) await ctx.reply(action.fallback.text, action.fallback.options);
+				else if (action.options?.caption) await ctx.reply(action.options.caption, action.options.reply_markup === undefined ? undefined : { reply_markup: action.options.reply_markup });
 			}
 		}
 	}
@@ -372,7 +380,7 @@ async function runDurable(
 		if (ctx.chat?.type !== "private") return;
 		if (options.onboardingService !== undefined && mfmFeature !== undefined) {
 			const view = await options.onboardingService.view(telegramUserId);
-			if (view.kind !== "classic") { await mfmFeature.show(ctx, view); return; }
+			if (view.kind !== "classic") { const replay = new ReplyCollector(); await mfmFeature.show(replay.context(ctx), view); await replay.dispatchReplies(ctx, false); return; }
 		}
 		const session = await profileFeature.findSession(telegramUserId);
 		if (session !== undefined) await ctx.reply("Запрос уже обработан. Текущий шаг сохранён.", { reply_markup: resumeKeyboard(session) });
