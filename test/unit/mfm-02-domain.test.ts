@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { validateMfmProfile } from "../../src/modules/profiles/domain/mfm-profile.js";
-const input = { eventStatus: "participant", displayName: "Lucas Almeida", profileType: "specialist", locationText: "São Paulo, Brazil", spheres: ["digital_it"], openTo: ["joint_projects"], about: "I connect people and useful projects." };
+const input = { eventStatus: "participant", displayName: "Lucas Almeida", profileType: "specialist", locationText: "São Paulo, Brazil", spheres: ["digital_it"], openTo: ["joint_projects"], photo: null, about: "I connect people and useful projects." };
 it("validates a structured person without a classic platform or profile type", () => {
 	expect(validateMfmProfile(input)).toEqual(input);
 	expect(validateMfmProfile({ ...input, about: null })).toEqual({ ...input, about: null });

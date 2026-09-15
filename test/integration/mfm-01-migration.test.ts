@@ -50,7 +50,7 @@ it("drops schema17 specialization rows and preserves the remaining MFM profile",
 		await database.execute("INSERT INTO mfm_profile_specializations VALUES (?, 'media', 'blogger')", [id]);
 		await database.execute("INSERT INTO mfm_profile_open_to VALUES (?, 'joint_projects')", [id]);
 		const result = await new MigrationRunner(await MigrationSource.fromDirectory("migrations")).migrate(database);
-		expect(result.applied).toEqual([18]);
+		expect(result.applied).toEqual([18, 19]);
 		expect(await database.query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'mfm_profile_specializations'")).toEqual([]);
 		expect(await database.query("SELECT profile_id, event_status, profile_type, location_text, about_text FROM mfm_profiles")).toEqual([{ profile_id: id, event_status: "volunteer", profile_type: "specialist", location_text: "Екатеринбург, Россия", about_text: null }]);
 		expect(await database.query("SELECT * FROM mfm_profile_open_to")).toEqual([{ profile_id: id, intent: "joint_projects" }]);

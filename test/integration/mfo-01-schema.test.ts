@@ -34,7 +34,7 @@ it("upgrades populated schema16 without rewriting data and transfers one preferr
 			openTo: await source.query("SELECT * FROM mfm_profile_open_to"),
 		};
 		const runner = new MigrationRunner(await MigrationSource.fromDirectory("migrations"));
-		expect((await runner.migrate(source)).applied).toEqual([17, 18]);
+		expect((await runner.migrate(source)).applied).toEqual([17, 18, 19]);
 		expect(await source.query("SELECT profile_id, event_status, profile_type, location_text, completed_at, updated_at, revision FROM mfm_profiles")).toEqual(before.profile);
 		expect(await source.query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'mfm_profile_specializations'")).toEqual([]);
 		expect(await source.query("SELECT * FROM mfm_profile_open_to")).toEqual(before.openTo);
@@ -46,7 +46,7 @@ it("upgrades populated schema16 without rewriting data and transfers one preferr
 		await runner.migrate(target);
 		await target.execute(`CREATE TABLE ${STATE_TRANSFER_AUDIT_TABLE} (id INTEGER PRIMARY KEY CHECK (id = 1), digest TEXT NOT NULL, imported_at INTEGER NOT NULL)`);
 		const manifest = await exportStateTransferManifest(new NodeSqlDatabase(source));
-		expect(manifest.schemaVersion).toBe(18);
+		expect(manifest.schemaVersion).toBe(19);
 		expect(manifest.tables).toHaveLength(25);
 		await importStateTransferManifest(new NodeSqlDatabase(target), manifest);
 		expect((await exportStateTransferManifest(new NodeSqlDatabase(target))).digest).toBe(manifest.digest);

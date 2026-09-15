@@ -16,7 +16,7 @@ it("performs the authorized third reset once after both prior audits", async () 
 		const before = await inspectProjectReset(boundary, target);
 		const third = { operationId: "mfo-2026-reset", target, expectedDigest: before.digest };
 		const result = await resetProjectDatabase(boundary, target, third);
-		expect(result).toMatchObject({ operationId: "mfo-2026-reset", target, removedRows: before.rowCount, schemaVersion: 18 });
+		expect(result).toMatchObject({ operationId: "mfo-2026-reset", target, removedRows: before.rowCount, schemaVersion: 19 });
 		expect(await inspectProjectReset(boundary, target)).toMatchObject({ rowCount: 0, schemaDigest: before.schemaDigest, completedOperations: expect.arrayContaining([expect.objectContaining({ operationId: "mfm-2026-reset" }), expect.objectContaining({ operationId: "mnet-2026-reset" }), result]) });
 		expect(await boundary.query("SELECT * FROM mfm_profile_contacts")).toEqual([]);
 		await seedConnectionPerson(boundary, 2);

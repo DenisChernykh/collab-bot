@@ -29,7 +29,7 @@ it("upgrades populated schema15 without opt-in, enforces pair decisions and tran
 		const before = await source.query("SELECT * FROM profiles");
 		const beforeMfm = await source.query("SELECT * FROM mfm_profiles");
 		const runner = new MigrationRunner(await MigrationSource.fromDirectory("migrations"));
-		expect((await runner.migrate(source)).applied).toEqual([16, 17, 18]);
+		expect((await runner.migrate(source)).applied).toEqual([16, 17, 18, 19]);
 		expect(await source.query("SELECT * FROM profiles")).toEqual(before);
 		expect(await source.query("SELECT profile_id, event_status, profile_type, location_text, completed_at, updated_at, revision FROM mfm_profiles")).toEqual(beforeMfm);
 		expect(await source.query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'mfm_profile_specializations'")).toEqual([]);
@@ -50,7 +50,7 @@ it("upgrades populated schema15 without opt-in, enforces pair decisions and tran
 		const targetDb = new NodeSqlDatabase(target);
 		await targetDb.execute("CREATE TABLE cf1_state_import_audit (id INTEGER PRIMARY KEY CHECK (id = 1), digest TEXT NOT NULL, imported_at INTEGER NOT NULL)");
 		const exported = await exportStateTransferManifest(new NodeSqlDatabase(source));
-		expect(exported.schemaVersion).toBe(18);
+		expect(exported.schemaVersion).toBe(19);
 		expect(exported.tables).toHaveLength(25);
 		await importStateTransferManifest(targetDb, exported);
 		expect((await exportStateTransferManifest(targetDb)).digest).toBe(exported.digest);
