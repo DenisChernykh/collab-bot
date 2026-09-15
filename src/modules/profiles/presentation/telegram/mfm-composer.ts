@@ -1,3 +1,4 @@
+import type { ProfilePhotoReader } from "../../application/ports/profile-photo-reader.js";
 import { InlineKeyboard, type Context } from "grammy";
 import type { OnboardingService, OnboardingView } from "../../application/onboarding-service.js";
 import { decodeMfmCallback } from "./mfm-callback-codec.js";
@@ -5,6 +6,8 @@ import { contactRequestIds, renderOnboarding } from "./mfm-presentation.js";
 import { COPY, NOTICES, tr } from "./mfm-copy.js";
 
 export interface MfmTelegramOptions {
+	readonly photoReader?: ProfilePhotoReader;
+	readonly schedulePhotoLookup?: (ctx: Context, operation: () => Promise<void>) => void;
 	readonly service: OnboardingService;
 	readonly helpContact: string;
 	readonly renderClassic: (ctx: Context, pendingStart?: string) => Promise<void>;

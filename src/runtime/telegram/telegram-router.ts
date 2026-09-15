@@ -35,6 +35,7 @@ import {
 	resumeKeyboard,
 	topicLabel,
 	type ProfileAudiencePlan,
+	type ProfilePhotoReader,
 	type ProfileAudienceService,
 	type ProfileDraft,
 	type ProfileRecord,
@@ -55,6 +56,7 @@ export interface TelegramRouterOptions {
 	readonly introductionService?: IntroductionService;
 	readonly onboardingService?: OnboardingService;
 	readonly profileService: ProfileService;
+	readonly profilePhotoReader?: ProfilePhotoReader;
 	readonly profileAudienceService?: ProfileAudienceService;
 	readonly sessionRepository: ProfileSessionRepository;
 	readonly telegramUserRepository: TelegramUserWriter & {
@@ -142,6 +144,12 @@ export function registerTelegramRouter(bot: Bot, options: TelegramRouterOptions)
 	const mfmFeature = options.onboardingService === undefined ? undefined : createMfmTelegramFeature({
 		...(options.connectionService === undefined ? {} : { completed: createConnectionTelegramFeature(options.connectionService, options.introductionService) }),
 		service: options.onboardingService,
+		...(options.profilePhotoReader === undefined ? {} : { photoReader: options.profilePhotoReader }),
+		schedulePhotoLookup: (ctx, operation) => {
+			const collector = (ctx as CollectedContext)[REPLY_COLLECTOR];
+			if (collector === undefined) throw new Error("photo lookup requires a durable collector");
+			collector.afterCommit = operation;
+		},
 		helpContact: options.helpContact,
 		renderClassic: async (ctx, pendingStart) => {
 			const userId = String(ctx.from!.id);
@@ -256,7 +264,9 @@ interface ProfileAudienceAction { readonly plan: ProfileAudiencePlan; readonly r
 const REPLY_COLLECTOR = Symbol("reply-collector");
 type CollectedContext = Context & { readonly [REPLY_COLLECTOR]?: ReplyCollector };
 
-class ReplyCollector {
+export class ReplyCollector {
+	afterCommit: (() => Promise<void>) | undefined;
+	private readonly orderedReplies: ({ kind: "text"; index: number } | { kind: "photo"; fileId: string; options?: Parameters<Context["replyWithPhoto"]>[1] })[] = [];
 	readonly replies: ReplyAction[] = [];
 	readonly edits: { readonly text: string; readonly options?: EditOptions }[] = [];
 	readonly answers: AnswerOptions[] = [];
@@ -266,8 +276,14 @@ class ReplyCollector {
 		const proxy = Object.create(ctx) as Context;
 		Object.defineProperty(proxy, REPLY_COLLECTOR, { value: this });
 		proxy.reply = async (text: string, options?: ReplyOptions) => {
+			this.orderedReplies.push({ kind: "text", index: this.replies.length });
 			if (options === undefined) this.replies.push({ text });
 			else this.replies.push({ text, options });
+			return undefined as never;
+		};
+		proxy.replyWithPhoto = async (photo, options) => {
+			if (typeof photo !== "string" || !/^[A-Za-z0-9_-]{1,1024}$/.test(photo)) throw new Error("buffered photos require a file reference");
+			this.orderedReplies.push({ kind: "photo", fileId: photo, ...(options === undefined ? {} : { options }) });
 			return undefined as never;
 		};
 		proxy.editMessageText = async (text: string, options?: EditOptions) => {
@@ -280,6 +296,23 @@ class ReplyCollector {
 			return true;
 		};
 		return proxy;
+	}
+
+	get hasReplies(): boolean { return this.orderedReplies.length > 0; }
+	async dispatchReplies(ctx: Context): Promise<void> {
+		for (const action of this.orderedReplies) {
+			if (action.kind === "text") {
+				const reply = this.replies[action.index]!;
+				if (reply.options === undefined) await ctx.reply(reply.text);
+				else await ctx.reply(reply.text, reply.options);
+			} else {
+				try { await ctx.replyWithPhoto(action.fileId, action.options); }
+				catch {
+					const caption = action.options?.caption;
+					if (caption) await ctx.reply(caption, action.options?.reply_markup === undefined ? undefined : { reply_markup: action.options.reply_markup });
+				}
+			}
+		}
 	}
 
 	scheduleAudience(plan: ProfileAudiencePlan): void {
@@ -334,7 +367,7 @@ async function runDurable(
 		},
 	});
 	const inputRecord = input !== null && typeof input === "object" && !Array.isArray(input) ? input as { readonly kind?: unknown } : undefined;
-	if (collector.replies.length === 0 && collector.answers.length === 0 && collector.edits.length === 0 && inputRecord?.kind === "callback_query") {
+	if (!collector.hasReplies && collector.afterCommit === undefined && collector.answers.length === 0 && collector.edits.length === 0 && inputRecord?.kind === "callback_query") {
 		await ctx.answerCallbackQuery();
 		if (ctx.chat?.type !== "private") return;
 		if (options.onboardingService !== undefined && mfmFeature !== undefined) {
@@ -371,10 +404,8 @@ async function runDurable(
 			postCommitError = error;
 		}
 	}
-	for (const reply of collector.replies) {
-		if (reply.options === undefined) await ctx.reply(reply.text);
-		else await ctx.reply(reply.text, reply.options);
-	}
+	if (collector.afterCommit !== undefined) await collector.afterCommit();
+	await collector.dispatchReplies(ctx);
 	if (postCommitError !== undefined) throw postCommitError;
 }
 

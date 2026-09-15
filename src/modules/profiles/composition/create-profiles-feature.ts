@@ -1,3 +1,5 @@
+import { GrammyProfilePhotoReader } from "../infrastructure/grammy-profile-photo-reader.js";
+import type { ProfilePhotoReader } from "../application/ports/profile-photo-reader.js";
 import { OnboardingService } from "../application/onboarding-service.js";
 import { SqliteOnboardingRepository } from "../infrastructure/sqlite-onboarding-repository.js";
 import { webCryptoCapabilities } from "../../../platform/crypto/capabilities.js";
@@ -17,6 +19,7 @@ import { SqliteProfileRepository } from "../infrastructure/sqlite-profile-reposi
 import { SqliteProfileSessionRepository } from "../infrastructure/sqlite-profile-session-repository.js";
 
 export interface ProfilesFeature {
+	readonly photoReader: ProfilePhotoReader;
 	readonly onboarding: OnboardingService;
 	readonly api: ProfileService;
 	readonly audience: ProfileAudienceService;
@@ -41,6 +44,7 @@ export function createProfilesFeature(options: CreateProfilesFeatureOptions): Pr
 	const api = new ProfileService(repository, options.transactions, options.clock);
 	return {
 		api,
+		photoReader: new GrammyProfilePhotoReader(options.telegramBot, options.deadline),
 		onboarding: new OnboardingService(new SqliteOnboardingRepository(database), api, options.transactions, options.clock, options.crypto ?? webCryptoCapabilities, options.mfmFeatureEnabled ?? false),
 		audience: new ProfileAudienceService(
 			new GrammyTelegramAudienceReader(options.telegramBot),

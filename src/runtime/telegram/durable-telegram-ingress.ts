@@ -28,7 +28,10 @@ export function registerDurableTelegramIngress(
 			if (message === undefined) return;
 			await options.executeDurably(
 				ctx,
-				{ kind: "message", text: message.text ?? "", hasChatShared: message.chat_shared !== undefined },
+				{ kind: "message", text: message.text ?? "", hasChatShared: message.chat_shared !== undefined,
+					...(message.photo === undefined ? {} : { photo: message.photo.map(size => ({ fileId: size.file_id, width: size.width, height: size.height })) }),
+					...(message.media_group_id === undefined ? {} : { mediaGroupId: message.media_group_id }),
+				},
 				(durableContext) => runTerminal(options.messageRoute, durableContext),
 			);
 		},

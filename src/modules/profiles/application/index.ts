@@ -7,3 +7,5 @@ export * from "./profile-service.js";
 export * from "./onboarding-service.js";
 export * from "./ports/onboarding-repository.js";
 export * from "../domain/mfm-profile.js";
+
+export type { ProfilePhotoReader } from "./ports/profile-photo-reader.js";

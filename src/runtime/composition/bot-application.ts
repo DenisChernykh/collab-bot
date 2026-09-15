@@ -149,6 +149,7 @@ export function composeBotApplication(options: BotApplicationCompositionOptions)
 		profileService: profilesFeature.api,
 		onboardingService: profilesFeature.onboarding,
 		profileAudienceService: profilesFeature.audience,
+		profilePhotoReader: profilesFeature.photoReader,
 		sessionRepository: profilesFeature.sessions,
 		telegramUserRepository: userRepository,
 		durableCommandExecutor,
