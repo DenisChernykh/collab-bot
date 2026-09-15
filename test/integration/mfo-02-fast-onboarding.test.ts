@@ -49,8 +49,9 @@ it("completes the short durable path, bounds spheres and saves or skips one cont
 		if (contactView.kind !== "step") throw new Error("expected contact step");
 		const contactToken = token(contactView);
 		view = await service.selectContact("1", groupContact, contactToken);
-		expect(view).toMatchObject({ session: { state: { step: "about", contact: groupContact } } });
-		expect(await service.selectContact("1", groupContact, contactToken)).toMatchObject({ notice: "stale", session: { state: { step: "about" } } });
+		expect(view).toMatchObject({ session: { state: { step: "photo", contact: groupContact } } });
+		expect(await service.selectContact("1", groupContact, contactToken)).toMatchObject({ notice: "stale", session: { state: { step: "photo" } } });
+		await act("1", { kind: "next" }); // skip photo
 		expect(await act("1", { kind: "text", value: "I build useful media projects." })).toMatchObject({ kind: "home", notice: "saved", profile: { contact: groupContact, openTo: ["joint_projects", "professional_communication"], about: "I build useful media projects." } });
 		expect(await boundary.query("SELECT kind FROM mfm_profile_contacts")).toEqual([{ kind: "telegram_group" }]);
 
@@ -60,7 +61,8 @@ it("completes the short durable path, bounds spheres and saves or skips one cont
 		await act("2", { kind: "next" });
 		await act("2", { kind: "choice", value: "city_and_events" });
 		await act("2", { kind: "next" });
-		expect(await act("2", { kind: "next" })).toMatchObject({ session: { state: { step: "about", contact: null } } });
+		expect(await act("2", { kind: "next" })).toMatchObject({ session: { state: { step: "photo", contact: null } } });
+		await act("2", { kind: "next" }); // skip photo
 		expect(await act("2", { kind: "next" })).toMatchObject({ kind: "home", profile: { contact: null, openTo: ["city_and_events"], about: null } });
 
 		await reachRequiredFlow("3", "Rollback");
@@ -69,6 +71,7 @@ it("completes the short durable path, bounds spheres and saves or skips one cont
 		await act("3", { kind: "choice", value: "professional_communication" });
 		await act("3", { kind: "next" });
 		await act("3", { kind: "next" });
+		await act("3", { kind: "next" }); // skip photo
 		if (view.kind !== "step") throw new Error("expected about step");
 		const rollbackToken = token(view);
 		await boundary.execute("CREATE TRIGGER mfo_session_delete_fail BEFORE DELETE ON onboarding_sessions BEGIN SELECT RAISE(ABORT, 'synthetic session delete failure'); END");
@@ -102,6 +105,7 @@ it("preserves optional profile data while editing and normalizes removed legacy 
 		await act({ kind: "next" });
 		await act({ kind: "next" });
 		await act({ kind: "next" });
+		await act({ kind: "next" }); // skip photo
 		expect(await act({ kind: "next" })).toMatchObject({ kind: "home", profile: { displayName: "Changed", openTo: ["professional_communication"], contact: groupContact, about: "Existing profile summary." } });
 		view = await service.edit("1");
 		await act({ kind: "text", value: "Changed again" });
@@ -110,6 +114,7 @@ it("preserves optional profile data while editing and normalizes removed legacy 
 		await act({ kind: "next" });
 		await act({ kind: "next" });
 		await act({ kind: "next" });
+		await act({ kind: "next" }); // keep photo before clearing about
 		expect(await act({ kind: "clear" })).toMatchObject({ kind: "home", profile: { about: null, contact: groupContact } });
 
 		await boundary.execute("INSERT INTO onboarding_sessions (telegram_user_id, state_json, revision, updated_at) VALUES ('1', ?, 1, 3)", [JSON.stringify({ version: 1, generation: "a".repeat(16), step: "intro", draft: { eventStatus: "volunteer", displayName: "Legacy" }, editing: false, page: 0 })]);

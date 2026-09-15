@@ -36,7 +36,11 @@ it.each(["ru", "en"] as const)("runs the real MFM router in %s and blocks every 
 		await choose({ kind: "choice", value: "digital_it" });
 		expect(fake.calls.some((x) => x.method === "editMessageText")).toBe(true);
 		await choose({ kind: "next" });
-		const saved = await text(language === "ru" ? "Пропустить" : "Skip");
+		await choose({ kind: "choice", value: "joint_projects" });
+		await choose({ kind: "next" });
+		await text(language === "ru" ? "Пропустить" : "Skip");
+		await choose({ kind: "next" }); // photo
+		const saved = await choose({ kind: "next" }); // about
 		expect(String(fake.lastMessage()?.text)).toContain(language === "ru" ? "Профиль готов" : "Profile ready");
 		await runtime.bot.handleUpdate(saved);
 		for (const command of ["/create", "/browse", "/my", "/applications", "/start c_fake", "/start a_fake"]) await text(command);

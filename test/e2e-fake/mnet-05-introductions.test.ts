@@ -67,6 +67,7 @@ it.each(["ru", "en"] as const)("completes private introduction decisions and con
 		for (const [sender, decision, ru, en] of [[3, "rejected", "Отклонить", "Decline"], [4, "withdrawn", "Отозвать запрос", "Withdraw introduction"]] as const) {
 			await message(sender, "/start"); await choose(sender, "🔎 Найти людей", "🔎 Find people");
 			await choose(sender, "Любая цель", "Any purpose");
+			await choose(sender, "Следующий ▶", "Next ▶"); // default-visible profile 1 precedes recipient 2
 			await choose(sender, "🤝 Познакомиться", "🤝 Introduce yourself"); await message(sender, "Another synthetic introduction message"); await choose(sender, "Отправить запрос", "Send introduction");
 			const [row] = await fixture.runtime.boundary.query<{ public_token: string }>("SELECT public_token FROM introduction_requests WHERE sender_profile_id = ?", [connectionProfileId(sender)]);
 			if (!row) throw new Error("missing decision request");

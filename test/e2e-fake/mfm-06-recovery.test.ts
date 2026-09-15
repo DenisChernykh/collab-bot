@@ -56,8 +56,13 @@ it("restores drafts across restarts, rejects category text and enforces limits w
 	expect(String(j.fake().lastMessage()?.text)).toContain("Продолжим");
 	expect((await j.session())?.state.draft).toEqual(persisted?.state.draft);
 	await j.act({ kind: "next" });
-	expect((await j.session())?.state.step).toBe("contact");
+	expect((await j.session())?.state.step).toBe("open_to");
+	await j.act({ kind: "choice", value: "joint_projects" });
 	await j.act({ kind: "next" });
+	expect((await j.session())?.state.step).toBe("contact");
+	await j.act({ kind: "next" }); // contact
+	await j.act({ kind: "next" }); // photo
+	await j.act({ kind: "next" }); // about
 	expect(await j.session()).toBeUndefined();
 	await j.restart(false); await j.text("/start");
 	expect(String(j.fake().lastMessage()?.text)).toContain("Мой профиль");
@@ -93,6 +98,9 @@ it("defaults new users to language then classic when the feature is off", () => 
 
 it("rolls back the final profile, session and receipt before any Telegram reply and permits one retry", () => withJourney(async (j) => {
 	await j.fields(); await j.act({ kind: "choice", value: "digital_it" }); await j.act({ kind: "next" });
+	await j.act({ kind: "choice", value: "joint_projects" }); await j.act({ kind: "next" });
+	await j.act({ kind: "next" }); // contact
+	await j.act({ kind: "next" }); // photo
 	const update = await j.event({ kind: "next" });
 	const before = await j.session();
 	const count = j.fake().calls.length;
@@ -109,6 +117,9 @@ it("rolls back the final profile, session and receipt before any Telegram reply 
 
 it("keeps the completed profile visible until an edited draft is saved once with the feature disabled", () => withJourney(async (j) => {
 	await j.fields(); await j.act({ kind: "choice", value: "digital_it" }); await j.act({ kind: "next" });
+	await j.act({ kind: "choice", value: "joint_projects" }); await j.act({ kind: "next" });
+	await j.act({ kind: "next" }); // contact
+	await j.act({ kind: "next" }); // photo
 	await j.act({ kind: "next" });
 	const repository = new SqliteOnboardingRepository(j.runtime().boundary);
 	const before = await repository.getProfile("42");
@@ -117,6 +128,9 @@ it("keeps the completed profile visible until an edited draft is saved once with
 	await j.text("Updated project"); await j.act({ kind: "choice", value: "business" });
 	await j.text("Belgrade, Serbia"); await j.act({ kind: "next" });
 	expect(await new SqliteOnboardingRepository(j.runtime().boundary).getProfile("42")).toEqual(before);
+	await j.act({ kind: "next" }); // goals
+	await j.act({ kind: "next" }); // contact
+	await j.act({ kind: "next" }); // photo
 	const save = await j.act({ kind: "next" }); await j.runtime().bot.handleUpdate(save);
 	expect(await new SqliteOnboardingRepository(j.runtime().boundary).getProfile("42")).toMatchObject({
 		profileId: before?.profileId, completedAt: before?.completedAt, revision: 2,

@@ -48,6 +48,7 @@ it.each(["ru", "en"] as const)("finishes and edits one durable MFM profile in %s
 		await act({ kind: "next" });
 		const before = view;
 		await act({ kind: "choice", value: "telegram_user" });
+		await act({ kind: "next" }); // skip photo
 		await act({ kind: "next" });
 		expect(view).toMatchObject({ kind: "home", profile: { displayName: "Lucas", spheres: ["digital_it"], openTo: ["joint_projects"], about: null, contact: { kind: "telegram_user" } } });
 		if (before.kind !== "step") throw new Error("expected step");
