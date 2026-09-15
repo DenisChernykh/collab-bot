@@ -80,7 +80,7 @@ it("runs RU/EN fast onboarding through both native pickers, external link and sk
 		await ru.text("Создаю полезные проекты и медиа.");
 		expect(String(fake.lastMessage()?.text)).toContain("Профиль готов 🎉");
 		expect(fake.lastMessage()?.reply_markup?.inline_keyboard?.flat()).toContainEqual(expect.objectContaining({ text: "Найти людей →" }));
-		expect(fake.lastMessage()?.reply_markup?.inline_keyboard?.flat().some((button) => button.text.includes("Дополнить"))).toBe(false);
+		expect(fake.lastMessage()?.reply_markup?.inline_keyboard?.flat().some((button) => String(button.text).includes("Дополнить"))).toBe(false);
 		const afterSelectionCalls = fake.calls.length;
 		await runtime.bot.handleUpdate(selected);
 		expect(fake.calls).toHaveLength(afterSelectionCalls);

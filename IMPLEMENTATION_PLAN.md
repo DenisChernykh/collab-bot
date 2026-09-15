@@ -2368,10 +2368,12 @@ User launch authorizes this local stage only. Read first before every unit: AGEN
 | Unit | Status | Depends on | Scope / observable result | Verification |
 |---|---|---|---|---|
 | MPH-00 | completed | MFP-04 | Product, technical and execution contract | Documentation diff |
-| MPH-01 | pending | MPH-00 | Schema19, validated photo and saved/draft persistence, transfer | Focused migration/repository tests, typecheck, manifest |
+| MPH-01 | completed | MPH-00 | Schema19, validated photo and saved/draft persistence, transfer | Focused migration/repository tests, typecheck, manifest |
 | MPH-02 | pending | MPH-01 | Buffered media replies and post-commit photo reader hook | Runtime tests, typecheck |
 | MPH-03 | pending | MPH-02 | Photo state machine and RU/EN wizard/editor routes | Focused application and fake journey tests |
 | MPH-04 | pending | MPH-03 | Saved photos on own/discovery/introduction screens | Focused presentation/privacy tests |
 | MPH-05 | pending | MPH-04 | Regression updates, final aggregate checks and independent review | pnpm check, fake Telegram, Cloudflare gates |
 
 MPH-00 evidence: Commit SHA: SELF. Read current contracts and confirmed main HEAD fdd5950, Node24.18.0/pnpm11.15.1. Read-only remote main remains c4c5bfbc5f9696b63e0acf89182990017c2237fb (sandbox DNS failed, host read succeeded). Prior MFP cards all completed, so corrected the stale stage summary only. Pre-existing docs/assets remains untracked and untouched. Changed files: docs/PRD.md, docs/TECHNICAL_DESIGN.md, IMPLEMENTATION_PLAN.md. Documentation diff/check passed; no runtime or external mutation.
+
+MPH-01 evidence: Commit SHA: SELF. Preflight main/cbb5c82, remote main unchanged, Node24.18.0/pnpm11.15.1. RED: new repository test lost photo during validation. GREEN: focused integration PASS2 (persist/reopen, independent candidate, clear, invalid SQL photo, populated18→19 upgrade, canonical transfer round-trip), pnpm typecheck and pnpm cloudflare:migrations:check PASS. Fixed one pre-existing test type error by narrowing unknown button text to String; no behavior change. Changed files: migrations/0019_mph-01-profile-photo.sql; src/modules/profiles/domain/mfm-profile.ts; src/modules/profiles/application/ports/onboarding-repository.ts; src/modules/profiles/infrastructure/sqlite-onboarding-repository.ts; src/platform/database/cloudflare-migration-manifest.ts; src/platform/database/state-transfer.ts; test/integration/mph-01-photo.test.ts; test/e2e-fake/mfo-03-fast-onboarding.test.ts; IMPLEMENTATION_PLAN.md. Inspected diff/check PASS. Existing schema-pinned regression assertions will be advanced in MPH-05.

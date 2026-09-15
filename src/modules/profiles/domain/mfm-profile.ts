@@ -11,7 +11,15 @@ export type MfmContact =
 	| { readonly kind: "telegram_user" }
 	| { readonly kind: "telegram_channel" | "telegram_group"; readonly url: string; readonly username: string; readonly telegramChatId: string; readonly title?: string }
 	| { readonly kind: "external"; readonly url: string };
+export interface MfmPhoto { readonly fileId: string; readonly botId: string; }
+export function validateMfmPhoto(value: unknown): MfmPhoto {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) throw new DomainValidationError("invalid profile photo");
+	const v = value as Record<string, unknown>;
+	if (typeof v.fileId !== "string" || !/^[A-Za-z0-9_-]{1,1024}$/.test(v.fileId) || typeof v.botId !== "string" || !/^[1-9][0-9]{0,19}$/.test(v.botId) || Object.keys(v).some(key => key !== "fileId" && key !== "botId")) throw new DomainValidationError("invalid profile photo");
+	return { fileId: v.fileId, botId: v.botId };
+}
 export interface MfmProfileInput {
+	readonly photo?: MfmPhoto | null;
 	readonly eventStatus: (typeof MFM_EVENT_STATUSES)[number];
 	readonly displayName: string;
 	readonly profileType: (typeof MFM_PROFILE_TYPES)[number];
@@ -68,6 +76,7 @@ export function validateMfmProfile(value: unknown): MfmProfileInput {
 		profileType: mfmValue(input.profileType, MFM_PROFILE_TYPES),
 		locationText: mfmText(input.locationText, 200),
 		spheres, openTo: choices(input.openTo, MFM_OPEN_TO, 1),
+		photo: input.photo === undefined || input.photo === null ? null : validateMfmPhoto(input.photo),
 		about: input.about === undefined || input.about === null ? null : mfmAbout(input.about),
 	};
 }

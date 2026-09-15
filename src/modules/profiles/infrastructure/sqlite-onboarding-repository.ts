@@ -1,6 +1,6 @@
 import type { SqlDatabase } from "../../../shared/application/ports/sql-database.js";
 import { resolveSqlDatabase, type SqlDatabaseInput } from "../../../platform/database/node-sql-database.js";
-import { MFM_EVENT_STATUSES, MFM_OPEN_TO, MFM_PROFILE_TYPES, MFM_SPHERES, mfmAbout, mfmText, mfmValue, validateMfmContact, validateMfmProfile, type MfmContact, type MfmDraft, type MfmProfileInput, type MfmProfileRecord } from "../domain/mfm-profile.js";
+import { MFM_EVENT_STATUSES, MFM_OPEN_TO, MFM_PROFILE_TYPES, MFM_SPHERES, mfmAbout, mfmText, mfmValue, validateMfmContact, validateMfmPhoto, validateMfmProfile, type MfmContact, type MfmDraft, type MfmProfileInput, type MfmProfileRecord } from "../domain/mfm-profile.js";
 import { LEGACY_ONBOARDING_STEPS, ONBOARDING_STEPS, type ExperienceUser, type OnboardingRepository, type OnboardingSession, type OnboardingState } from "../application/ports/onboarding-repository.js";
 
 export class SqliteOnboardingRepository implements OnboardingRepository {
@@ -32,7 +32,7 @@ export class SqliteOnboardingRepository implements OnboardingRepository {
 	}
 	async deleteSession(userId: string): Promise<void> { await this.database.execute("DELETE FROM onboarding_sessions WHERE telegram_user_id = ?", [userId]); }
 	async getProfile(userId: string): Promise<MfmProfileRecord | undefined> {
-		const [row] = await this.database.query<{ profile_id: string; display_name: string; event_status: string; profile_type: string; location_text: string; about_text: string | null; completed_at: number; updated_at: number; revision: number }>("SELECT m.*, p.display_name FROM mfm_profiles m JOIN profiles p ON p.id = m.profile_id WHERE p.telegram_user_id = ? AND p.status = 'active'", [userId]);
+		const [row] = await this.database.query<{ profile_id: string; display_name: string; event_status: string; profile_type: string; location_text: string; about_text: string | null; photo_json: string | null; completed_at: number; updated_at: number; revision: number }>("SELECT m.*, p.display_name FROM mfm_profiles m JOIN profiles p ON p.id = m.profile_id WHERE p.telegram_user_id = ? AND p.status = 'active'", [userId]);
 		if (row === undefined) return undefined;
 		const spheres = await this.database.query<{ sphere: string }>("SELECT sphere FROM mfm_profile_spheres WHERE profile_id = ? ORDER BY rowid", [row.profile_id]);
 		const openTo = await this.database.query<{ intent: string }>("SELECT intent FROM mfm_profile_open_to WHERE profile_id = ? ORDER BY rowid", [row.profile_id]);
@@ -40,7 +40,7 @@ export class SqliteOnboardingRepository implements OnboardingRepository {
 		const contact = contactRow === undefined ? null : validateMfmContact(contactRow.kind === "telegram_user" ? { kind: contactRow.kind }
 			: contactRow.kind === "external" ? { kind: contactRow.kind, url: contactRow.url }
 				: { kind: contactRow.kind, url: contactRow.url, username: contactRow.username, telegramChatId: contactRow.telegram_chat_id, ...(contactRow.title === null ? {} : { title: contactRow.title }) });
-		return { ...validateMfmProfile({ eventStatus: row.event_status, displayName: row.display_name, profileType: row.profile_type, locationText: row.location_text, spheres: spheres.map((x) => x.sphere), openTo: openTo.map((x) => x.intent), about: row.about_text }), profileId: row.profile_id, contact, completedAt: row.completed_at, updatedAt: row.updated_at, revision: row.revision };
+		return { ...validateMfmProfile({ eventStatus: row.event_status, displayName: row.display_name, profileType: row.profile_type, locationText: row.location_text, spheres: spheres.map((x) => x.sphere), openTo: openTo.map((x) => x.intent), about: row.about_text, photo: row.photo_json === null ? null : JSON.parse(row.photo_json) }), profileId: row.profile_id, contact, completedAt: row.completed_at, updatedAt: row.updated_at, revision: row.revision };
 	}
 	async saveProfile(userId: string, input: MfmProfileInput, now: number, contact?: MfmContact | null): Promise<MfmProfileRecord> {
 		const checked = validateMfmProfile(input);
@@ -51,7 +51,7 @@ export class SqliteOnboardingRepository implements OnboardingRepository {
 			const [base] = await this.database.query<{ id: string }>("SELECT id FROM profiles WHERE telegram_user_id = ? AND status = 'active'", [userId]);
 			if (base === undefined) throw new Error("base profile unavailable");
 			await this.database.execute("UPDATE profiles SET display_name = ?, updated_at = ? WHERE id = ?", [checked.displayName, now, base.id]);
-			await this.database.execute("INSERT INTO mfm_profiles (profile_id, event_status, profile_type, location_text, completed_at, updated_at, revision, about_text) VALUES (?, ?, ?, ?, ?, ?, 1, ?) ON CONFLICT(profile_id) DO UPDATE SET event_status = excluded.event_status, profile_type = excluded.profile_type, location_text = excluded.location_text, about_text = excluded.about_text, updated_at = excluded.updated_at, revision = mfm_profiles.revision + 1", [base.id, checked.eventStatus, checked.profileType, checked.locationText, now, now, checked.about]);
+			await this.database.execute("INSERT INTO mfm_profiles (profile_id, event_status, profile_type, location_text, completed_at, updated_at, revision, about_text, photo_json) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?) ON CONFLICT(profile_id) DO UPDATE SET event_status = excluded.event_status, profile_type = excluded.profile_type, location_text = excluded.location_text, about_text = excluded.about_text, photo_json = excluded.photo_json, updated_at = excluded.updated_at, revision = mfm_profiles.revision + 1", [base.id, checked.eventStatus, checked.profileType, checked.locationText, now, now, checked.about, checked.photo == null ? null : JSON.stringify(checked.photo)]);
 			await this.database.execute("DELETE FROM mfm_profile_spheres WHERE profile_id = ?", [base.id]);
 			await this.database.execute("DELETE FROM mfm_profile_open_to WHERE profile_id = ?", [base.id]);
 			for (const sphere of checked.spheres) await this.database.execute("INSERT INTO mfm_profile_spheres VALUES (?, ?)", [base.id, sphere]);
@@ -79,6 +79,8 @@ function parseState(value: unknown): OnboardingState {
 	const step = normalizeStep(rawStep);
 	const rawReturnStep = v.returnStep === undefined ? undefined : mfmValue(v.returnStep, [...ONBOARDING_STEPS, ...LEGACY_ONBOARDING_STEPS, "home"]);
 	return { version: 1, generation: v.generation, step, draft, editing: v.editing,
+		...(v.photoCandidate === undefined ? {} : { photoCandidate: validateMfmPhoto(v.photoCandidate) }),
+		...(v.photoOnly === true ? { photoOnly: true } : {}),
 		...(v.contact === undefined ? {} : { contact: v.contact === null ? null : validateMfmContact(v.contact) }),
 		...(v.pendingStart === undefined ? {} : { pendingStart: mfmText(v.pendingStart, 64) }),
 		...(rawReturnStep === undefined ? {} : { returnStep: rawReturnStep === "home" ? rawReturnStep : normalizeStep(rawReturnStep) }),
@@ -99,6 +101,7 @@ function parseDraft(value: unknown): MfmDraft {
 		...(v.locationText === undefined ? {} : { locationText: mfmText(v.locationText, 200) }),
 		...(v.spheres === undefined ? {} : { spheres: draftChoices(v.spheres, MFM_SPHERES) }),
 		...(v.openTo === undefined ? {} : { openTo: draftChoices(v.openTo, MFM_OPEN_TO) }),
+		...(v.photo === undefined ? {} : { photo: v.photo === null ? null : validateMfmPhoto(v.photo) }),
 		...(v.about === undefined ? {} : { about: v.about === null ? null : mfmAbout(v.about) }),
 	};
 }
