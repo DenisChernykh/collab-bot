@@ -44,7 +44,7 @@ it("resets the same DO storage atomically with append-only guards restored and a
 		const response = await helper.fetch(request());
 		expect(response.status).toBe(200);
 		const result = await response.json();
-		expect(result).toMatchObject({ removedRows: 2, schemaVersion: 17 });
+		expect(result).toMatchObject({ removedRows: 2, schemaVersion: 19 });
 		expect(await (await inspect()).json()).toMatchObject({ rowCount: 0, schemaDigest: before.schemaDigest });
 		await insertEvent();
 		await expect(database.execute("DELETE FROM product_events")).rejects.toThrow("append-only");

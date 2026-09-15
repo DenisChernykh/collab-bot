@@ -8,7 +8,7 @@ import type { ResetInspection, ResetRequest } from "../../src/platform/database/
 
 it("performs two separately enabled workerd resets, preserving prior audit and rejecting active alarms or changed retry input", async () => {
 	const stub = env.COLLABORATION_STATE.get(env.COLLABORATION_STATE.idFromName("mnet-second-reset"));
-	expect(await (await stub.fetch("https://local/__cf1/schema")).json()).toMatchObject({ migrationCount: 18 });
+	expect(await (await stub.fetch("https://local/__cf1/schema")).json()).toMatchObject({ migrationCount: 19 });
 	await runInDurableObject(stub, async (_instance, state) => {
 		const database = new CloudflareSqlDatabase(state.storage);
 		const runtime = { COLLABORATION_STATE: env.COLLABORATION_STATE, DEPLOYMENT_ENVIRONMENT: "staging" };
@@ -36,7 +36,7 @@ it("performs two separately enabled workerd resets, preserving prior audit and r
 		const ready = await inspect(); secondRequest.expectedDigest = ready.digest;
 		const response = await second.fetch(request(secondRequest)); expect(response.status).toBe(200);
 		const result = await response.json();
-		expect(result).toMatchObject({ operationId: "mnet-2026-reset", removedRows: 1, schemaVersion: 18 });
+		expect(result).toMatchObject({ operationId: "mnet-2026-reset", removedRows: 1, schemaVersion: 19 });
 		expect(await inspect()).toMatchObject({ rowCount: 0, schemaDigest: ready.schemaDigest, completedOperations: [firstResult, result] });
 		await database.execute("INSERT INTO telegram_users (telegram_user_id, display_name, status, created_at, updated_at) VALUES ('2', 'Later synthetic', 'active', 1, 1)");
 		const later = await inspect();

@@ -9,7 +9,7 @@ import { connectionProfileId, seedConnectionPerson } from "../support/connection
 
 it("runs the third primary reset through the maintenance Durable Object and keeps exact retry harmless", async () => {
 	const stub = env.COLLABORATION_STATE.get(env.COLLABORATION_STATE.idFromName("mfo-third-reset"));
-	expect(await (await stub.fetch("https://local/__cf1/schema")).json()).toMatchObject({ migrationCount: 17 });
+	expect(await (await stub.fetch("https://local/__cf1/schema")).json()).toMatchObject({ migrationCount: 19 });
 	await runInDurableObject(stub, async (_instance, state) => {
 		const database = new CloudflareSqlDatabase(state.storage);
 		const runtime = { COLLABORATION_STATE: env.COLLABORATION_STATE, DEPLOYMENT_ENVIRONMENT: "staging" };
@@ -27,7 +27,7 @@ it("runs the third primary reset through the maintenance Durable Object and keep
 		const response = await apply(request.operationId, request);
 		expect(response.status).toBe(200);
 		const result = await response.json();
-		expect(result).toMatchObject({ operationId: request.operationId, removedRows: before.rowCount, schemaVersion: 17 });
+		expect(result).toMatchObject({ operationId: request.operationId, removedRows: before.rowCount, schemaVersion: 19 });
 		expect(await inspect()).toMatchObject({ rowCount: 0, completedOperations: expect.arrayContaining([expect.objectContaining({ operationId: "mfm-2026-reset" }), expect.objectContaining({ operationId: "mnet-2026-reset" }), result]) });
 		await database.execute("INSERT INTO telegram_users (telegram_user_id, display_name, status, created_at, updated_at) VALUES ('2', 'Later', 'active', 2, 2)");
 		expect(await (await apply(request.operationId, request)).json()).toEqual(result);

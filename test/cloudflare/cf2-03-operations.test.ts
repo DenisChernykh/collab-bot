@@ -103,7 +103,7 @@ describe("CF2-03 staging operations rehearsal", () => {
 		expect(importedResponse.status).toBe(200);
 		expect(await importedResponse.json() as StateTransferSummary).toEqual({
 			digest: primaryBefore.digest,
-			tableCount: 26,
+			tableCount: 25,
 			rowCount: 1,
 		});
 

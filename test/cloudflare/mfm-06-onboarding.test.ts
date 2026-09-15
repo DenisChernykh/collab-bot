@@ -17,7 +17,7 @@ it("runs the composed MFM journey atomically in workerd and transfers profiles, 
 	// Drain the response so it cannot keep the object alive during eviction.
 	const schema = await stub.fetch("https://local/__cf1/schema");
 	expect(schema.status).toBe(200);
-	expect(await schema.json()).toMatchObject({ migrationCount: 18, integrity: "ok" });
+	expect(await schema.json()).toMatchObject({ migrationCount: 19, integrity: "ok" });
 	await runInDurableObject(stub, async (_instance, state) => {
 		const database = new CloudflareSqlDatabase(state.storage);
 		const repository = new SqliteOnboardingRepository(database);
@@ -47,7 +47,12 @@ it("runs the composed MFM journey atomically in workerd and transfers profiles, 
 			if (id === 43) continue; // The transfer must retain an unfinished draft too.
 			await act(id, { kind: "choice", value: "digital_it" }); await act(id, { kind: "next" });
 			await act(id, { kind: "choice", value: "joint_projects" }); await act(id, { kind: "next" });
-			await act(id, { kind: "next" });
+			await act(id, { kind: "next" }); // contact -> photo
+			if (id === 41) {
+				await bot.handleUpdate({ update_id: ++sequence, message: { ...privateMessageForUser(sequence, id), photo: [{ file_id: "workerd_photo", file_unique_id: "synthetic", width: 640, height: 640 }] } });
+				expect(await repository.getProfile(String(id))).toBeUndefined();
+				await act(id, { kind: "photo_confirm" });
+			} else await act(id, { kind: "next" }); // skip photo
 			const update = await event(id, { kind: "next" });
 			if (id === 41) {
 				const before = await repository.getSession(String(id));
@@ -69,11 +74,12 @@ it("runs the composed MFM journey atomically in workerd and transfers profiles, 
 	await evictDurableObject(stub);
 	const manifest = await runInDurableObject(stub, (_instance, state) => exportStateTransferManifest(new CloudflareSqlDatabase(state.storage)));
 	const target = env.COLLABORATION_STATE.get(env.COLLABORATION_STATE.idFromName("mfm-06-transfer"));
-	expect(await (await target.fetch("https://local/__cf1/schema")).json()).toMatchObject({ migrationCount: 18, integrity: "ok" });
+	expect(await (await target.fetch("https://local/__cf1/schema")).json()).toMatchObject({ migrationCount: 19, integrity: "ok" });
 	await runInDurableObject(target, async (_instance, state) => {
 		const database = new CloudflareSqlDatabase(state.storage);
 		await importStateTransferManifest(database, manifest);
 		const repository = new SqliteOnboardingRepository(database);
+		expect((await repository.getProfile("41"))?.photo).toEqual({ fileId: "workerd_photo", botId: "777" });
 		expect(await repository.getUser("41")).toMatchObject({ language: "ru", experience: "mfm" });
 		expect(await repository.getProfile("42")).toMatchObject({ openTo: ["joint_projects"], about: null });
 		expect(await repository.getSession("43")).toMatchObject({ state: { step: "spheres", draft: { eventStatus: "participant", displayName: "Example Person" } } });

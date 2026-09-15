@@ -13,7 +13,7 @@ it("protects a data-free state summary, preserves canonical hashes and never sch
 	expect((await worker.fetch(new Request(url), runtime)).status).toBe(401);
 	expect((await worker.fetch(new Request(url, { headers, method: "POST" }), runtime)).status).toBe(405);
 	const stub = env.COLLABORATION_STATE.get(env.COLLABORATION_STATE.idFromName("collaboration-bot-primary"));
-	expect(await (await stub.fetch("https://local/__cf1/schema")).json()).toMatchObject({ migrationCount: 17 });
+	expect(await (await stub.fetch("https://local/__cf1/schema")).json()).toMatchObject({ migrationCount: 19 });
 	const before = await runInDurableObject(stub, async (_instance, state) => {
 		const db = new CloudflareSqlDatabase(state.storage);
 		await db.execute("INSERT INTO telegram_users (telegram_user_id, username, display_name, status, created_at, updated_at) VALUES ('123456789', 'private_synthetic_username', 'Private synthetic name', 'active', 1, 1)");
@@ -24,7 +24,7 @@ it("protects a data-free state summary, preserves canonical hashes and never sch
 	expect(response.headers.get("cache-control")).toBe("no-store");
 	const text = await response.text();
 	const summary = JSON.parse(text);
-	expect(summary).toEqual({ schemaVersion: 17, tableCount: 26, rowCount: 1, digest: before.digest,
+	expect(summary).toEqual({ schemaVersion: 19, tableCount: 25, rowCount: 1, digest: before.digest,
 		tables: before.tables.map(({ name, rowCount, digest }) => ({ name, rowCount, digest })), quiescent: true, alarmScheduledAt: null });
 	for (const secret of ["123456789", "private_synthetic_username", "Private synthetic name", '"rows"', '"columns"', "synthetic-summary-token"]) expect(text).not.toContain(secret);
 	await runInDurableObject(stub, async (_instance, state) => {
