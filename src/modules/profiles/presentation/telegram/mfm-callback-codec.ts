@@ -2,7 +2,7 @@ import type { OnboardingAction, OnboardingToken } from "../../application/onboar
 import type { OnboardingSession } from "../../application/ports/onboarding-repository.js";
 import { MFM_EVENT_STATUSES, MFM_PROFILE_TYPES, MFM_SPHERES, MFM_OPEN_TO } from "../../domain/mfm-profile.js";
 const VALUES: readonly string[] = [...new Set(["ru", "en", "yes", "no", ...MFM_EVENT_STATUSES, ...MFM_PROFILE_TYPES, ...MFM_SPHERES, ...MFM_OPEN_TO])];
-const KINDS = ["language", "affiliation", "choice", "next", "back", "keep", "city", "clear", "cancel"] as const;
+const KINDS = ["language", "affiliation", "choice", "next", "back", "keep", "city", "clear", "cancel", "photo_upload", "photo_telegram", "photo_confirm", "photo_other"] as const;
 export function encodeMfmCallback(action: OnboardingAction, session: OnboardingSession): string {
 	if (action.kind === "text") throw new Error("free text cannot be a callback");
 	const value = "value" in action ? VALUES.indexOf(action.value) : 0;
@@ -20,7 +20,7 @@ export function decodeMfmCallback(value: string): { readonly action: OnboardingA
 	const code = parseInt(match[4]!, 36);
 	if (!Number.isSafeInteger(revision) || kind === undefined) return undefined;
 	const token = { generation, revision };
-	if (kind === "next" || kind === "back" || kind === "keep" || kind === "city" || kind === "clear" || kind === "cancel") return code === 0 ? { action: { kind }, token } : undefined;
+	if (kind === "next" || kind === "back" || kind === "keep" || kind === "city" || kind === "clear" || kind === "cancel" || kind === "photo_upload" || kind === "photo_telegram" || kind === "photo_confirm" || kind === "photo_other") return code === 0 ? { action: { kind }, token } : undefined;
 	const selected = VALUES[code];
 	return selected === undefined ? undefined : { action: { kind, value: selected }, token };
 }

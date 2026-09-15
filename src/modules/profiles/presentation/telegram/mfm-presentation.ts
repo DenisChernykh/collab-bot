@@ -14,7 +14,7 @@ export function renderOnboarding(view: OnboardingView): { text: string; keyboard
 	const keyboard = new InlineKeyboard();
 	const prefix = view.notice === undefined ? "" : `${t(NOTICES[view.notice])}\n\n`;
 	if (view.notice === "paused" && view.kind === "step") return { text: t(NOTICES.paused), keyboard: keyboard.text(t(COPY.resume), "mfm:resume") };
-	if (view.kind === "home") return { text: prefix + ownProfile(view.profile, language, view.festivalEnabled), keyboard: keyboard.text(t(COPY.edit), "mfm:edit") };
+	if (view.kind === "home") return { text: prefix + ownProfile(view.profile, language, view.festivalEnabled), keyboard: keyboard.text(t(COPY.edit), "mfm:edit").row().text(t(["📷 Фото профиля", "📷 Profile photo"]), "mfm:photo") };
 	if (view.kind === "classic") throw new Error("classic rendering belongs to the existing router");
 	if (view.kind !== "step") return { text: prefix + t(COPY[view.kind]), keyboard };
 	const { session } = view;
@@ -65,6 +65,19 @@ export function renderOnboarding(view: OnboardingView): { text: string; keyboard
 			for (const key of MFM_OPEN_TO) choice(key, OPEN_TO_LABELS[key], draft.openTo?.includes(key));
 			if ((draft.openTo?.length ?? 0) > 0) button(t(COPY.continue), { kind: "next" });
 			break;
+		case "photo": {
+			if (session.state.photoCandidate !== undefined) {
+				text = t(COPY.photoPreview);
+				button(t(COPY.photoConfirm), { kind: "photo_confirm" });
+				button(t(COPY.photoOther), { kind: "photo_other" });
+			} else {
+				button(t(COPY.photoUpload), { kind: "photo_upload" });
+				button(t(COPY.photoTelegram), { kind: "photo_telegram" });
+				button(t(draft.photo == null ? COPY.skip : COPY.photoKeep), { kind: "next" });
+				if (draft.photo != null) button(t(COPY.photoDelete), { kind: "clear" });
+			}
+			break;
+		}
 		case "about": {
 			if (draft.about !== undefined && draft.about !== null) text += `\n\n${t(COPY.aboutCurrent)}: ${draft.about}`;
 			button(t(COPY.skip), { kind: "next" });

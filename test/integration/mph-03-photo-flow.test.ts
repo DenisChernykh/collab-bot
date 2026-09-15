@@ -1,0 +1,47 @@
+import { expect, it } from "vitest";
+import { OnboardingService, type OnboardingAction } from "../../src/modules/profiles/application/onboarding-service.js";
+import { ProfileService } from "../../src/modules/profiles/application/profile-service.js";
+import { SqliteOnboardingRepository } from "../../src/modules/profiles/infrastructure/sqlite-onboarding-repository.js";
+import { SqliteProfileRepository } from "../../src/modules/profiles/infrastructure/sqlite-profile-repository.js";
+import { webCryptoCapabilities } from "../../src/platform/crypto/capabilities.js";
+import { DatabaseBoundaryTransactionRunner } from "../../src/platform/database/transaction-runner.js";
+import { FakeClock } from "../support/fake-clock.js";
+import { withFreshMigratedDatabase } from "../support/migrated-database.js";
+
+it("confirms photos only explicitly, fences late results and supports isolated editing", async () => {
+ const clock = new FakeClock(100);
+ await withFreshMigratedDatabase({ prefix: "mph-flow-", clock }, async ({ boundary }) => {
+  const repo = new SqliteOnboardingRepository(boundary); const tx = new DatabaseBoundaryTransactionRunner(boundary);
+  const profiles = new ProfileService(new SqliteProfileRepository(boundary), tx, clock);
+  const create = (enabled = true) => new OnboardingService(repo, profiles, tx, clock, webCryptoCapabilities, enabled);
+  let service = create();
+  await boundary.execute("INSERT INTO telegram_users (telegram_user_id, display_name, status, experience, created_at, updated_at) VALUES ('1', 'Synthetic', 'active', 'mfm', 1, 1)");
+  await profiles.ensureFromTelegram("1", "Synthetic");
+  const draft = { eventStatus: "participant" as const, displayName: "Synthetic", profileType: "media" as const, locationText: "City", spheres: ["media" as const], openTo: ["joint_projects" as const], about: null };
+  await repo.saveSession("1", { version: 1, generation: "a".repeat(16), step: "contact", draft, editing: false }, 2);
+  const proof = async () => { const s = (await repo.getSession("1"))!; return { generation: s.state.generation, revision: s.revision }; };
+  const act = async (action: OnboardingAction) => service.act("1", action, await proof());
+  expect(await act({ kind: "next" })).toMatchObject({ session: { state: { step: "photo" } } });
+  const photo = { fileId: "synthetic_photo", botId: "123" };
+  const old = await proof();
+  await service.selectPhoto("1", photo, old);
+  expect(await repo.getProfile("1")).toBeUndefined();
+  service = create(); expect(await service.view("1")).toMatchObject({ session: { state: { photoCandidate: photo } } });
+  expect(await service.selectPhoto("1", { ...photo, fileId: "late" }, old)).toMatchObject({ notice: "stale" });
+  await act({ kind: "photo_confirm" });
+  expect(await repo.getProfile("1")).toBeUndefined();
+  expect(await act({ kind: "next" })).toMatchObject({ kind: "home", profile: { photo } });
+  await service.edit("1", true);
+  await service.selectPhoto("1", { ...photo, fileId: "replacement" }, await proof());
+  await service.cancel("1"); expect(await repo.getProfile("1")).toMatchObject({ photo });
+  await service.edit("1", true); await act({ kind: "photo_telegram" });
+  const pending = await proof(); await act({ kind: "next" });
+  expect(await service.selectPhoto("1", { ...photo, fileId: "late" }, pending)).toMatchObject({ notice: "stale" });
+  service = create(false); await service.edit("1", true); await act({ kind: "clear" });
+  expect(await repo.getProfile("1")).toMatchObject({ ...draft, photo: null });
+  await service.edit("1", true); const blockedProof = await proof();
+  await boundary.execute("UPDATE telegram_users SET status = 'blocked', blocked_at = 100 WHERE telegram_user_id = '1'");
+  expect(await service.selectPhoto("1", photo, blockedProof)).toMatchObject({ kind: "blocked" });
+  expect(await repo.getProfile("1")).toMatchObject({ photo: null });
+ });
+});

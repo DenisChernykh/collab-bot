@@ -3,6 +3,11 @@ import type { OnboardingNotice } from "../../application/onboarding-service.js";
 export type Translation = readonly [string, string];
 export const tr = (value: Translation, language: Language): string => value[language === "ru" ? 0 : 1];
 export const COPY = {
+	photo: ["📷 Фото профиля\n\nЕго увидят другие пользователи. Отправьте одно фото или возьмите его из Telegram. Этот шаг можно пропустить.", "📷 Profile photo\n\nOther users will see it. Send one photo or take it from Telegram. You can skip this step."],
+	photoUpload: ["Загрузить фото", "Upload photo"], photoTelegram: ["Взять из Telegram", "Take from Telegram"],
+	photoConfirm: ["Использовать фото", "Use photo"], photoOther: ["Выбрать другое", "Choose another"],
+	photoDelete: ["Удалить фото", "Remove photo"], photoKeep: ["Оставить текущее фото", "Keep current photo"],
+	photoPreview: ["Использовать это фото в профиле? Его увидят другие пользователи.", "Use this photo in your profile? Other users will see it."],
 	language: ["Выберите язык / Choose your language", "Выберите язык / Choose your language"],
 	affiliation: ["Вы связаны с МФМ-2026? 🌍", "Are you connected with MFM-2026? 🌍"],
 	event_status: ["Как вы участвуете в МФМ-2026?", "How are you taking part in MFM-2026?"],
@@ -41,6 +46,9 @@ export const COPY = {
 	help: ["«Давай вместе» — короткий профиль для знакомства и профессионального общения.\n/start — профиль или продолжение анкеты\n/language — язык\n/profile — профиль\n\nПоддержка: ", "«Давай вместе» — a short profile for meeting people and professional conversations.\n/start — profile or continue setup\n/language — language\n/profile — profile\n\nSupport: "],
 } as const satisfies Record<string, Translation>;
 export const NOTICES: Record<OnboardingNotice, Translation> = {
+	photo_saved: ["Фото профиля обновлено ✅", "Profile photo updated ✅"],
+	photo_unavailable: ["Не удалось получить фото из Telegram. Загрузите фото, попробуйте ещё раз или пропустите шаг.", "Could not get a Telegram photo. Upload one, try again or skip this step."],
+	photo_invalid: ["Отправьте одно изображение как фото, без альбома. Документы и видео не подходят.", "Send one image as a photo, without an album. Documents and videos are not supported."],
 	stale: ["Эта кнопка уже неактуальна. Продолжите с текущего шага.", "This button is out of date. Continue from the current step."],
 	invalid: ["Проверьте ввод. Имя — до 100, город — до 200, «О себе» — от 10 до 500 символов.", "Check your input. Name up to 100, location up to 200, About from 10 to 500 characters."],
 	limit: ["Можно выбрать до 3 направлений.", "You can select up to 3 fields."],

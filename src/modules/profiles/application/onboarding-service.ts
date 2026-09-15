@@ -2,11 +2,11 @@ import type { Clock } from "../../../shared/application/ports/clock.js";
 import type { CryptoCapabilities } from "../../../shared/application/ports/crypto.js";
 import type { TransactionRunner } from "../../../shared/application/ports/transaction-runner.js";
 import { DomainValidationError } from "../../../shared/domain/value-objects/enums.js";
-import { MFM_EVENT_STATUSES, MFM_OPEN_TO, MFM_PROFILE_TYPES, MFM_SPHERES, mfmAbout, mfmText, mfmValue, validateMfmContact, validateMfmProfile, type Language, type MfmContact, type MfmDraft, type MfmProfileRecord } from "../domain/mfm-profile.js";
+import { MFM_EVENT_STATUSES, MFM_OPEN_TO, MFM_PROFILE_TYPES, MFM_SPHERES, mfmAbout, mfmText, mfmValue, validateMfmContact, validateMfmPhoto, validateMfmProfile, type MfmPhoto, type Language, type MfmContact, type MfmDraft, type MfmProfileRecord } from "../domain/mfm-profile.js";
 import type { ExperienceUser, OnboardingRepository, OnboardingSession, OnboardingState, OnboardingStep } from "./ports/onboarding-repository.js";
 import type { ProfileService } from "./profile-service.js";
 
-export type OnboardingNotice = "stale" | "invalid" | "limit" | "required" | "saved" | "paused";
+export type OnboardingNotice = "stale" | "invalid" | "limit" | "required" | "saved" | "photo_saved" | "photo_unavailable" | "photo_invalid" | "paused";
 type ViewContext = { readonly language: Language; readonly festivalEnabled: boolean; readonly notice?: OnboardingNotice };
 export type OnboardingView = ViewContext & (
 	| { readonly kind: "classic"; readonly pendingStart?: string }
@@ -17,8 +17,8 @@ export type OnboardingView = ViewContext & (
 export interface OnboardingToken { readonly generation: string; readonly revision: number; }
 export type OnboardingAction =
 	| { readonly kind: "language" | "affiliation" | "choice" | "text"; readonly value: string }
-	| { readonly kind: "next" | "back" | "keep" | "city" | "clear" | "cancel" };
-const FLOW: readonly OnboardingStep[] = ["affiliation", "event_status", "display_name", "profile_type", "location", "spheres", "open_to", "contact", "about"];
+	| { readonly kind: "next" | "back" | "keep" | "city" | "clear" | "cancel" | "photo_upload" | "photo_telegram" | "photo_confirm" | "photo_other" };
+const FLOW: readonly OnboardingStep[] = ["affiliation", "event_status", "display_name", "profile_type", "location", "spheres", "open_to", "contact", "photo", "about"];
 
 export class OnboardingService {
 	constructor(
@@ -79,14 +79,14 @@ export class OnboardingService {
 		});
 	}
 
-	async edit(userId: string): Promise<OnboardingView> {
+	async edit(userId: string, photoOnly = false): Promise<OnboardingView> {
 		return this.transactions.withTransaction(async () => {
 			const user = await this.repository.getUser(userId);
 			if (user?.status !== "active" || user.experience !== "mfm") return this.view(userId);
 			if (await this.repository.getSession(userId) !== undefined) return this.view(userId);
 			const profile = await this.repository.getProfile(userId);
 			if (profile === undefined) return this.view(userId);
-			await this.save(userId, { ...this.initial("display_name", profile), contact: profile.contact, editing: true });
+			await this.save(userId, { ...this.initial(photoOnly ? "photo" : "display_name", profile), contact: profile.contact, editing: true, ...(photoOnly ? { photoOnly: true } : {}) });
 			return this.view(userId);
 		});
 	}
@@ -132,7 +132,7 @@ export class OnboardingService {
 			if (current.state.step !== "contact") return this.view(userId, "invalid");
 			if (!this.enabled && user.experience === "mfm" && await this.repository.getProfile(userId) === undefined) return this.view(userId);
 			try {
-				await this.save(userId, { ...current.state, step: "about", contact: validateMfmContact(contact) });
+				await this.save(userId, { ...current.state, step: "photo", contact: validateMfmContact(contact) });
 				return this.view(userId);
 			}
 			catch (error) {
@@ -140,6 +140,32 @@ export class OnboardingService {
 				throw error;
 			}
 		});
+	}
+
+	async selectPhoto(userId: string, photo: MfmPhoto | null, expected: OnboardingToken): Promise<OnboardingView> {
+		return this.transactions.withTransaction(async () => {
+			const view = await this.view(userId);
+			if (view.kind === "blocked") return view;
+			if (view.kind !== "step" || view.session.state.step !== "photo" || view.session.state.generation !== expected.generation || view.session.revision !== expected.revision) return this.view(userId, "stale");
+			if (!this.enabled && await this.repository.getProfile(userId) === undefined) return view;
+			if (photo === null) return this.view(userId, "photo_unavailable");
+			try { await this.save(userId, { ...view.session.state, photoCandidate: validateMfmPhoto(photo) }); }
+			catch (error) { if (error instanceof DomainValidationError) return this.view(userId, "photo_invalid"); throw error; }
+			return this.view(userId);
+		});
+	}
+
+	private async finishPhoto(userId: string, state: OnboardingState, photo: MfmPhoto | null): Promise<OnboardingView> {
+		const clean = { ...state };
+		delete clean.photoCandidate;
+		if (state.photoOnly) {
+			const current = await this.repository.getProfile(userId);
+			if (current === undefined) return this.view(userId, "stale");
+			await this.repository.saveProfile(userId, { ...current, photo }, this.now());
+			await this.repository.deleteSession(userId);
+			return this.view(userId, "photo_saved");
+		}
+		return this.move(userId, clean, "about", { ...state.draft, photo });
 	}
 
 	private async advance(userId: string, user: ExperienceUser, state: OnboardingState, action: OnboardingAction): Promise<OnboardingView> {
@@ -159,6 +185,19 @@ export class OnboardingService {
 			await this.save(userId, { ...state, step: "event_status" });
 			return this.view(userId);
 		}
+		if (state.step === "photo") {
+			if (action.kind === "photo_confirm") return state.photoCandidate === undefined ? this.view(userId, "photo_invalid") : this.finishPhoto(userId, state, state.photoCandidate);
+			if (action.kind === "next") return this.finishPhoto(userId, state, state.draft.photo ?? null);
+			if (action.kind === "clear") return this.finishPhoto(userId, state, null);
+			if (action.kind === "photo_upload" || action.kind === "photo_telegram" || action.kind === "photo_other") {
+				const clean = { ...state };
+				delete clean.photoCandidate;
+				await this.save(userId, clean);
+				return this.view(userId);
+			}
+			if (action.kind === "text") return this.view(userId, "photo_invalid");
+			if (action.kind === "back" && state.photoOnly) return this.cancel(userId);
+		}
 		if (action.kind === "back") {
 			const minimum = state.editing ? FLOW.indexOf("display_name") : 0;
 			const index = FLOW.indexOf(state.step);
@@ -171,7 +210,7 @@ export class OnboardingService {
 		if (action.kind === "next") {
 			if (state.step === "spheres") return (state.draft.spheres?.length ?? 0) === 0 ? this.view(userId, "required") : this.move(userId, state, "open_to", state.draft);
 			if (state.step === "open_to") return (state.draft.openTo?.length ?? 0) === 0 ? this.view(userId, "required") : this.move(userId, state, "contact", state.draft);
-			if (state.step === "contact") { await this.save(userId, { ...state, step: "about", contact: state.editing ? state.contact ?? null : null }); return this.view(userId); }
+			if (state.step === "contact") { await this.save(userId, { ...state, step: "photo", contact: state.editing ? state.contact ?? null : null }); return this.view(userId); }
 			if (state.step === "about") return this.complete(userId, state, state.draft.about ?? null);
 			return this.view(userId, "invalid");
 		}
@@ -180,14 +219,14 @@ export class OnboardingService {
 		if (action.kind === "text" || action.kind === "keep") {
 			if (state.step === "display_name") return this.move(userId, state, "profile_type", { ...state.draft, displayName: mfmText(action.kind === "text" ? action.value : state.draft.displayName, 100) });
 			if (state.step === "location") return this.move(userId, state, "spheres", { ...state.draft, locationText: mfmText(action.kind === "text" ? action.value : state.draft.locationText, 200) });
-			if (state.step === "contact" && action.kind === "text") { await this.save(userId, { ...state, step: "about", contact: validateMfmContact({ kind: "external", url: action.value }) }); return this.view(userId); }
+			if (state.step === "contact" && action.kind === "text") { await this.save(userId, { ...state, step: "photo", contact: validateMfmContact({ kind: "external", url: action.value }) }); return this.view(userId); }
 			if (state.step === "about" && action.kind === "text") return this.complete(userId, state, mfmAbout(action.value));
 			return this.view(userId, "invalid");
 		}
 		if (action.kind === "choice") {
 			if (state.step === "event_status") return this.move(userId, state, "display_name", { ...state.draft, eventStatus: mfmValue(action.value, MFM_EVENT_STATUSES) });
 			if (state.step === "profile_type") return this.move(userId, state, "location", { ...state.draft, profileType: mfmValue(action.value, MFM_PROFILE_TYPES) });
-			if (state.step === "contact" && action.value === "telegram_user") { await this.save(userId, { ...state, step: "about", contact: { kind: "telegram_user" } }); return this.view(userId); }
+			if (state.step === "contact" && action.value === "telegram_user") { await this.save(userId, { ...state, step: "photo", contact: { kind: "telegram_user" } }); return this.view(userId); }
 			return this.toggle(userId, state, action.value);
 		}
 		return this.view(userId, "invalid");

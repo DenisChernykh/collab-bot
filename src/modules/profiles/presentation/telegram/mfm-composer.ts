@@ -1,3 +1,4 @@
+import { replyWithProfilePhoto } from "./profile-photo-reply.js";
 import type { ProfilePhotoReader } from "../../application/ports/profile-photo-reader.js";
 import { InlineKeyboard, type Context } from "grammy";
 import type { OnboardingService, OnboardingView } from "../../application/onboarding-service.js";
@@ -29,7 +30,7 @@ export function createMfmTelegramFeature(options: MfmTelegramOptions) {
 		}
 		const rendered = renderOnboarding(view);
 		if (edit && ctx.callbackQuery?.message !== undefined && rendered.keyboard instanceof InlineKeyboard) await ctx.editMessageText(rendered.text, { reply_markup: rendered.keyboard });
-		else await ctx.reply(rendered.text, { reply_markup: rendered.keyboard });
+		else await replyWithProfilePhoto(ctx, rendered.text, view.kind === "step" && view.session.state.step === "photo" ? view.session.state.photoCandidate ?? view.session.state.draft.photo : view.kind === "home" ? view.profile.photo : null, { reply_markup: rendered.keyboard });
 	}
 	async function leaveContact(ctx: Context, view: OnboardingView, message: string): Promise<void> {
 		await ctx.reply(message, { reply_markup: { remove_keyboard: true } });
@@ -86,6 +87,16 @@ export function createMfmTelegramFeature(options: MfmTelegramOptions) {
 			return true;
 		},
 		async routeMessage(ctx: Context, userId: string): Promise<boolean> {
+			const current = await service.view(userId);
+			if (current.kind === "step" && current.session.state.step === "photo") {
+				const sizes = ctx.message?.photo;
+				if (sizes === undefined || sizes.length === 0 || ctx.message?.media_group_id !== undefined) {
+					await show(ctx, { ...current, notice: "photo_invalid" }); return true;
+				}
+				const largest = sizes.reduce((best, size) => size.width * size.height > best.width * best.height ? size : best);
+				await show(ctx, await service.selectPhoto(userId, { fileId: largest.file_id, botId: String(ctx.me.id) }, { generation: current.session.state.generation, revision: current.session.revision }));
+				return true;
+			}
 			const shared = ctx.message?.chat_shared;
 			if (shared === undefined) return false;
 			const view = await service.view(userId);
@@ -114,9 +125,19 @@ export function createMfmTelegramFeature(options: MfmTelegramOptions) {
 			const parsed = decodeMfmCallback(data);
 			if (parsed !== undefined) {
 				const next = await service.act(userId, parsed.action, parsed.token);
+				if (parsed.action.kind === "photo_telegram" && next.kind === "step" && next.session.state.step === "photo" && next.notice === undefined && next.session.revision !== parsed.token.revision) {
+					const proof = { generation: next.session.state.generation, revision: next.session.revision };
+					if (options.schedulePhotoLookup === undefined) { await show(ctx, { ...next, notice: "photo_unavailable" }); return true; }
+					options.schedulePhotoLookup(ctx, async () => {
+						const photo = await options.photoReader?.read(userId, String(ctx.me.id)) ?? null;
+						await show(ctx, await service.selectPhoto(userId, photo, proof));
+					});
+					return true;
+				}
 				const edit = view.kind === "step" && next.kind === "step" && view.session.state.step === next.session.state.step && parsed.action.kind === "choice";
 				await show(ctx, next, edit);
-			} else if (data === "mfm:edit") await show(ctx, await service.edit(userId));
+			} else if (data === "mfm:photo") await show(ctx, await service.edit(userId, true));
+			else if (data === "mfm:edit") await show(ctx, await service.edit(userId));
 			else await show(ctx, view);
 			return true;
 		},

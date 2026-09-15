@@ -1,0 +1,54 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { expect, it } from "vitest";
+import type { Update } from "grammy/types";
+import type { OnboardingAction } from "../../src/modules/profiles/application/onboarding-service.js";
+import { encodeMfmCallback } from "../../src/modules/profiles/presentation/telegram/mfm-callback-codec.js";
+import { SqliteOnboardingRepository } from "../../src/modules/profiles/infrastructure/sqlite-onboarding-repository.js";
+import { createFakeBotRuntime } from "../support/fake-bot-runtime.js";
+import { callbackForUser, privateMessageForUser } from "../support/fake-telegram.js";
+import { FakeClock } from "../support/fake-clock.js";
+
+it.each(["ru", "en"] as const)("runs confirmed upload/import/skip and isolated photo edits in %s", async language => {
+ const directory = await mkdtemp(join(tmpdir(), "mph-bot-"));
+ const { runtime, fake } = await createFakeBotRuntime({ databasePath: join(directory, "app.sqlite"), mfmFeatureEnabled: true, clock: new FakeClock(1_700_000_000_000) });
+ const repo = new SqliteOnboardingRepository(runtime.boundary); let sequence = 10000; let lookups = 0; let empty = false;
+ const latest = () => [...fake.calls].reverse().find(c => c.method === "sendMessage" || c.method === "sendPhoto");
+ const text = async (value: string) => runtime.bot.handleUpdate({ update_id: ++sequence, message: privateMessageForUser(sequence, 101, value) });
+ const callback = async (data: string) => { const update = { update_id: ++sequence, callback_query: callbackForUser(sequence, 101, data) }; await runtime.bot.handleUpdate(update); return update; };
+ const choose = async (action: OnboardingAction) => callback(encodeMfmCallback(action, (await repo.getSession("101"))!));
+ const photo = (album = false): Update => ({ update_id: ++sequence, message: { ...privateMessageForUser(sequence, 101), photo: [{ file_id: "upload_small", file_unique_id: "s", width: 30, height: 30 }, { file_id: "upload_large", file_unique_id: "l", width: 640, height: 640 }], ...(album ? { media_group_id: "album" } : {}) } });
+ try {
+  runtime.bot.api.config.use(async (previous, method, payload, signal) => {
+   if (method !== "getUserProfilePhotos") return previous(method, payload, signal);
+   lookups++;
+   expect(await runtime.boundary.query("SELECT command_id FROM command_receipts WHERE status = 'in_progress'")).toEqual([]);
+   return { ok: true, result: { total_count: empty ? 0 : 1, photos: empty ? [] : [[{ file_id: "imported", file_unique_id: "i", width: 640, height: 640 }]] } } as never;
+  });
+  await text("/start"); await repo.setUser("101", language, "mfm");
+  await repo.saveSession("101", { version: 1, generation: "a".repeat(16), step: "contact", editing: false, draft: { displayName: "Synthetic", eventStatus: "participant", profileType: "media", locationText: "City", spheres: ["media"], openTo: ["joint_projects"], about: null } }, 1_700_000_000_000);
+  await choose({ kind: "next" });
+  expect(String(latest()?.payload.text)).toContain(language === "ru" ? "Его увидят другие пользователи" : "Other users will see it");
+  expect(JSON.stringify(latest()?.payload.reply_markup)).toContain(language === "ru" ? "Взять из Telegram" : "Take from Telegram");
+  const beforeAlbum = await repo.getSession("101"); await runtime.bot.handleUpdate(photo(true));
+  expect(await repo.getSession("101")).toEqual(beforeAlbum);
+  await runtime.bot.handleUpdate({ update_id: ++sequence, message: { ...privateMessageForUser(sequence, 101), document: { file_id: "doc", file_unique_id: "doc" } } });
+  expect(await repo.getSession("101")).toEqual(beforeAlbum);
+  await choose({ kind: "photo_upload" }); const upload = photo(); await runtime.bot.handleUpdate(upload);
+  expect(latest()?.method).toBe("sendPhoto"); expect(latest()?.payload.photo).toBe("upload_large");
+  expect(await repo.getProfile("101")).toBeUndefined();
+  const calls = fake.calls.length; await runtime.bot.handleUpdate(upload); expect(fake.calls).toHaveLength(calls);
+  await choose({ kind: "photo_other" }); await choose({ kind: "photo_telegram" });
+  expect(lookups).toBe(1); expect((await repo.getSession("101"))?.state.photoCandidate).toEqual({ fileId: "imported", botId: "777" });
+  await choose({ kind: "photo_confirm" }); expect((await repo.getSession("101"))?.state.step).toBe("about");
+  await choose({ kind: "next" }); expect((await repo.getProfile("101"))?.photo).toEqual({ fileId: "imported", botId: "777" });
+  await callback("mfm:photo"); await runtime.bot.handleUpdate(photo()); await text("/cancel");
+  expect((await repo.getProfile("101"))?.photo?.fileId).toBe("imported");
+  await callback("mfm:photo"); empty = true; const imported = await choose({ kind: "photo_telegram" });
+  expect(String(latest()?.payload.caption ?? latest()?.payload.text)).toContain(language === "ru" ? "Не удалось получить фото" : "Could not get a Telegram photo");
+  await runtime.bot.handleUpdate(imported); expect(lookups).toBe(2);
+  await choose({ kind: "next" }); expect((await repo.getProfile("101"))?.photo?.fileId).toBe("imported");
+  await callback("mfm:photo"); await choose({ kind: "clear" }); expect((await repo.getProfile("101"))?.photo).toBeNull();
+ } finally { await runtime.stop(); await rm(directory, { recursive: true, force: true }); }
+});
