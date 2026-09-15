@@ -1,11 +1,11 @@
 import { InlineKeyboard } from "grammy";
-import { renderMfmProfile, tr, type Translation } from "../../../profiles/index.js";
+import { renderMfmProfile, tr, type MfmPhoto, type Translation } from "../../../profiles/index.js";
 import type { IntroductionAction, IntroductionNotice, IntroductionStatus, IntroductionView } from "../../application/index.js";
 import { encodeIntroductionCallback } from "./introduction-callback-codec.js";
 
 const STATUS: Record<IntroductionStatus, Translation> = { pending: ["Ожидает ответа", "Awaiting a reply"], accepted: ["Знакомство принято ✅", "Introduction accepted ✅"], rejected: ["Запрос отклонён", "Introduction declined"], withdrawn: ["Запрос отозван", "Introduction withdrawn"] };
 const NOTICES: Record<IntroductionNotice, Translation> = { stale: ["Кнопка устарела. Продолжите с этого экрана.", "That button is out of date. Continue here."], invalid: ["Сообщение должно содержать 10–500 символов.", "Your message must contain 10–500 characters."], disabled: ["Новые знакомства сейчас недоступны. Черновик сохранён.", "New introductions are currently unavailable. Your draft is saved."], unavailable: ["Запрос или профиль сейчас недоступен.", "This introduction or profile is currently unavailable."] };
-export function renderIntroduction(view: IntroductionView): { text: string; keyboard: InlineKeyboard } {
+export function renderIntroduction(view: IntroductionView): { text: string; keyboard: InlineKeyboard; photo?: MfmPhoto } {
 	const keyboard = new InlineKeyboard();
 	if (view.kind === "unavailable") return { text: "Раздел недоступен. /start\nUnavailable. /start", keyboard };
 	const t = (value: Translation) => tr(value, view.language);
@@ -44,5 +44,6 @@ export function renderIntroduction(view: IntroductionView): { text: string; keyb
 	}
 	button(view.kind === "compose" || view.kind === "confirm" ? ["Отмена", "Cancel"] : ["← Назад", "← Back"], { kind: "cancel" });
 	if (view.notice !== undefined) text = `${t(NOTICES[view.notice])}\n\n${text}`;
-	return { text, keyboard };
+	const photo = (view.kind === "request" || view.kind === "list") && view.request !== null ? view.person?.photo : null;
+	return { text, keyboard, ...(photo == null ? {} : { photo }) };
 }

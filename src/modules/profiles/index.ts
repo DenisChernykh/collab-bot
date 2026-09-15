@@ -14,3 +14,5 @@ export * from "./presentation/telegram/profile-presentation.js";
 export { createMfmTelegramFeature, type MfmTelegramFeature } from "./presentation/telegram/mfm-composer.js";
 export { renderMfmProfile } from "./presentation/telegram/mfm-presentation.js";
 export { EVENT_LABELS, SPHERE_LABELS, OPEN_TO_LABELS, tr, type Translation } from "./presentation/telegram/mfm-copy.js";
+
+export { replyWithProfilePhoto } from "./presentation/telegram/profile-photo-reply.js";

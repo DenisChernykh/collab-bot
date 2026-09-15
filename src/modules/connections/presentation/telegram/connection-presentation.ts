@@ -1,5 +1,5 @@
 import { InlineKeyboard } from "grammy";
-import { EVENT_LABELS, SPHERE_LABELS, OPEN_TO_LABELS, renderMfmProfile, tr, type Translation } from "../../../profiles/index.js";
+import { EVENT_LABELS, SPHERE_LABELS, OPEN_TO_LABELS, renderMfmProfile, tr, type MfmPhoto, type Translation } from "../../../profiles/index.js";
 import { FILTER_FIELDS, filterChoices, type ConnectionAction, type ConnectionView, type FilterField } from "../../application/index.js";
 import { encodeConnectionCallback } from "./connection-callback-codec.js";
 import { encodeIntroductionCallback } from "./introduction-callback-codec.js";
@@ -12,7 +12,7 @@ const PURPOSE_LABELS: Readonly<Record<string, Translation>> = {
 	professional_communication: ["💬 Для профессионального знакомства", "💬 For a professional introduction"],
 	city_and_events: ["🌆 Для прогулки / мероприятия", "🌆 For a walk / event"],
 };
-export function renderConnection(view: ConnectionView, introductions = false): { text: string; keyboard: InlineKeyboard } {
+export function renderConnection(view: ConnectionView, introductions = false): { text: string; keyboard: InlineKeyboard; photo?: MfmPhoto } {
 	const keyboard = new InlineKeyboard();
 	if (view.kind === "unavailable") return { text: "Раздел недоступен. /start\nUnavailable. /start", keyboard };
 	const t = (value: Translation) => tr(value, view.language);
@@ -26,6 +26,7 @@ export function renderConnection(view: ConnectionView, introductions = false): {
 			if (view.visible) button(["Скрыть из поиска", "Hide from search"], { kind: "visibility", value: false });
 			else if (view.festivalEnabled) button(["👁 Показывать в поиске", "👁 Show in search"], { kind: "visibility", value: true });
 			keyboard.text(t(["✏️ Изменить профиль", "✏️ Edit profile"]), "mfm:edit").row();
+			keyboard.text(t(["📷 Фото профиля", "📷 Profile photo"]), "mfm:photo").row();
 		}
 		if (view.festivalEnabled) button(["🔎 Найти людей", "🔎 Find people"], { kind: "choose_filter", field: "openTo" });
 		if (introductions) keyboard.text(t(["🤝 Мои знакомства", "🤝 My introductions"]), encodeIntroductionCallback({ kind: "list", tab: "incoming" }, view.session)).row();
@@ -53,5 +54,6 @@ export function renderConnection(view: ConnectionView, introductions = false): {
 		const notice: Record<typeof view.notice, Translation> = { stale: ["Кнопка устарела. Продолжите с этого экрана.", "That button is out of date. Continue here."], invalid: ["Выберите вариант кнопкой.", "Choose an option using the buttons."], disabled: ["Поиск сейчас недоступен.", "Discovery is currently unavailable."] };
 		text = t(notice[view.notice]) + "\n\n" + text;
 	}
-	return { text, keyboard };
+	const photo = view.kind === "home" || view.kind === "profile" ? view.profile.photo : view.kind === "search" ? view.person?.photo : null;
+	return { text, keyboard, ...(photo == null ? {} : { photo }) };
 }
