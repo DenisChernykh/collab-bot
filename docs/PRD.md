@@ -789,3 +789,14 @@ This user-authorized contract supersedes the specialization and onboarding/searc
 - MFP-F06: the release goes directly to the existing production Worker; staging is untouched. A successful normal schema18 deployment precedes one exact production-only maintenance reset. Target identity, migration, Telegram pending state and delivery quiescence are mandatory fail-closed checks; normal schema18 is restored and zero product rows are verified afterward.
 
 MFP acceptance: RU/EN create/edit flows; one-to-three required goals; optional about skip/preserve/clear; contact/about atomic completion; no Improve profile or specialization surface/schema; purpose-first search on every entry with three choices and Any; unchanged visibility/introduction/contact privacy; schema17→18 migration and schema18 transfer; direct production normal deploy followed by one exact production-only reset and restoration. No staging, local/rehearsal database, Telegram history, webhook, secret or remote-Git mutation.
+
+
+## 26. MFM profile photo — approved extension (2026-09-15)
+
+MPH-F01: Only MFM profiles may have one optional photo. The wizard asks after contact and before about; skip preserves an existing photo. Upload accepts a single Telegram photo, not documents, video or albums. Explicit Telegram import selects the first accessible profile photo, with no automatic synchronization. Both sources require preview and Use photo confirmation before publication. Users are told that other users will see the photo.
+
+MPH-F02: My profile offers a standalone photo editor with add/replace/remove/cancel; cancellation preserves the saved profile. Initial wizard changes remain drafts until completion. All prompts are RU/EN. Missing photos and provider failures allow retry/upload/skip and never prevent completion. Back/resume/language and feature-off behavior retain the existing policy.
+
+MPH-F03: Current confirmed photos accompany own profiles, discovery and authorized introduction profile screens. Long profiles remain complete in a separate text message. Unavailable media falls back to text. Deleting a photo affects subsequent views, not Telegram history. Visibility, accepted-contact authorization and classic behavior remain unchanged.
+
+MPH-F04: Additive schema19 retains existing data. Store only a reusable media reference scoped to the bot; no file download, external storage, auto-import, public URL or credentials. Provider requests and media replies happen outside transactions. Stale results and repeated updates cannot replace current state or repeat an import. A crash before an import result is saved permits a new explicit attempt. Production operations and real Telegram checks require separate authorization.

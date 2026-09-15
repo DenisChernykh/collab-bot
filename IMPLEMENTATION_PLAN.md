@@ -52,7 +52,8 @@
 | MFMR — MFM hosted release | `completed` | 1 | Authorized staging-first MFM release on the existing production bot |
 | MNET — MFM discovery and introductions | `completed` | 12 | Private profile discovery, introduction requests, authorized reset and hosted release |
 | MFO — Fast MFM onboarding | `completed` | 14 | Short RU/EN registration released; the unexecuted MFO-11 reset was superseded by MFP |
-| MFP — Focused MFM profile | `in_progress` | 5 | Required goals, optional about, purpose-first discovery and production-only reset |
+| MFP — Focused MFM profile | `completed` | 5 | Required goals, optional about, purpose-first discovery and production-only reset |
+| MPH — MFM profile photo | `in_progress` | 6 | Optional confirmed photo from upload or Telegram, local implementation |
 
 ```text
 P0-01 → P0-02
@@ -2358,3 +2359,19 @@ Shared contract: read AGENTS.md, PRD §25, the focused TD contract and the compl
 - **MFP-03 evidence:** Commit SHA: `SELF`. Every user-facing Find people entry now opens the purpose question even when the connection session already holds a prior purpose; the selected purpose remains search-session state and does not mutate the profile. The existing open_to predicate handles joint projects, professional introductions and walks/events, while Any removes the predicate and preserves pagination and other filters. The shared profile renderer includes about in own, search and introduction-request cards. Focused integration/fake tests PASS9, including all four purpose variants and repeat entry; diff-check PASS. No production, staging, Telegram or remote-Git mutation.
 
 - **MFP-04 evidence:** Commit SHA: `SELF`. Added exact `mfp-2026-reset` with the three completed-reset prerequisites and schema18 replay/preservation coverage. The aggregate `pnpm check` passed after correcting only concrete stale expectations (109 unit, 127 integration, 47 runtime); focused fake PASS3, workerd PASS2, Cloudflare typecheck/manifest and production normal dry-run PASS (905.76 KiB / 167.35 KiB gzip). Blocker-limited local review found no credential/contact exposure, data-corruption, duplicate-effect or unrunnable-candidate blocker. Read-only production preflight initially stopped because active maintenance version `c1a38631-b64a-4822-bb76-b06449f0bb55` had already recorded unexpected operation `mfo-2026-final-reset`; schema17 was quiescent with zero product rows and Telegram pending updates zero. The user then explicitly authorized the normal schema18 deploy without a new reset. Wrangler activated normal version `0b2604b3-238b-4d38-8b70-ae75c5b1234e` in deployment `1a6af0f0-a1ee-4c79-b6b1-e40a8c75bef4` at 100% with MFM enabled and no RESET binding. Final production checks report health ok, schema18, 25 tables, zero product rows, quiescent state, null alarm, reset route404, protected summary401 without auth, exact four secret names, matching bot/webhook and Telegram pending updates zero. `mfp-2026-reset` was not executed. Staging, local/rehearsal databases, Telegram messages, webhooks, secrets, other resources and remote Git were untouched.
+
+
+## MPH — MFM profile photo (2026-09-15)
+
+User launch authorizes this local stage only. Read first before every unit: AGENTS.md, PRD §26, TD MFM photo contract, this complete stage and predecessor evidence, package.json. Scope and invariants: one optional confirmed MFM photo; classic unchanged; draft privacy, actor/session fencing, post-commit provider/delivery, non-destructive schema upgrade. Do not touch docs/assets (pre-existing untracked user files), real Telegram, databases outside tests, production, reset, remote Git or dependencies. Stop for policy conflicts, incompatible toolchain, unit >12 source/test files, destructive changes or failing acceptance. Preflight branch/HEAD/status/remote/predecessor and toolchain each unit. Runtime units require focused RED/GREEN; final gate pnpm check, fake/Cloudflare checks and one independent blocker review. One local Task-ID commit per unit. Known untracked docs/assets is excluded from the clean tracked-worktree invariant.
+
+| Unit | Status | Depends on | Scope / observable result | Verification |
+|---|---|---|---|---|
+| MPH-00 | completed | MFP-04 | Product, technical and execution contract | Documentation diff |
+| MPH-01 | pending | MPH-00 | Schema19, validated photo and saved/draft persistence, transfer | Focused migration/repository tests, typecheck, manifest |
+| MPH-02 | pending | MPH-01 | Buffered media replies and post-commit photo reader hook | Runtime tests, typecheck |
+| MPH-03 | pending | MPH-02 | Photo state machine and RU/EN wizard/editor routes | Focused application and fake journey tests |
+| MPH-04 | pending | MPH-03 | Saved photos on own/discovery/introduction screens | Focused presentation/privacy tests |
+| MPH-05 | pending | MPH-04 | Regression updates, final aggregate checks and independent review | pnpm check, fake Telegram, Cloudflare gates |
+
+MPH-00 evidence: Commit SHA: SELF. Read current contracts and confirmed main HEAD fdd5950, Node24.18.0/pnpm11.15.1. Read-only remote main remains c4c5bfbc5f9696b63e0acf89182990017c2237fb (sandbox DNS failed, host read succeeded). Prior MFP cards all completed, so corrected the stale stage summary only. Pre-existing docs/assets remains untracked and untouched. Changed files: docs/PRD.md, docs/TECHNICAL_DESIGN.md, IMPLEMENTATION_PLAN.md. Documentation diff/check passed; no runtime or external mutation.

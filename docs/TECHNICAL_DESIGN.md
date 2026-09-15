@@ -1802,3 +1802,14 @@ Migration18 drops the child `mfm_profile_specializations` table and adds constra
 Every user-facing Find people entry resets navigation to the purpose filter screen even when a prior session purpose exists. The existing single `openTo` session filter remains search-only: one selected goal matches candidates containing that goal, while Any purpose removes the predicate. Event-status and sphere filters, visibility, self-exclusion, ordering, pagination, introduction authorization and accepted-contact resolution are unchanged.
 
 The previous MFO-11 reset is superseded without claiming execution. The MFP release uses a distinct `mfp-2026-reset` operation in the isolated maintenance entrypoint after the normal schema18 production deployment. It preserves migration history and earlier reset audit tables, requires exact production identity/digest and quiescence, deletes only reviewed product/auxiliary rows, supports exact replay, then restores the just-deployed normal version. Staging and all local/rehearsal targets remain untouched.
+
+
+## MFM photo contract (2026-09-15)
+
+PRD §26 is the narrow exception to the deferred photo capability. Profiles own validated opaque photo references `{fileId, botId}`, nullable persisted media, draft candidate/confirmation and a photo-only edit mode. Migration19 adds nullable constrained photo JSON to mfm_profiles; the canonical transfer schema and Cloudflare manifest advance together. Missing fields in old drafts normalize to absent photo. Connections read only saved profile photos, never candidates.
+
+The photo step sits between contact and about. A preview candidate is separate from the confirmed draft photo. Confirmation advances to about or saves a standalone photo edit; clear removes and skip preserves. Cancel discards editing state. Actor/generation/revision checks fence every mutation and late provider result. Callback codes remain append-only for old-button compatibility.
+
+A profiles-owned reader adapts getUserProfilePhotos(offset=0, limit=1), chooses the greatest-area size and returns a bot-scoped reference. Runtime schedules lookup after command commit, using a provider deadline, then conditionally saves the candidate with the captured session proof. Receipt replay schedules no second lookup. No retries occur automatically.
+
+ReplyCollector buffers ordered text/photo replies and dispatches after commit. Photo replies use stored file_id only when botId matches the running bot. Captions up to 1024 UTF-16 units use one photo message; longer text uses a photo followed by complete text and keyboard. Definite media rejection falls back to text; ambiguous network outcomes do not automatically resend a photo. Existing durable notification outbox remains text-only. Canonical inbound commands include photo identity and media-group identity only for media updates, preserving existing text-command hashes.
