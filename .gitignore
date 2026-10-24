@@ -41,3 +41,8 @@ node_modules/
 .vscode/
 *.swp
 *.swo
+.pnpm-store/
+.env.local
+.env.production
+.dev.vars
+!*.example
